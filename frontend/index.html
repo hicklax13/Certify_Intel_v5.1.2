@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certify Intel - Competitive Intelligence Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <img src="logo.png" alt="Certify Intel" class="logo-img"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <h1 style="display:none;">Certify<span>Intel</span></h1>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+                <a href="#" class="nav-item" data-page="competitors">
+                    <span class="icon">🏢</span> Competitors
+                </a>
+                <a href="#" class="nav-item" data-page="discovered">
+                    <span class="icon">🔮</span> Discovered
+                </a>
+                <a href="#" class="nav-item" data-page="comparison">
+                    <span class="icon">⚖️</span> Compare
+                </a>
+                <a href="#" class="nav-item" data-page="changes">
+                    <span class="icon">🔔</span> Change Log
+                </a>
+                <a href="#" class="nav-item" data-page="analytics">
+                    <span class="icon">📈</span> Analytics
+                </a>
+                <a href="#" class="nav-item" data-page="marketmap">
+                    <span class="icon">🗺️</span> Market Map
+                </a>
+                <a href="#" class="nav-item" data-page="battlecards">
+                    <span class="icon">🃏</span> Battlecards
+                </a>
+                <a href="#" class="nav-item" data-page="reports">
+                    <span class="icon">📄</span> Reports
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <span class="icon">⚙️</span> Settings
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/api/export/excel" class="export-btn">
+                    📥 Export Excel
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="search-bar">
+                    <input type="text" id="globalSearch" placeholder="Search competitors...">
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="triggerScrapeAll()">
+                        🔄 Refresh Data
+                    </button>
+                    <div class="user-menu">
+                        <span class="user-avatar">CI</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <section id="dashboardPage" class="page active">
+                <div class="page-header">
+                    <h2>Competitive Intelligence Dashboard</h2>
+                    <p class="subtitle">Real-time competitor monitoring for Certify Health</p>
+                </div>
+
+                <!-- AI Executive Summary -->
+                <div id="aiSummaryCard" class="analytics-card full-width"
+                    style="display: none; margin-bottom: 20px; background: linear-gradient(135deg, #fff 0%, #f8faff 100%); border-left: 5px solid #2563eb; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                            <span>🤖</span> Executive Intelligence Brief
+                        </h3>
+                        <span class="badge"
+                            style="background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 600;">AI
+                            Generated</span>
+                    </div>
+                    <div id="aiSummaryContent" style="font-size: 1.05em; line-height: 1.6; color: #334155;">
+                        Generating strategic insights...
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card" onclick="showCompanyList('all')" style="cursor: pointer;"
+                        title="Click to see all competitors">
+                        <div class="stat-icon blue">🏢</div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="totalCompetitors">-</span>
+                            <span class="stat-label">Total Competitors</span>
+                        </div>
+                        <div class="stat-tooltip" id="tooltip-all" style="display: none;"></div>
+                    </div>
+                    <div class="stat-card" onclick="showCompanyList('High')" style="cursor: pointer;"
+                        title="Click to see High Threat competitors">
+                        <div class="stat-icon red">🔴</div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="highThreat">-</span>
+                            <span class="stat-label">High Threat</span>
+                        </div>
+                        <div class="stat-tooltip" id="tooltip-high" style="display: none;"></div>
+                    </div>
+                    <div class="stat-card" onclick="showCompanyList('Medium')" style="cursor: pointer;"
+                        title="Click to see Medium Threat competitors">
+                        <div class="stat-icon yellow">🟡</div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="mediumThreat">-</span>
+                            <span class="stat-label">Medium Threat</span>
+                        </div>
+                        <div class="stat-tooltip" id="tooltip-medium" style="display: none;"></div>
+                    </div>
+                    <div class="stat-card" onclick="showCompanyList('Low')" style="cursor: pointer;"
+                        title="Click to see Low Threat competitors">
+                        <div class="stat-icon green">🟢</div>
+                        <div class="stat-content">
+                            <span class="stat-value" id="lowThreat">-</span>
+                            <span class="stat-label">Low Threat</span>
+                        </div>
+                        <div class="stat-tooltip" id="tooltip-low" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <h3>Threat Distribution</h3>
+                        <canvas id="threatChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Pricing Models</h3>
+                        <canvas id="pricingChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Threats Table -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Top Competitive Threats</h3>
+                        <a href="#" class="view-all" onclick="showPage('competitors')">View All →</a>
+                    </div>
+                    <table class="data-table" id="topThreatsTable">
+                        <thead>
+                            <tr>
+                                <th>Competitor</th>
+                                <th>Threat Level</th>
+                                <th>Customers</th>
+                                <th>Pricing</th>
+                                <th>Last Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topThreatsBody">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Recent Changes -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Recent Changes</h3>
+                        <a href="#" class="view-all" onclick="showPage('changes')">View All →</a>
+                    </div>
+                    <div id="recentChanges" class="changes-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Competitors Page -->
+            <section id="competitorsPage" class="page">
+                <div class="page-header">
+                    <h2>Competitors</h2>
+                    <button class="btn btn-secondary" onclick="triggerDiscovery()" style="margin-right: 10px;">🔮
+                        Discover New</button>
+                    <button class="btn btn-primary" onclick="showAddCompetitorModal()">+ Add Competitor</button>
+                </div>
+                <div class="filters-bar">
+                    <select id="filterThreat">
+                        <option value="">All Threats</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                    <select id="filterStatus">
+                        <option value="">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="competitors-grid" id="competitorsGrid">
+                    <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Discovered Page -->
+            <section id="discoveredPage" class="page">
+                <div class="page-header">
+                    <h2>🔮 Discovered Competitors</h2>
+                    <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
+                </div>
+
+                <!-- Editable Scoring Criteria -->
+                <div class="criteria-editor"
+                    style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0; font-size: 1em; color: #122753;">📋 Discovery Scoring Criteria</h3>
+                        <button class="btn btn-secondary" onclick="resetCriteria()"
+                            style="padding: 4px 12px; font-size: 0.8em;">Reset to Default</button>
+                    </div>
+                    <p style="color: #64748b; font-size: 0.85em; margin-bottom: 12px;">
+                        Edit the criteria below to customize what the Discovery Agent searches for. Each criterion is
+                        weighted in the relevance score.
+                    </p>
+                    <textarea id="discoveryCriteria" rows="10"
+                        style="width: 100%; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; resize: vertical;">• Target Market: Patient engagement, patient intake, healthcare check-in solutions
+• Company Size: 50-5000 employees (growth-stage or established)
+• Geography: US-based or significant US presence
+• Product Focus: Digital check-in, eligibility verification, patient payments, scheduling
+• Technology: Cloud-based SaaS, mobile-first, EHR integrations
+• Funding: Series A+ or profitable private company
+• Customer Base: Medical practices, health systems, ambulatory care
+• Competitive Signals: Similar keywords, overlapping customer segments
+• Exclude: Pure EHR vendors, hospital-only solutions, international-only</textarea>
+                </div>
+
+                <div class="discovery-info"
+                    style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #0284c7;">
+                    <strong>Certify Scout Discovery Agent</strong>
+                    <p style="margin: 5px 0 0 0; color: #64748b; font-size: 0.9em;">
+                        Autonomous search for potential new competitors using AI-powered qualification.
+                        Companies scoring 50%+ relevance against your criteria are shown below.
+                    </p>
+                </div>
+                <div id="discoveryStatus" class="discovery-status"
+                    style="display: none; padding: 15px; background: #fef3c7; border-radius: 8px; margin-bottom: 20px;">
+                    <span class="spinner">⏳</span> Running Certify Scout discovery scan... This may take a minute.
+                </div>
+                <div id="discoveredGrid" class="competitors-grid">
+                    <p class="empty-state">No discovered competitors yet. Click "Run Discovery" to start scanning.</p>
+                </div>
+            </section>
+
+            <!-- Comparison Page -->
+            <section id="comparisonPage" class="page">
+                <div class="page-header">
+                    <h2>Competitor Comparison</h2>
+                </div>
+                <div class="comparison-selector">
+                    <label>Select competitors to compare:</label>
+                    <div id="comparisonChecklist"></div>
+                    <button class="btn btn-primary" onclick="runComparison()">Compare Selected</button>
+                </div>
+                <div id="comparisonResults"></div>
+            </section>
+
+            <!-- Changes Page -->
+            <section id="changesPage" class="page">
+                <div class="page-header">
+                    <h2>Change Log</h2>
+                </div>
+                <div class="filters-bar">
+                    <select id="filterCompany" onchange="loadChanges()">
+                        <option value="">All Companies</option>
+                    </select>
+                    <select id="filterSeverity">
+                        <option value="">All Severity</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                    <select id="filterDays">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+                <div id="changesList" class="changes-list-full">
+                    <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Analytics Page -->
+            <section id="analyticsPage" class="page">
+                <div class="page-header">
+                    <h2>Analytics & Insights</h2>
+                </div>
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <h3>Market Share Estimates</h3>
+                        <canvas id="marketShareChart"></canvas>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Competitive Heatmap</h3>
+                        <div id="heatmapContainer"></div>
+                    </div>
+                    <div class="analytics-card full-width">
+                        <h3>Feature Gap Analysis</h3>
+                        <div id="featureGapContainer"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Market Map Page -->
+            <section id="marketmapPage" class="page">
+                <div class="page-header">
+                    <h2>🗺️ Competitive Market Map</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="mapViewType" onchange="updateMarketMap()"
+                            style="padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <option value="threat-size">Threat vs Company Size</option>
+                            <option value="category">Product Categories</option>
+                            <option value="funding">Funding Stage</option>
+                            <option value="geography">Geographic Focus</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="exportMarketMap()">📥 Export Map</button>
+                    </div>
+                </div>
+
+                <!-- Market Map Legend -->
+                <div
+                    style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+                    <span style="font-weight: 600; color: #122753;">Legend:</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 16px; height: 16px; background: #dc3545; border-radius: 50%;"></span> High
+                        Threat</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 16px; height: 16px; background: #f59e0b; border-radius: 50%;"></span> Medium
+                        Threat</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 16px; height: 16px; background: #22c55e; border-radius: 50%;"></span> Low
+                        Threat</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 16px; height: 16px; background: #3A95ED; border-radius: 4px;"></span> Public
+                        Company</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 16px; height: 16px; background: #64748b; border-radius: 4px;"></span> Private
+                        Company</span>
+                </div>
+
+                <!-- Main Market Map Visualization -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                    <!-- Bubble Chart -->
+                    <div
+                        style="background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 20px;">
+                        <h3 style="margin: 0 0 15px 0; color: #122753;">Competitor Positioning</h3>
+                        <div style="height: 500px;">
+                            <canvas id="marketMapChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Categories Grid -->
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                        <div id="categoryBreakdown"
+                            style="background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 20px; flex: 1; overflow-y: auto; max-height: 520px;">
+                            <h3 style="margin: 0 0 15px 0; color: #122753;">By Product Category</h3>
+                            <div id="categoryList"><!-- Populated by JS --></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Company Grid -->
+                <div
+                    style="margin-top: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 20px;">
+                    <h3 style="margin: 0 0 15px 0; color: #122753;">📊 Competitor Intelligence Grid</h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                            <thead>
+                                <tr style="background: #122753; color: white;">
+                                    <th style="padding: 12px; text-align: left;">Company</th>
+                                    <th style="padding: 12px; text-align: center;">Status</th>
+                                    <th style="padding: 12px; text-align: center;">Threat</th>
+                                    <th style="padding: 12px; text-align: center;">Employees</th>
+                                    <th style="padding: 12px; text-align: center;">Customers</th>
+                                    <th style="padding: 12px; text-align: center;">G2 Rating</th>
+                                    <th style="padding: 12px; text-align: center;">Pricing</th>
+                                    <th style="padding: 12px; text-align: center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="marketMapTable">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Battlecards Page -->
+            <section id="battlecardsPage" class="page">
+                <div class="page-header">
+                    <h2>Sales Battlecards</h2>
+                    <button class="btn btn-secondary" onclick="generateAllBattlecards()">📄 Generate All PDFs</button>
+                </div>
+                <div class="battlecards-grid" id="battlecardsGrid">
+                    <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Reports Page -->
+            <section id="reportsPage" class="page">
+                <div class="page-header">
+                    <h2>Reports</h2>
+                </div>
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <div class="report-icon">📊</div>
+                        <h3>Executive Briefing</h3>
+                        <p>Weekly summary for leadership</p>
+                        <button class="btn btn-primary"
+                            onclick="window.open('http://localhost:8000/api/reports/weekly-briefing', '_blank')">Generate
+                            PDF</button>
+                    </div>
+                    <div class="report-card">
+                        <div class="report-icon">⚖️</div>
+                        <h3>Comparison Report</h3>
+                        <p>Side-by-side competitor analysis</p>
+                        <button class="btn btn-primary"
+                            onclick="window.open('http://localhost:8000/api/reports/comparison', '_blank')">Generate
+                            PDF</button>
+                    </div>
+                    <div class="report-card">
+                        <div class="report-icon">📥</div>
+                        <h3>Excel Export</h3>
+                        <p>Full data export for Excel</p>
+                        <button class="btn btn-primary"
+                            onclick="window.location.href='http://localhost:8000/api/export/excel'">Download</button>
+                    </div>
+                    <div class="report-card">
+                        <div class="report-icon">{ }</div>
+                        <h3>JSON Export</h3>
+                        <p>For Power Query integration</p>
+                        <button class="btn btn-secondary"
+                            onclick="window.location.href='http://localhost:8000/api/export/json'">Download</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Page -->
+            <section id="settingsPage" class="page">
+                <div class="page-header">
+                    <h2>Settings</h2>
+                </div>
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>Alert Rules</h3>
+                        <p>Configure custom alert triggers</p>
+                        <div id="alertRulesList"></div>
+                        <button class="btn btn-secondary" onclick="showAddRuleModal()">+ Add Rule</button>
+                    </div>
+                    <div class="settings-card">
+                        <h3>Integrations</h3>
+                        <div class="integration-item">
+                            <span>Slack</span>
+                            <span class="status-badge" id="slackStatus">Not Configured</span>
+                        </div>
+                        <div class="integration-item">
+                            <span>Microsoft Teams</span>
+                            <span class="status-badge" id="teamsStatus">Not Configured</span>
+                        </div>
+                        <div class="integration-item">
+                            <span>SMS (Twilio)</span>
+                            <span class="status-badge" id="smsStatus">Not Configured</span>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <h3>Scheduler</h3>
+                        <div class="schedule-item">
+                            <span>Weekly Full Refresh</span>
+                            <span>Sundays 2:00 AM</span>
+                        </div>
+                        <div class="schedule-item">
+                            <span>Daily High-Priority Check</span>
+                            <span>Daily 6:00 AM</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Template -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="visualizations.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
