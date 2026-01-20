@@ -205,95 +205,120 @@ class SECEdgarScraper:
             last_updated=datetime.utcnow().isoformat()
         )
     
+    
     def _search_edgar(self, company_name: str) -> SECData:
-        """Search SEC EDGAR for company filings."""
-        # SEC full-text search API
-        search_url = f"{self.EDGAR_BASE_URL}/submissions/CIK{company_name}.json"
+        """Search for company data using yfinance as a proxy for SEC data."""
+        import yfinance as yf
         
-        req = urllib.request.Request(search_url, headers=self.headers)
-        
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read())
-        
-        # Parse response into SECData
-        return self._parse_edgar_response(data)
-    
-    def _parse_edgar_response(self, data: Dict) -> SECData:
-        """Parse EDGAR API response."""
-        # Implementation would parse the full company submission history
-        raise NotImplementedError("Full EDGAR parsing not implemented")
-    
-    def get_risk_analysis(self, company_name: str) -> Dict[str, Any]:
-        """Analyze risk factors from SEC filings."""
-        data = self.get_company_data(company_name)
-        
-        risk_categories = {
-            "competition": [],
-            "regulatory": [],
-            "financial": [],
-            "operational": [],
-            "cybersecurity": [],
-            "customer": []
+        # 1. Try to find a ticker symbol for the company name
+        # This is a simple mapping for the prototype; in production, use a search API
+        ticker_map = {
+            "phreesia": "PHR",
+            "health catalyst": "HCAT",
+            "veeva": "VEEV",
+            "teladoc": "TDOC",
+            "doximity": "DOCS",
+            "hims & hers": "HIMS",
+            "definitive healthcare": "DH",
+            "carecloud": "CCLD",
+            "augment health": "N/A", # Private
+            "klara": "N/A", # Acquired by ModMed
+            "triage": "N/A" # Private
         }
         
-        for risk in data.risk_factors:
-            risk_lower = risk.lower()
-            if any(kw in risk_lower for kw in ["competition", "competitor", "compete"]):
-                risk_categories["competition"].append(risk)
-            elif any(kw in risk_lower for kw in ["regulatory", "regulation", "compliance", "hipaa"]):
-                risk_categories["regulatory"].append(risk)
-            elif any(kw in risk_lower for kw in ["loss", "profitability", "cash", "debt"]):
-                risk_categories["financial"].append(risk)
-            elif any(kw in risk_lower for kw in ["cyber", "security", "breach", "privacy"]):
-                risk_categories["cybersecurity"].append(risk)
-            elif any(kw in risk_lower for kw in ["customer", "client", "concentration"]):
-                risk_categories["customer"].append(risk)
-            else:
-                risk_categories["operational"].append(risk)
+        symbol = ticker_map.get(company_name.lower())
         
+        if not symbol and "inc" in company_name.lower() or "corp" in company_name.lower():
+             # extremely basic guess or fail
+             pass
+             
+        if not symbol or symbol == "N/A":
+            return self._build_placeholder(company_name)
+            
+        try:
+            # 2. Fetch data from yfinance
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            # Map yfinance info to SECData structure
+            # Note: yfinance data is often newer than the last 10-K, but serves the same purpose
+            
+            # Financials (Annual)
+            financials_data = []
+            try:
+                income_stmt = ticker.income_stmt
+                balance_sheet = ticker.balance_sheet
+                
+                if not income_stmt.empty:
+                    # Get the most recent 3 years
+                    cols = income_stmt.columns[:3]
+                    for date in cols:
+                        year_data = income_stmt[date]
+                        bs_data = balance_sheet[date] if not balance_sheet.empty and date in balance_sheet.columns else {}
+                        
+                        rev = year_data.get("Total Revenue", 0)
+                        net_inc = year_data.get("Net Income", 0)
+                        gross_profit = year_data.get("Gross Profit", 0)
+                        op_income = year_data.get("Operating Income", 0)
+                        
+                        fin = FinancialData(
+                            revenue=rev,
+                            net_income=net_inc,
+                            gross_margin=gross_profit / rev if rev else 0,
+                            operating_margin=op_income / rev if rev else 0,
+                            total_assets=bs_data.get("Total Assets"),
+                            total_debt=bs_data.get("Total Debt"),
+                            cash_and_equivalents=bs_data.get("Cash And Cash Equivalents"),
+                            year=date.year,
+                            quarter=None
+                        )
+                        financials_data.append(fin)
+            except Exception as e:
+                print(f"Error fetching financials for {symbol}: {e}")
+
+            # Risk Factors - yfinance doesn't provide text, use generic or skip
+            # For a real app, we'd scrape the text from 'https://www.sec.gov/Archives/edgar/data/...'
+            risks = [f"See full 10-K for {symbol} risk factors"]
+            
+            return SECData(
+                company_name=info.get("longName", company_name),
+                cik=info.get("cik", ""), # yfinance sometimes provides CIK
+                stock_symbol=symbol,
+                sic_code=str(info.get("sector", "")),
+                sic_description=info.get("industry", ""),
+                recent_filings=[], # Populated if we did a full EDGAR search
+                financials=financials_data,
+                risk_factors=risks,
+                competitor_mentions=[],
+                customers_mentioned=[],
+                employee_count=info.get("fullTimeEmployees"),
+                fiscal_year_end="N/A",
+                last_updated=datetime.utcnow().isoformat()
+            )
+            
+        except Exception as e:
+            print(f"YFinance error for {symbol}: {e}")
+            return self._build_placeholder(company_name)
+
+    def _parse_edgar_response(self, data: Dict) -> SECData:
+        """Parse EDGAR API response (Unused in yfinance mode)."""
+        pass
+    
+    def get_risk_analysis(self, company_name: str) -> Dict[str, Any]:
+        """Analyze risk factors."""
+        # For now, just return basic info since we don't have full text
+        data = self.get_company_data(company_name)
         return {
             "company": company_name,
             "total_risks": len(data.risk_factors),
-            "risk_categories": {k: len(v) for k, v in risk_categories.items()},
-            "risks": risk_categories,
-            "competitor_mentions": data.competitor_mentions,
-            "key_customers": data.customers_mentioned
+            "risk_categories": {},
+            "risks": data.risk_factors,
+            "competitor_mentions": [],
+            "key_customers": []
         }
 
     def get_latest_form_d(self, company_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Search for the latest Form D (Notice of Exempt Offering of Securities).
-        Returns dict with date, amount, and investors if found.
-        """
-        # This is where we would ping the real SEC API
-        # For this MVP, we will simulate a smart lookup based on known data or return None
-        # In a real implementation:
-        # 1. Search CIK matching name
-        # 2. Fetch submissions for CIK
-        # 3. Filter for 'D' or 'D/A' forms
-        
-        # Simulating data for demonstration
-        mock_filings = {
-            "clearwave": {"date": "2022-05-15", "amount": 15000000, "type": "Series C"},
-            "cedar": {"date": "2023-03-10", "amount": 102000000, "type": "Series D"},
-            "luma health": {"date": "2021-11-20", "amount": 130000000, "type": "Series C"},
-            "kyruus": {"date": "2022-11-05", "amount": 30000000, "type": "Growth Equity"},
-            "waystar": {"date": "2019-10-18", "amount": 2700000000, "type": "Private Equity"},
-            "zocdoc": {"date": "2021-02-11", "amount": 150000000, "type": "Growth"},
-            "notable health": {"date": "2021-11-04", "amount": 100000000, "type": "Series B"}
-        }
-        
-        company_lower = company_name.lower()
-        if company_lower in mock_filings:
-            filing = mock_filings[company_lower]
-            return {
-                "filing_date": filing["date"],
-                "amount_raised": filing["amount"],
-                "round_type": filing["type"],
-                "form_type": "Form D",
-                "source": f"SEC EDGAR (CIK Lookup: {company_name})"
-            }
-            
+        """Simulate Form D lookup."""
         return None
     
     def compare_financials(self, company_names: List[str]) -> Dict[str, Any]:
@@ -301,20 +326,23 @@ class SECEdgarScraper:
         comparison = []
         
         for name in company_names:
-            data = self.get_company_data(name)
-            if data.financials and data.stock_symbol != "N/A (Private)":
-                latest = data.financials[0]
-                comparison.append({
-                    "name": name,
-                    "symbol": data.stock_symbol,
-                    "revenue": latest.revenue,
-                    "net_income": latest.net_income,
-                    "gross_margin": latest.gross_margin,
-                    "operating_margin": latest.operating_margin,
-                    "year": latest.year,
-                    "employees": data.employee_count,
-                    "is_profitable": (latest.net_income or 0) > 0
-                })
+            try:
+                data = self.get_company_data(name)
+                if data.financials and data.stock_symbol and "Private" not in data.stock_symbol:
+                    latest = data.financials[0]
+                    comparison.append({
+                        "name": data.company_name,
+                        "symbol": data.stock_symbol,
+                        "revenue": latest.revenue,
+                        "net_income": latest.net_income,
+                        "gross_margin": latest.gross_margin,
+                        "operating_margin": latest.operating_margin,
+                        "year": latest.year,
+                        "employees": data.employee_count,
+                        "is_profitable": (latest.net_income or 0) > 0
+                    })
+            except Exception:
+                continue
         
         if not comparison:
             return {"message": "No public companies with financials found"}
@@ -335,7 +363,9 @@ def get_sec_data(company_name: str) -> Dict[str, Any]:
     data = scraper.get_company_data(company_name)
     
     result = asdict(data)
+    # Helper to serialize SECFiling objects
     result["recent_filings"] = [asdict(f) for f in data.recent_filings]
+    # Helper to serialize FinancialData objects
     result["financials"] = [asdict(f) for f in data.financials]
     
     return result
@@ -345,16 +375,22 @@ if __name__ == "__main__":
     scraper = SECEdgarScraper()
     
     print("=" * 60)
-    print("SEC EDGAR Financial Analysis")
+    print("Real-Time Financial Analysis (Source: YFinance)")
     print("=" * 60)
     
     for company in ["Phreesia", "Veeva", "Health Catalyst"]:
+        print(f"\nFetching data for {company}...")
         data = scraper.get_company_data(company)
-        print(f"\n{company} ({data.stock_symbol}):")
+        print(f"[{data.stock_symbol}] {data.company_name}")
         if data.financials:
-            f = data.financials[0]
-            print(f"  Revenue: ${f.revenue/1000000:.0f}M")
-            print(f"  Net Income: ${f.net_income/1000000:.0f}M")
-            print(f"  Gross Margin: {f.gross_margin*100:.0f}%")
-        print(f"  Risk Factors: {len(data.risk_factors)}")
-        print(f"  Competitors Named: {', '.join(data.competitor_mentions[:3])}")
+            f = data.financials[0] # Most recent year
+            rev_m = f.revenue / 1_000_000 if f.revenue else 0
+            net_m = f.net_income / 1_000_000 if f.net_income else 0
+            print(f"  Year: {f.year}")
+            print(f"  Revenue: ${rev_m:,.1f}M")
+            print(f"  Net Income: ${net_m:,.1f}M")
+            print(f"  Gross Margin: {f.gross_margin*100:.1f}%" if f.gross_margin else "  Gross Margin: N/A")
+            print(f"  Employees: {data.employee_count}")
+        else:
+            print("  No financial data available.")
+
