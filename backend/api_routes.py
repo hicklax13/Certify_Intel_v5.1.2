@@ -2,23 +2,29 @@
 Certify Intel - Extended API Routes
 Additional endpoints for analytics, win/loss, auth, reports, and frontend serving
 """
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from typing import Optional, List
 from datetime import datetime, timedelta
 import os
+from pydantic import BaseModel
+
+# Import DB dependencies
+from database import get_db, SystemSetting, SessionLocal
+from sqlalchemy.orm import Session
 
 # Import extended features
 from extended_features import (
     auth_manager, win_loss_tracker, rate_limiter, cache_manager,
     similarweb_scraper, social_monitor,
-    WinLossRecord
+    WinLossRecord, ClassificationWorkflow
 )
 from analytics import AnalyticsEngine
 from reports import ReportManager
 from external_scrapers import ExternalDataCollector
+from data_enrichment import data_enrichment, ClearbitLogoService
 
 router = APIRouter()
 
@@ -29,9 +35,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 # ============== Authentication ==============
 
 @router.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login and get access token."""
-    user = auth_manager.authenticate_user(form_data.username, form_data.password)
+    user = auth_manager.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
@@ -61,6 +67,256 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Invalid token")
     
     return {"email": payload.get("sub"), "role": payload.get("role")}
+
+
+@router.get("/api/notifications")
+async def get_notifications(limit: int = 10, db: Session = Depends(get_db)):
+    """Get recent notifications (change logs)."""
+    # Import ChangeLog locally to avoid circular issues if any
+    from database import ChangeLog
+    
+    notifications = db.query(ChangeLog).order_by(ChangeLog.detected_at.desc()).limit(limit).all()
+    
+    return [
+        {
+            "id": n.id,
+            "competitor_name": n.competitor_name,
+            "change_type": n.change_type,
+            "severity": n.severity,
+            "detected_at": n.detected_at,
+            "new_value": n.new_value[:100] + "..." if n.new_value and len(n.new_value) > 100 else n.new_value
+        }
+        for n in notifications
+    ]
+
+
+# ============== Corporate Profile (Certify Health) ==============
+
+@router.get("/api/corporate-profile")
+async def get_corporate_profile():
+    """
+    Get Certify Health's corporate profile for the reference battlecard.
+    This is the company users are comparing competitors against.
+    """
+    return {
+        "id": "certify-health",
+        "name": "Certify Health",
+        "is_corporate": True,  # Flag to distinguish from competitors
+        "website": "https://www.certifyhealth.com",
+        "tagline": "Unified Healthcare Platform - From Check-In to Payment",
+        
+        # Company Info
+        "year_founded": "2012",
+        "headquarters": "Gaithersburg, Maryland, USA",
+        "employee_count": "100-150",
+        "employee_growth_rate": "+19% YoY",
+        "offices": ["Gaithersburg, MD (HQ)", "Bengaluru, India"],
+        
+        # Funding & Financials
+        "funding_total": "$10M Series A",
+        "latest_round": "Series A",
+        "investors": ["ABS Capital Partners"],
+        "is_public": False,
+        
+        # Products (7 Core Platforms)
+        "products": {
+            "pxp": {
+                "name": "Patient Experience Platform",
+                "description": "Intake, scheduling, communication, engagement",
+                "features": ["Self-Scheduling", "Digital Intake", "Reminders & Nudges", "Patient Portal", "Post-Visit Experience"]
+            },
+            "pms": {
+                "name": "Practice Management System",
+                "description": "Operations, staff tasking, reporting, compliance",
+                "features": ["Scheduling & Appointments", "Registration", "Eligibility & Coverage", "Front/Back Office Ops", "Billing & RCM Ops"]
+            },
+            "rcm": {
+                "name": "Revenue Cycle Management",
+                "description": "Claims, payments, analytics, merchant services",
+                "features": ["Patient Payments", "Claims Submission", "Denial Management", "Text-to-Pay", "AutoPay"]
+            },
+            "patient_mgmt": {
+                "name": "Patient Management (EHR)",
+                "description": "Charts, documentation, encounter tools, care coordination",
+                "features": ["Patient Chart & Timeline", "Clinical Documentation", "AI-Powered Scribe", "Care Coordination", "Orders & Results"]
+            },
+            "certify_pay": {
+                "name": "CERTIFY Pay",
+                "description": "Omnichannel payment gateway for healthcare",
+                "features": ["Payment Gateway", "Merchant Services", "Transaction Logs", "Chargebacks", "Payouts"]
+            },
+            "facecheck": {
+                "name": "FaceCheck™",
+                "description": "Biometric patient authentication",
+                "features": ["Facial Recognition", "Touchless ID", "Fraud Prevention", "Expedited Check-In"]
+            },
+            "interoperability": {
+                "name": "Interoperability",
+                "description": "FHIR/HL7-driven integrations with all major EHRs",
+                "features": ["Epic", "Cerner", "Athena", "NextGen", "eClinicalWorks", "Allscripts"]
+            }
+        },
+        
+        # Markets Served (11 Verticals)
+        "markets": [
+            "Hospitals & Health Systems",
+            "Ambulatory & Outpatient Care",
+            "Long-Term & Rehabilitation Care",
+            "Behavioral Health & Human Services",
+            "Specialized Care Facilities",
+            "Telehealth & Digital Healthcare",
+            "Laboratory & Diagnostic Services",
+            "Managed Care & Health Insurance",
+            "Multi-Specialty Groups & Enterprises",
+            "Occupational & Corporate Healthcare",
+            "Government & Public Health"
+        ],
+        
+        # Key Differentiators
+        "key_differentiators": [
+            "Unified platform (not fragmented point solutions)",
+            "EHR-agnostic with deep integrations",
+            "FaceCheck™ biometric authentication",
+            "AI-powered clinical documentation",
+            "End-to-end patient journey coverage",
+            "HIPAA-compliant, SOC 2 certified"
+        ],
+        
+        # Metrics & ROI
+        "claimed_outcomes": {
+            "no_show_reduction": "30% fewer no-shows",
+            "revenue_increase": "25% more revenue collected",
+            "staff_hours_saved": "60+ staff hours saved monthly",
+            "claim_denial_reduction": "20% reduction in claim denials",
+            "digital_checkin_rate": "66% of patients check in digitally",
+            "roi": "5-10x ROI on subscription"
+        },
+        
+        # Certifications & Compliance
+        "certifications": ["HIPAA Compliant", "SOC 2 Type II", "HITRUST CSF"],
+        
+        # Customer Segments
+        "customer_size_focus": "Small to Enterprise (all sizes)",
+        "geographic_focus": "United States (Primary), International Expansion",
+        
+        # Mission & Vision
+        "mission": "Simpler Healthcare, Better Outcomes",
+        "vision": "Connected Care, End to End - Patients move through a frictionless journey from scheduling to payment.",
+        
+        # Awards & Recognition
+        "awards": ["Healthcare Innovation Red Hot Company 2025"],
+        
+        # Contact
+        "contact": {
+            "demo_url": "https://www.certifyhealth.com/market-study/",
+            "support_url": "https://support.certifyglobal.com/portal/en/home"
+        }
+    }
+
+
+# ============== Data Enrichment (Free APIs) ==============
+
+@router.get("/api/logo/{domain}")
+async def get_company_logo(domain: str):
+    """Get company logo URL from Clearbit."""
+    logo_url = ClearbitLogoService.get_logo_url(domain)
+    return {"domain": domain, "logo_url": logo_url}
+
+
+@router.get("/api/logo-proxy")
+async def proxy_logo(url: str):
+    """Proxy image requests to bypass CORS/SSL issues."""
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, follow_redirects=True, timeout=5.0)
+            if resp.status_code == 200:
+                from fastapi import Response
+                return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
+    except Exception:
+        pass
+    
+    # Fallback SVG if failed
+    from fastapi.responses import Response
+    return Response(content='<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#e2e8f0"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" fill="#64748b" font-size="14">?</text></svg>', media_type="image/svg+xml")
+
+
+@router.post("/api/enrich/batch-logos")
+async def batch_enrich_logos(db: Session = Depends(get_db)):
+    """Add logo URLs to all competitors missing logos."""
+    from database import Competitor
+    
+    competitors = db.query(Competitor).filter(
+        Competitor.is_deleted == False,
+        (Competitor.logo_url == None) | (Competitor.logo_url == "")
+    ).all()
+    
+    updated = 0
+    for comp in competitors:
+        if comp.website:
+            logo_url = ClearbitLogoService.get_logo_url(comp.website)
+            comp.logo_url = logo_url
+            updated += 1
+    
+    db.commit()
+    
+    return {"updated": updated, "total": len(competitors)}
+
+
+@router.post("/api/enrich/{competitor_id}")
+async def enrich_competitor(
+    competitor_id: int,
+    include_contacts: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Enrich competitor data from free APIs.
+    - Clearbit: Logo
+    - SEC EDGAR: Financials (if public)
+    - Hunter.io: Contacts (optional, uses quota)
+    """
+    from database import Competitor
+    
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    
+    enriched = await data_enrichment.enrich_competitor(
+        name=competitor.name,
+        website=competitor.website,
+        is_public=competitor.is_public or False,
+        include_contacts=include_contacts
+    )
+    
+    # Update competitor record
+    for key, value in enriched.items():
+        if hasattr(competitor, key):
+            setattr(competitor, key, value)
+    
+    db.commit()
+    
+    return {
+        "competitor_id": competitor_id,
+        "enriched_fields": list(enriched.keys()),
+        "data": enriched
+    }
+
+
+@router.get("/api/sec/{company_name}")
+async def get_sec_data(company_name: str):
+    """Get SEC EDGAR data for a public company."""
+    sec_data = await data_enrichment.sec.enrich_competitor(company_name, is_public=True)
+    return {"company": company_name, "sec_data": sec_data}
+
+
+@router.get("/api/news-search/{company_name}")
+async def search_company_news(company_name: str):
+    """Search for company news using Google Custom Search."""
+    if not data_enrichment.google.is_configured:
+        return {"error": "Google Search API not configured", "hint": "Set GOOGLE_API_KEY and GOOGLE_CX in .env"}
+    
+    news = await data_enrichment.search_competitor_news(company_name)
+    return {"company": company_name, "results": news}
 
 
 # ============== Win/Loss Database ==============
@@ -136,7 +392,7 @@ analytics_engine = AnalyticsEngine()
 @router.get("/api/analytics/competitor/{competitor_id}")
 async def get_competitor_analysis(competitor_id: int):
     """Get full analytics for a competitor."""
-    from main import SessionLocal, Competitor
+    from database import SessionLocal, Competitor
     
     db = SessionLocal()
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
@@ -173,7 +429,7 @@ async def get_competitor_analysis(competitor_id: int):
 @router.get("/api/analytics/heatmap")
 async def get_competitive_heatmap():
     """Get competitive heatmap data."""
-    from main import SessionLocal, Competitor
+    from database import SessionLocal, Competitor
     
     db = SessionLocal()
     comps = db.query(Competitor).filter(Competitor.is_deleted == False).all()
@@ -250,7 +506,7 @@ report_manager = ReportManager("./reports")
 @router.get("/api/reports/weekly-briefing")
 async def generate_weekly_briefing():
     """Generate and return weekly executive briefing PDF."""
-    from main import SessionLocal, Competitor, ChangeLog
+    from database import SessionLocal, Competitor, ChangeLog
     
     db = SessionLocal()
     competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
@@ -292,7 +548,7 @@ async def generate_weekly_briefing():
 @router.get("/api/reports/battlecard/{competitor_id}")
 async def generate_battlecard(competitor_id: int):
     """Generate and return competitor battlecard PDF."""
-    from main import SessionLocal, Competitor
+    from database import SessionLocal, Competitor
     # Import Scrapers
     from linkedin_tracker import LinkedInTracker
     from google_ecosystem_scraper import GoogleEcosystemScraper
@@ -392,7 +648,7 @@ async def generate_battlecard(competitor_id: int):
 @router.get("/api/reports/comparison")
 async def generate_comparison_report():
     """Generate and return comparison report PDF."""
-    from main import SessionLocal, Competitor
+    from database import SessionLocal, Competitor
     # Only essentials for comparison to avoid timeout
     from google_ecosystem_scraper import GoogleEcosystemScraper
     from seo_scraper import SEOScraper
@@ -466,3 +722,69 @@ async def rate_limit_middleware(request: Request, call_next):
     response.headers["X-RateLimit-Limit"] = str(rate_limiter.limit)
     
     return response
+
+
+# ============== Settings Endpoints ==============
+
+class ThreatCriteriaUpdate(BaseModel):
+    high_threat_criteria: str
+    medium_threat_criteria: str
+    low_threat_criteria: str
+
+def background_classification_task():
+    """Background task to re-run classification."""
+    db = SessionLocal()
+    try:
+        print("Starting background re-classification based on new criteria...")
+        workflow = ClassificationWorkflow(db)
+        workflow.run_classification_pipeline()
+        print("Background re-classification complete.")
+    except Exception as e:
+        print(f"Error in background classification: {e}")
+    finally:
+        db.close()
+
+@router.get("/api/settings/threat-criteria")
+async def get_threat_criteria(db: Session = Depends(get_db)):
+    """Get current threat level classification criteria."""
+    criteria = {
+        "high": "Direct competitor with overlapping products, >$10M revenue, or rapid growth.",
+        "medium": "Partial product overlap or emerging competitor in adjacent market.",
+        "low": "Indirect competitor, legacy system, or different market focus."
+    }
+    
+    settings = db.query(SystemSetting).filter(SystemSetting.key.in_([
+        "threat_criteria_high", "threat_criteria_medium", "threat_criteria_low"
+    ])).all()
+    
+    for s in settings:
+        if s.key == "threat_criteria_high": criteria["high"] = s.value
+        elif s.key == "threat_criteria_medium": criteria["medium"] = s.value
+        elif s.key == "threat_criteria_low": criteria["low"] = s.value
+        
+    return criteria
+
+@router.post("/api/settings/threat-criteria")
+async def update_threat_criteria(update: ThreatCriteriaUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Update threat level criteria and trigger re-classification."""
+    
+    def upsert(key, value):
+        setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if not setting:
+            setting = SystemSetting(key=key, value=value)
+            db.add(setting)
+        else:
+            setting.value = value
+            setting.updated_at = datetime.utcnow()
+    
+    upsert("threat_criteria_high", update.high_threat_criteria)
+    upsert("threat_criteria_medium", update.medium_threat_criteria)
+    upsert("threat_criteria_low", update.low_threat_criteria)
+    
+    db.commit()
+    
+    # Trigger re-classification
+    background_tasks.add_task(background_classification_task)
+    
+    return {"status": "updated", "message": "Criteria updated. AI classification has been triggered."}
+

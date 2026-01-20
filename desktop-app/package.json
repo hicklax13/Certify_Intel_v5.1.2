@@ -1,0 +1,107 @@
+{
+    "name": "certify-intel",
+    "version": "1.0.0",
+    "description": "Competitive Intelligence Dashboard for Healthcare",
+    "main": "electron/main.js",
+    "author": "Certify Health",
+    "license": "UNLICENSED",
+    "private": true,
+    "scripts": {
+        "start": "electron .",
+        "start:dev": "cross-env NODE_ENV=development electron .",
+        "build:backend": "cd ../backend && pyinstaller --onefile --name certify_backend main.py",
+        "build:win": "electron-builder --win",
+        "build:mac": "electron-builder --mac",
+        "build:all": "electron-builder --win --mac",
+        "build:version-a": "cross-env BUILD_VERSION=A npm run build:all",
+        "build:version-b": "cross-env BUILD_VERSION=B npm run build:all",
+        "postinstall": "electron-builder install-app-deps"
+    },
+    "dependencies": {
+        "electron-updater": "^6.1.7",
+        "electron-log": "^5.0.3"
+    },
+    "devDependencies": {
+        "electron": "^28.1.0",
+        "electron-builder": "^24.9.1",
+        "cross-env": "^7.0.3"
+    },
+    "build": {
+        "appId": "com.certifyhealth.intel",
+        "productName": "Certify Intel",
+        "directories": {
+            "output": "dist",
+            "buildResources": "resources"
+        },
+        "files": [
+            "electron/**/*",
+            "frontend/**/*",
+            "backend-bundle/**/*",
+            "data/**/*",
+            "!**/*.pyc",
+            "!**/__pycache__"
+        ],
+        "extraResources": [
+            {
+                "from": "backend-bundle",
+                "to": "backend-bundle"
+            },
+            {
+                "from": "data",
+                "to": "data"
+            }
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "resources/icons/icon.ico"
+        },
+        "mac": {
+            "target": [
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
+            ],
+            "icon": "resources/icons/icon.icns",
+            "category": "public.app-category.business"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "installerIcon": "resources/icons/icon.ico",
+            "uninstallerIcon": "resources/icons/icon.ico",
+            "installerHeaderIcon": "resources/icons/icon.ico",
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true
+        },
+        "dmg": {
+            "contents": [
+                {
+                    "x": 130,
+                    "y": 220
+                },
+                {
+                    "x": 410,
+                    "y": 220,
+                    "type": "link",
+                    "path": "/Applications"
+                }
+            ]
+        },
+        "publish": {
+            "provider": "github",
+            "owner": "YOUR_GITHUB_USERNAME",
+            "repo": "certify-intel-releases"
+        }
+    }
+}

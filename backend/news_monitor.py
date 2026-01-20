@@ -58,13 +58,13 @@ class NewsMonitor:
         self.newsapi_key = os.getenv("NEWSAPI_KEY")
         self.bing_news_key = os.getenv("BING_NEWS_KEY")
     
-    def fetch_news(self, company_name: str, days: int = 7) -> NewsDigest:
+    def fetch_news(self, company_name: str, days: int = 90) -> NewsDigest:
         """
         Fetch news for a company from all available sources.
         
         Args:
             company_name: Name of the company
-            days: Number of days to look back
+            days: Number of days to look back (default: 90 days / 3 months)
             
         Returns:
             NewsDigest with articles and analysis
@@ -108,10 +108,10 @@ class NewsMonitor:
         
         return NewsDigest(
             company_name=company_name,
-            articles=unique_articles[:20],  # Limit to 20
+            articles=unique_articles,  # Include ALL articles
             total_count=len(unique_articles),
             sentiment_breakdown=sentiment_counts,
-            major_events=major_events[:5],
+            major_events=major_events,  # Include ALL major events
             fetched_at=datetime.utcnow().isoformat()
         )
     
@@ -120,16 +120,17 @@ class NewsMonitor:
         articles = []
         
         try:
-            # Healthcare-specific search
-            query = urllib.parse.quote(f"{company_name} healthcare")
+            # Search by company name only (most general)
+            query = urllib.parse.quote(f'"{company_name}"')
             url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
             
-            with urllib.request.urlopen(url, timeout=10) as response:
+            with urllib.request.urlopen(url, timeout=15) as response:
                 content = response.read()
             
             root = ET.fromstring(content)
             
-            for item in root.findall(".//item")[:10]:
+            # Get ALL matching articles (no limit)
+            for item in root.findall(".//item"):
                 title = item.find("title")
                 link = item.find("link")
                 pub_date = item.find("pubDate")
@@ -171,13 +172,15 @@ class NewsMonitor:
         
         try:
             from_date = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-            query = urllib.parse.quote(f'"{company_name}" healthcare')
-            url = f"https://newsapi.org/v2/everything?q={query}&from={from_date}&sortBy=publishedAt&apiKey={self.newsapi_key}"
+            # Search by company name only (most general)
+            query = urllib.parse.quote(f'"{company_name}"')
+            url = f"https://newsapi.org/v2/everything?q={query}&from={from_date}&sortBy=publishedAt&pageSize=100&apiKey={self.newsapi_key}"
             
-            with urllib.request.urlopen(url, timeout=10) as response:
+            with urllib.request.urlopen(url, timeout=15) as response:
                 data = json.loads(response.read())
             
-            for item in data.get("articles", [])[:10]:
+            # Get ALL matching articles (up to 100 per source)
+            for item in data.get("articles", []):
                 articles.append(NewsArticle(
                     title=item.get("title", ""),
                     url=item.get("url", ""),
@@ -202,15 +205,17 @@ class NewsMonitor:
             return articles
         
         try:
-            query = urllib.parse.quote(f"{company_name} healthcare")
-            url = f"https://api.bing.microsoft.com/v7.0/news/search?q={query}&count=10"
+            # Search by company name only (most general)
+            query = urllib.parse.quote(f'"{company_name}"')
+            url = f"https://api.bing.microsoft.com/v7.0/news/search?q={query}&count=100"
             
             req = urllib.request.Request(url)
             req.add_header("Ocp-Apim-Subscription-Key", self.bing_news_key)
             
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=15) as response:
                 data = json.loads(response.read())
             
+            # Get ALL matching articles
             for item in data.get("value", []):
                 articles.append(NewsArticle(
                     title=item.get("name", ""),
@@ -275,7 +280,7 @@ class NewsMonitor:
 
 
 # API convenience functions
-def fetch_competitor_news(company_name: str, days: int = 7) -> Dict[str, Any]:
+def fetch_competitor_news(company_name: str, days: int = 90) -> Dict[str, Any]:
     """Fetch news for a competitor."""
     monitor = NewsMonitor()
     digest = monitor.fetch_news(company_name, days)

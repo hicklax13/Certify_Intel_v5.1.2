@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "C:\Users\conno\Downloads\Certify_Health_Intelv1\backend\verify_system.py", line 64, in <module>
+    check_imports(os.getcwd())
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\conno\Downloads\Certify_Health_Intelv1\backend\verify_system.py", line 7, in check_imports
+    print(f"\U0001f50d Starting Static Analysis on {start_dir}...")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f50d' in position 0: character maps to <undefined>

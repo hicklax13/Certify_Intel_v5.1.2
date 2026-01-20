@@ -106,6 +106,53 @@ class CompetitorScraper:
                 error=str(e)
             )
     
+    async def scrape(self, url: str) -> dict:
+        """Simple scrape method for compatibility with main.py calls.
+        Returns dict with extracted content from the website."""
+        try:
+            if not self.browser:
+                return {"error": "Browser not initialized"}
+            
+            context = await self.browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
+            page = await context.new_page()
+            
+            # Navigate to the URL
+            if not url.startswith("http"):
+                url = f"https://{url}"
+            
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+            
+            if not response or response.status >= 400:
+                await context.close()
+                return {"error": f"HTTP {response.status if response else 'No response'}"}
+            
+            await page.wait_for_timeout(2000)
+            
+            # Extract text content
+            content = await page.evaluate("""
+                () => {
+                    const scripts = document.querySelectorAll('script, style, noscript');
+                    scripts.forEach(s => s.remove());
+                    return document.body.innerText || '';
+                }
+            """)
+            
+            title = await page.title()
+            await context.close()
+            
+            return {
+                "content": content,
+                "title": title,
+                "url": url,
+                "success": True
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    
     def _get_page_url(self, website: str, page_type: str) -> Optional[str]:
         """Get the URL for a specific page type."""
         # Ensure website has protocol

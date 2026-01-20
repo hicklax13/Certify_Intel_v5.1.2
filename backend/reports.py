@@ -68,14 +68,15 @@ class ExecutiveBriefingGenerator:
             textColor=colors.HexColor('#FFC107')
         ))
         
-        self.styles.add(ParagraphStyle(
-            name='Heading3',
-            parent=self.styles['Heading2'],
-            fontSize=12,
-            textColor=colors.HexColor('#1B2B65'),
-            spaceBefore=10,
-            spaceAfter=5
-        ))
+        if 'Heading3' not in self.styles:
+            self.styles.add(ParagraphStyle(
+                name='Heading3',
+                parent=self.styles['Heading2'],
+                fontSize=12,
+                textColor=colors.HexColor('#1B2B65'),
+                spaceBefore=10,
+                spaceAfter=5
+            ))
     
     def generate_briefing(
         self,

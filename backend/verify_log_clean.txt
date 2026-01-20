@@ -1,0 +1,56 @@
+[INFO] Starting Static Analysis on C:\Users\conno\Downloads\Certify_Health_Intelv1\backend...
+[PASS] additional_competitors_part1.py - OK
+[PASS] additional_competitors_part2.py - OK
+Environment variables loaded from .env
+[PASS] alerts.py - OK
+[PASS] analytics.py - OK
+[PASS] api_routes.py - OK
+[PASS] appstore_scraper.py - OK
+[FAIL] celery_app.py - IMPORT ERROR
+   No module named 'celery'
+[PASS] crunchbase_scraper.py - OK
+[PASS] database.py - OK
+[PASS] discovery_agent.py - OK
+[PASS] extended_features.py - OK
+[PASS] external_scrapers.py - OK
+[PASS] extractor.py - OK
+[PASS] glassdoor_scraper.py - OK
+[PASS] google_ecosystem_scraper.py - OK
+[PASS] gov_contracts_scraper.py - OK
+[PASS] h1b_scraper.py - OK
+[PASS] himss_scraper.py - OK
+[PASS] indeed_scraper.py - OK
+[PASS] klas_scraper.py - OK
+[PASS] linkedin_tracker.py - OK
+Environment variables loaded from .env
+[PASS] main.py - OK
+[PASS] news_monitor.py - OK
+[PASS] notifications.py - OK
+[PASS] pitchbook_scraper.py - OK
+[PASS] populate_data.py - OK
+[PASS] price_tracker.py - OK
+[PASS] reports.py - OK
+[PASS] review_scraper.py - OK
+[PASS] risk_management_scraper.py - OK
+[PASS] scheduler.py - OK
+[PASS] scraper.py - OK
+[PASS] sec_edgar_scraper.py - OK
+[PASS] seed_db.py - OK
+[PASS] sentiment_scraper.py - OK
+[PASS] seo_scraper.py - OK
+[PASS] social_media_monitor.py - OK
+[FAIL] tasks.py - IMPORT ERROR
+   cannot import name 'celery_app' from 'celery_app' (C:\Users\conno\Downloads\Certify_Health_Intelv1\backend\celery_app.py)
+[PASS] tech_stack_scraper.py - OK
+[PASS] tests.py - OK
+[PASS] test_email.py - OK
+[PASS] test_phase3.py - OK
+[PASS] threat_analyzer.py - OK
+[PASS] uspto_scraper.py - OK
+[PASS] webhooks.py - OK
+[PASS] win_loss_tracker.py - OK
+[PASS] discovery.py - OK
+[PASS] reports.py - OK
+----------------------------------------
+Checked 48 files.
+FAILED: Found 2 errors.

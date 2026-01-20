@@ -27,7 +27,11 @@ except ImportError:
 AUTH_AVAILABLE = True
 
 
+
 # ============== User Authentication ==============
+
+from database import User, SessionLocal
+from sqlalchemy.orm import Session
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
@@ -35,46 +39,29 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 
-class User:
-    """User model for authentication."""
-    def __init__(
-        self,
-        id: int,
-        email: str,
-        hashed_password: str,
-        full_name: str = "",
-        role: str = "viewer",  # viewer, analyst, admin
-        is_active: bool = True,
-        created_at: datetime = None
-    ):
-        self.id = id
-        self.email = email
-        self.hashed_password = hashed_password
-        self.full_name = full_name
-        self.role = role
-        self.is_active = is_active
-        self.created_at = created_at or datetime.utcnow()
-
-
 class AuthManager:
-    """Handles user authentication."""
+    """Handles user authentication with Database Persistence."""
     
     def __init__(self):
-        # In-memory user store for demo (use DB in production)
-        self.users: Dict[str, User] = {}
-        self._create_default_admin()
+        pass
     
-    def _create_default_admin(self):
-        """Create default admin user."""
-        admin_email = os.getenv("ADMIN_EMAIL", "admin@certifyhealth.com")
-        admin_password = os.getenv("ADMIN_PASSWORD", "certifyintel2024")
-        
-        self.create_user(
-            email=admin_email,
-            password=admin_password,
-            full_name="System Admin",
-            role="admin"
-        )
+    def ensure_default_admin(self, db: Session):
+        """Create default admin user if not exists."""
+        try:
+            admin_email = os.getenv("ADMIN_EMAIL", "admin@certifyhealth.com")
+            existing = db.query(User).filter(User.email == admin_email).first()
+            if not existing:
+                print(f"Creating default admin: {admin_email}")
+                admin_password = os.getenv("ADMIN_PASSWORD", "certifyintel2024")
+                self.create_user(
+                    db,
+                    email=admin_email,
+                    password=admin_password,
+                    full_name="System Admin",
+                    role="admin"
+                )
+        except Exception as e:
+            print(f"Error ensuring default admin: {e}")
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against hash."""
@@ -87,22 +74,32 @@ class AuthManager:
         salted = f"{SECRET_KEY}{password}"
         return hashlib.sha256(salted.encode()).hexdigest()
     
-    def create_user(self, email: str, password: str, full_name: str = "", role: str = "viewer") -> User:
-        """Create a new user."""
-        user = User(
-            id=len(self.users) + 1,
+    def create_user(self, db: Session, email: str, password: str, full_name: str = "", role: str = "viewer") -> User:
+        """Create a new user in DB."""
+        # hashed_password = self.hash_password(password)
+        # user = User(email=email, hashed_password=hashed_password, full_name=full_name, role=role)
+        # Check if exists
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            return existing
+            
+        hashed = self.hash_password(password)
+        new_user = User(
             email=email,
-            hashed_password=self.hash_password(password),
+            hashed_password=hashed,
             full_name=full_name,
-            role=role
+            role=role,
+            is_active=True
         )
-        self.users[email] = user
-        return user
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return new_user
     
-    def authenticate_user(self, email: str, password: str) -> Optional[User]:
-        """Authenticate user credentials."""
-        user = self.users.get(email)
-        if not user:
+    def authenticate_user(self, db: Session, email: str, password: str) -> Optional[User]:
+        """Authenticate user credentials against DB."""
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not user.is_active:
             return None
         if not self.verify_password(password, user.hashed_password):
             return None
@@ -551,3 +548,49 @@ if __name__ == "__main__":
     # Test
     print("Win/Loss Stats:")
     print(json.dumps(win_loss_tracker.get_stats(), indent=2))
+
+# ============== Workflow Automation ==============
+
+from database import Competitor
+from sqlalchemy.orm import Session
+
+KNOWN_TICKERS = {
+    "phreesia": {"symbol": "PHR", "exchange": "NYSE", "name": "Phreesia Inc"},
+    "health catalyst": {"symbol": "HCAT", "exchange": "NASDAQ", "name": "Health Catalyst Inc"},
+    "veeva": {"symbol": "VEEV", "exchange": "NYSE", "name": "Veeva Systems Inc"},
+    "teladoc": {"symbol": "TDOC", "exchange": "NYSE", "name": "Teladoc Health Inc"},
+    "doximity": {"symbol": "DOCS", "exchange": "NYSE", "name": "Doximity Inc"},
+    "hims & hers": {"symbol": "HIMS", "exchange": "NYSE", "name": "Hims & Hers Health Inc"},
+    "definitive healthcare": {"symbol": "DH", "exchange": "NASDAQ", "name": "Definitive Healthcare Corp"},
+    "carecloud": {"symbol": "CCLD", "exchange": "NASDAQ", "name": "CareCloud Inc"},
+}
+
+class ClassificationWorkflow:
+    """Automated workflow for classifying competitors."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        
+    def run_classification_pipeline(self):
+        """Run the full classification pipeline."""
+        print("Starting automated classification pipeline...")
+        try:
+            competitors = self.db.query(Competitor).filter(Competitor.is_deleted == False).all()
+            updates_count = 0
+            for comp in competitors:
+                comp_name_lower = comp.name.lower()
+                if comp_name_lower in KNOWN_TICKERS:
+                    info = KNOWN_TICKERS[comp_name_lower]
+                    if not comp.is_public or comp.ticker_symbol != info["symbol"]:
+                        print(f"  [AUTO-CLASSIFY] Identifying {comp.name} as PUBLIC ({info['symbol']})")
+                        comp.is_public = True
+                        comp.ticker_symbol = info["symbol"]
+                        comp.stock_exchange = info["exchange"]
+                        updates_count += 1
+            if updates_count > 0:
+                self.db.commit()
+            print(f"Classification validation complete. {updates_count} records updated/verified.")
+        except Exception as e:
+            print(f"Error in classification pipeline: {e}")
+        finally:
+            self.db.close()

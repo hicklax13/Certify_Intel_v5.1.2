@@ -50,21 +50,55 @@ class DiscoveryAgent:
         self.use_live_search = use_live_search and DDGS_AVAILABLE
         self.use_openai = use_openai and OPENAI_AVAILABLE
         
-        # Certify Health DNA Profile
+        # Certify Health DNA Profile - Expanded for all 7 Products & 11 Markets
         self.profile = {
             "core_keywords": [
-                "patient intake", "digital check-in", "revenue cycle management", 
-                "biometric authentication", "patient engagement", "healthcare it",
-                "eligibility verification", "patient registration", "medical billing"
+                # Patient Experience Platform (PXP)
+                "patient experience platform", "patient portal", "digital intake", 
+                "appointment scheduling", "self-scheduling", "patient check-in", "kiosk",
+                # Practice Management System (PMS)
+                "practice management", "medical scheduling", "patient registration",
+                # Revenue Cycle Management (RCM)
+                "revenue cycle management", "patient payments", "eligibility verification",
+                "insurance verification", "claims management", "denial management",
+                # Patient Management / Clinical
+                "clinical documentation", "ehr", "emr", "ai scribe", "care coordination",
+                # CERTIFY Pay
+                "healthcare payments", "patient payment collection", "text to pay",
+                # FaceCheck
+                "biometric authentication", "facial recognition", "patient identification",
+                # Interoperability
+                "ehr integration", "fhir", "hl7", "healthcare interoperability"
             ],
-            "required_context": ["healthcare", "medical", "hospital", "practice", "patient", "clinical"],
+            "market_keywords": [
+                # Hospitals & Health Systems
+                "hospital", "health system", "inpatient",
+                # Ambulatory & Outpatient
+                "ambulatory", "outpatient", "urgent care", "asc", "imaging center",
+                # Behavioral Health
+                "behavioral health", "mental health", "substance abuse",
+                # Telehealth
+                "telehealth", "telemedicine", "virtual care",
+                # Labs & Diagnostics
+                "laboratory", "diagnostic", "pathology",
+                # Enterprise
+                "multi-specialty", "dso", "dental service organization", "group practice"
+            ],
+            "required_context": [
+                "healthcare", "medical", "hospital", "practice", "patient", "clinical",
+                "health system", "provider", "physician", "clinic", "ambulatory"
+            ],
             "negative_keywords": [
                 "top 10", "best", "review", "blog", "news", "article", 
-                "job", "career", "salary", "investor", "stock", "press release"
+                "job", "career", "salary", "investor", "stock", "press release",
+                "wikipedia", "linkedin.com/in/", "glassdoor", "indeed"
             ],
             "known_competitors": [
                 "phreesia", "clearwave", "kareo", "athenahealth", "kyruus",
-                "notable", "klara", "mend", "relatient", "modmed"
+                "notable", "klara", "mend", "relatient", "modmed", "nextech",
+                "simplepractice", "drchrono", "advancedmd", "eclinicalworks",
+                "veradigm", "nextgen", "greenway", "carecloud", "tebra",
+                "solutionreach", "luma health", "yosi health", "qure4u"
             ]
         }
         
@@ -91,19 +125,34 @@ class DiscoveryAgent:
         
         candidates = []
         
-        # 1. Generate Search Queries - Healthcare IT specific
+        # 1. Generate Search Queries - Covering all 7 Products & 11 Markets
         queries = [
-            "Phreesia competitors patient intake 2025",
-            "best patient check-in software healthcare",
+            # Product-focused queries
+            "Phreesia competitors patient intake 2026",
+            "patient experience platform healthcare software",
+            "practice management system medical",
             "healthcare revenue cycle management companies",
-            "patient engagement platform providers",
+            "patient payment collection software healthcare",
+            "biometric patient identification healthcare",
+            "ehr integration platform fhir hl7",
+            "ai medical scribe clinical documentation",
             "digital front door healthcare solutions",
             "patient self-scheduling software medical",
-            "healthcare eligibility verification companies",
-            "patient payment platform healthcare",
-            "patient self-service kiosk companies",
-            "EHR patient portal software",
-            "medical practice management software"
+            # Market-focused queries  
+            "hospital patient intake software",
+            "ambulatory care practice management",
+            "urgent care check-in software",
+            "behavioral health practice management software",
+            "telehealth platform patient engagement",
+            "dental DSO practice management software",
+            "long-term care patient management",
+            "laboratory patient scheduling software",
+            "multi-specialty group practice software",
+            # Competitor-focused queries
+            "Phreesia alternatives 2026",
+            "athenahealth competitors healthcare",
+            "Epic alternatives patient engagement",
+            "Clearwave competitors patient check-in"
         ]
         
         found_urls = set()

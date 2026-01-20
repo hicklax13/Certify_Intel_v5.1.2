@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build outputs
+backend/dist/
+backend/build/
+backend/*.spec
+backend/exports/*.pdf
+backend/exports/*.xlsx
+backend/reports/
+backend/test_reports/
+
+# Desktop app
+desktop-app/node_modules/
+desktop-app/dist/
+desktop-app/out/
+desktop-app/backend-bundle/
+
+# Test files
+backend/test_*.py
+backend/verify_*.py
+backend/verify_*.pdf
+backend/test_*.json
+backend/build_log*.txt
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from scraper import CompetitorScraper, ScrapeResult
 from extractor import GPTExtractor, ExtractedData
-from main import SessionLocal, Competitor, ChangeLog
+from database import SessionLocal, Competitor, ChangeLog
 
 # Initialize scheduler
 scheduler = AsyncIOScheduler()

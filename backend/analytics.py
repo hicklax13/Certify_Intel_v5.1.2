@@ -11,7 +11,7 @@ from collections import defaultdict
 
 # Import models
 try:
-    from main import SessionLocal, Competitor
+    from database import SessionLocal, Competitor
 except ImportError:
     pass
 
@@ -33,17 +33,101 @@ class ThreatScoreCalculator:
     
     # Weight factors for different signals
     WEIGHTS = {
-        "market_overlap": 0.20,      # How much they compete in same segments
-        "customer_size_overlap": 0.15,  # Target similar practice sizes
-        "funding_strength": 0.15,    # Financial resources
-        "growth_rate": 0.15,         # How fast they're growing
-        "product_breadth": 0.10,     # Feature coverage
-        "customer_base": 0.10,       # Installed base size
-        "pricing_competition": 0.10, # Price positioning
-        "innovation_rate": 0.05,     # New product launches
+        "product_overlap": 0.20,         # How many of Certify's 7 products they compete with
+        "market_overlap": 0.15,          # How many of Certify's 11 markets they target
+        "customer_size_overlap": 0.10,   # Target similar practice sizes
+        "funding_strength": 0.15,        # Financial resources
+        "growth_rate": 0.15,             # How fast they're growing
+        "product_breadth": 0.05,         # Feature coverage
+        "customer_base": 0.10,           # Installed base size
+        "pricing_competition": 0.05,     # Price positioning
+        "innovation_rate": 0.05,         # New product launches
     }
     
-    # Certify Health's target segments (for overlap calculation)
+    # Certify Health's 7 Product Categories (keywords for overlap detection)
+    CERTIFY_PRODUCTS = {
+        "pxp": [
+            "patient experience", "appointment scheduling", "digital intake", "self-scheduling",
+            "patient reminders", "nudges", "patient communication", "post-visit", 
+            "patient portal", "brand experience", "check-in", "kiosk"
+        ],
+        "pms": [
+            "practice management", "scheduling", "registration", "front office", 
+            "back office", "billing ops", "reporting", "appointments", "waitlist"
+        ],
+        "rcm": [
+            "revenue cycle", "patient payments", "claims", "billing", "collections",
+            "denial management", "payment gateway", "text to pay", "autopay",
+            "eligibility verification", "insurance verification", "copay"
+        ],
+        "patient_mgmt": [
+            "patient chart", "clinical documentation", "care coordination", 
+            "orders", "ai scribe", "encounter", "soap notes", "ehr", "emr",
+            "patient record", "vitals", "medical history"
+        ],
+        "certify_pay": [
+            "patient payments", "text to pay", "autopay", "merchant services",
+            "payment collection", "healthcare payments", "medical payments"
+        ],
+        "facecheck": [
+            "biometric", "facial recognition", "identity verification", 
+            "patient identification", "touchless", "photo id"
+        ],
+        "interoperability": [
+            "ehr integration", "fhir", "hl7", "epic", "cerner", "athena",
+            "nextgen", "eclinicalworks", "allscripts", "api", "interoperability"
+        ]
+    }
+    
+    # Certify Health's 11 Market Verticals (keywords for overlap detection)
+    CERTIFY_MARKETS = {
+        "hospitals": [
+            "hospital", "health system", "general hospital", "teaching hospital",
+            "specialty hospital", "imaging department", "inpatient"
+        ],
+        "ambulatory": [
+            "ambulatory", "outpatient", "urgent care", "walk-in", "asc",
+            "ambulatory surgical", "imaging center", "retail clinic", "primary care"
+        ],
+        "long_term": [
+            "nursing home", "assisted living", "snf", "skilled nursing", 
+            "memory care", "palliative", "long-term care", "rehabilitation"
+        ],
+        "behavioral": [
+            "behavioral health", "mental health", "substance abuse", "psychiatric",
+            "crisis stabilization", "counseling", "therapy"
+        ],
+        "specialized": [
+            "dialysis", "fertility", "ivf", "sleep center", "pain management", 
+            "wound care", "hyperbaric"
+        ],
+        "telehealth": [
+            "telehealth", "telemedicine", "virtual care", "remote monitoring", 
+            "rpm", "digital therapeutics", "chronic disease management"
+        ],
+        "labs": [
+            "laboratory", "diagnostic", "pathology", "genetic testing", 
+            "toxicology", "lab", "blood test"
+        ],
+        "managed_care": [
+            "hmo", "ppo", "aco", "tpa", "medicare", "medicaid", 
+            "managed care", "health plan", "payer"
+        ],
+        "enterprise": [
+            "multi-specialty", "idn", "dso", "dental service organization",
+            "group practice", "multi-location", "enterprise"
+        ],
+        "occupational": [
+            "occupational health", "corporate health", "employee health", 
+            "workplace clinic", "corporate wellness"
+        ],
+        "government": [
+            "va hospital", "veterans", "military", "public health", 
+            "community health", "fqhc", "government"
+        ]
+    }
+    
+    # Legacy flat list for backwards compatibility
     CERTIFY_SEGMENTS = [
         "patient intake", "eligibility verification", "payments",
         "patient engagement", "check-in", "registration"

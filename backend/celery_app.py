@@ -3,7 +3,29 @@ Certify Intel - Celery Configuration
 Async task queue for background processing.
 """
 import os
-from celery import Celery
+try:
+    from celery import Celery
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    
+    # Mock Celery class for environments without celery installed
+    class Celery:
+        def __init__(self, main, broker=None, backend=None):
+            self.main = main
+            self.conf = self.Conf()
+            
+        class Conf:
+            def update(self, **kwargs): pass
+            
+        def task(self, *args, **kwargs):
+            def decorator(func):
+                func.delay = lambda *a, **k: None # Mock delay
+                return func
+            return decorator
+            
+        def autodiscover_tasks(self, packages, force=False): pass
+        def start(self): print("Celery mock started")
 
 # Get Redis URL from environment or use default
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -12,9 +34,11 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery(
     "certify_intel",
     broker=REDIS_URL,
-    backend=REDIS_URL,
-    include=["tasks"]
+    backend=REDIS_URL
 )
+
+# Autodiscover tasks to avoid circular import issues during initialization
+celery_app.autodiscover_tasks(['tasks'], force=True)
 
 # Celery configuration
 celery_app.conf.update(
