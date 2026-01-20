@@ -12,7 +12,8 @@ import os
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    print("Environment variables loaded from .env")
+    print(f"Loading environment variables from .env")
+    print(f"Database URL: {os.getenv('DATABASE_URL', 'sqlite:///./certify_intel.db')}")
 except ImportError:
     print("python-dotenv not installed, using system environment variables")
 
@@ -690,6 +691,39 @@ def get_competitor_completeness(competitor_id: int, db: Session = Depends(get_db
 
 
 # ============== CHANGE HISTORY ENDPOINTS ==============
+
+@app.get("/api/changes")
+def get_changes(competitor_id: Optional[int] = None, days: int = 30, db: Session = Depends(get_db)):
+    """Get change logs for timeline."""
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    
+    query = db.query(DataChangeHistory).filter(DataChangeHistory.changed_at >= cutoff)
+    
+    if competitor_id:
+        query = query.filter(DataChangeHistory.competitor_id == competitor_id)
+        
+    changes = query.order_by(DataChangeHistory.changed_at.desc()).limit(100).all()
+    
+    return {
+        "competitor_id": competitor_id,
+        "days": days,
+        "count": len(changes),
+        "changes": [
+            {
+                "id": c.id,
+                "competitor_id": c.competitor_id,
+                "change_type": c.field_name.replace("_", " ").title(), # Map field_name to readable type
+                "previous_value": c.old_value,
+                "new_value": c.new_value,
+                "severity": "Medium", # Default severity as DB model doesn't have it yet, or map from field
+                "detected_at": c.changed_at.isoformat(),
+                "source": c.source_url
+            }
+            for c in changes
+        ]
+    }
+
 
 @app.get("/api/changes/history/{competitor_id}")
 def get_competitor_change_history(competitor_id: int, db: Session = Depends(get_db)):

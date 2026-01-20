@@ -4,7 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 
 # Database setup - SQLite for simplicity
-DATABASE_URL = "sqlite:///./certify_intel.db"
+import os
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./certify_intel.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
