@@ -1,117 +1,132 @@
 # Certify Health Intel - Competitive Intelligence Dashboard
 
-A modern competitive intelligence platform for healthcare technology companies. Track competitors, monitor market changes, and generate actionable insights powered by AI.
+![Certify Intel Banner](frontend/logo.png)
 
-## 🚀 Features
+## 📖 Overview
 
-- **Real-time Competitor Tracking**: Monitor pricing, features, funding, and market positioning
-- **AI-Powered Discovery**: Automatically discover new competitors using OpenAI GPT
-- **Change Log**: Track all competitor data changes with severity scoring
-- **Analytics & Reports**: Generate executive briefings, battlecards, and comparison reports
-- **Data Quality Dashboard**: Monitor data completeness and freshness
-- **Desktop & Web App**: Run as standalone Electron app or web application
+**Certify Health Intel** is a mission-critical competitive intelligence platform designed specifically for **Certify Health**. It provides a centralized, real-time dashboard to track, analyze, and counter competitors in the healthcare technology space.
 
-## 📁 Project Structure
+The system aggregates data from multiple sources—public financial filings, web scrapers, and manual field intelligence—to provide a 360-degree view of the competitive landscape. It empowers the sales, product, and leadership teams with actionable insights to maintain Certify Health's market leadership.
+
+## 🎯 Who Is This For?
+
+- **Executive Leadership**: For high-level market summaries, threat analysis, and strategic planning.
+- **Sales Team**: For instant access to "Battlecards," feature comparisons, and win/loss data to close more deals.
+- **Product Management**: To identify feature gaps, monitor competitor releases, and guide the product roadmap.
+- **Strategy & Ops**: To track market shifts, funding events, and M&A activity.
+
+## ✨ Key Features
+
+### 🔍 Real-Time Intelligence
+
+- **Automated Tracking**: Monitors 30+ data points per competitor including pricing, customers, and employee growth.
+- **AI Discovery Agent**: "Certify Scout" autonomously crawls the web to identify emerging threats and new market entrants.
+- **Change Detection**: Alerts system that highlights significant changes in competitor messaging or pricing.
+
+### 📊 Advanced Analytics
+
+- **AI Executive Summary**: Generates weekly strategic briefings using GPT-4 analysis of all collected data.
+- **Market Positioning Map**: Visualizes competitors by threat level, company size, and market focus.
+- **Feature Gap Analysis**: Side-by-side product comparison matrices.
+
+### 🛠️ Operational Tools
+
+- **Battlecard Generator**: One-click PDF generation of sales battlecards.
+- **Data Quality Engine**: Scores data freshness and completeness to ensure trust in the insights.
+- **Multi-Platform Access**: Accessible via a responsive Web Dashboard or a standalone Desktop Application.
+
+## 🏗️ Tech Stack & Architecture
+
+This project is built with a modern, scalable architecture designed for performance and ease of deployment.
+
+### **Backend (Python)**
+
+- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) - High-performance async web framework.
+- **Database**: **SQLite** (with SQLAlchemy ORM) - Lightweight and zero-config for easy deployment.
+- **AI/ML**: **OpenAI GPT-4** Integration - For data extraction, summarization, and strategic analysis.
+- **Scraping**: **Playwright** & **BeautifulSoup** - For robust web scraping and dynamic content handling.
+- **Task Management**: **APScheduler** - For scheduling periodic background scraping jobs.
+- **Reporting**: **ReportLab** - For programmatic PDF generation.
+
+### **Frontend (Web)**
+
+- **Core**: HTML5, Vanilla JavaScript (ES6+), CSS3.
+- **Styling**: Custom CSS variables for a premium, dark-mode aesthetic (Glassmorphism design).
+- **Visualization**: **Chart.js** - For interactive market maps and trend charts.
+- **PWA**: Fully capable Progressive Web App with service workers.
+
+### **DesktopWrapper**
+
+- **Framework**: [Electron](https://www.electronjs.org/) - Wraps the web application for a native desktop experience.
+- **Build Tools**: **electron-builder** - Generates `.exe` (Windows) and `.dmg` (macOS) installers.
+
+## 📂 Project Structure
 
 ```
 Project_Intel/
-├── backend/          # Python FastAPI backend
-│   ├── main.py      # Main application entry point
-│   ├── database.py  # SQLAlchemy models
-│   ├── requirements.txt
-│   ├── .env.example # Environment template
-│   └── [scrapers]   # Data source integrations
-├── frontend/         # HTML/CSS/JS frontend
-│   ├── index.html   # Main dashboard
-│   ├── login.html   # Authentication
-│   ├── app.js       # Application logic
-│   └── styles.css   # Styling
-└── desktop-app/      # Electron wrapper (optional)
-    ├── electron/
-    └── package.json
+├── backend/                  # The Brain (Python API)
+│   ├── main.py              # Application entry point
+│   ├── database.py          # Data models & storage
+│   ├── discovery_agent.py   # AI scraping logic
+│   ├── analytics.py         # Data processing engine
+│   └── [scrapers]           # Modular scraper scripts
+├── frontend/                 # The Face (UI/UX)
+│   ├── index.html           # Single Page Application
+│   ├── app.js               # Client-side logic
+│   └── styles.css           # Custom design system
+├── desktop-app/              # The Wrapper (Electron)
+│   ├── electron/            # Native integration
+│   └── dist/                # Installers output
+└── client_docs/              # Intelligence Library
+    ├── [Project Plans]      # Strategic roadmaps
+    ├── [Deliverables]       # Final reports
+    └── [Templates]          # Excel dashboards
 ```
 
-## 🛠️ Installation & Setup
+## 🚀 Installation & Setup
 
-### Backend (Python)
+### Prerequisites
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+- Python 3.9+
+- Node.js (for Desktop App only)
+- OpenAI API Key (for AI features)
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Backend Setup
 
-3. Configure environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your OpenAI API key and SMTP settings
-   ```
+```bash
+cd backend
+pip install -r requirements.txt
 
-4. Run the backend:
-   ```bash
-   uvicorn main:app --reload --port 8000
-   ```
+# Configure Environment
+cp .env.example .env
+# Edit .env with your keys:
+# OPENAI_API_KEY=sk-...
+# SMTP_PASSWORD=...
 
-### Desktop App (Electron - Optional)
+# Run Server
+uvicorn main:app --reload --port 8000
+```
 
-1. Navigate to the desktop-app directory:
-   ```bash
-   cd desktop-app
-   ```
+### 2. Desktop App (Optional)
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+cd desktop-app
+npm install
+npm start
+```
 
-3. Run the desktop app:
-   ```bash
-   npm start
-   ```
+## 🛡️ Security & Privacy
 
-4. Build installer:
-   ```bash
-   # Windows
-   npm run build:win
-   
-   # macOS
-   npm run build:mac
-   ```
+- **Role-Based Access**: Multi-tier authentication (Admin, Analyst, Viewer).
+- **Local-First Data**: All competitor data is stored in your local SQL database unless configured otherwise.
+- **Audit Logs**: Full change history tracking for data integrity.
 
-## 🌐 Access
+## 👥 Contributors
 
-- **Web App**: http://localhost:8000
-- **Login**: Default credentials - admin@certifyhealth.com / admin123
-- **API Docs**: http://localhost:8000/docs
+Developed for **Certify Health** by the Innovation Team.
 
-## 📊 Key Endpoints
-
-- `GET /api/competitors` - List all competitors
-- `POST /api/competitors` - Add new competitor
-- `GET /api/analytics/summary` - AI executive summary
-- `GET /api/changes` - Recent competitor changes
-- `POST /api/scrape` - Trigger data refresh
-
-## 🔑 Required Configuration
-
-Add these to your `.env` file:
-
-- `OPENAI_API_KEY` - For AI-powered extraction and discovery
-- `SMTP_*` - For email alerts (Gmail recommended)
-- `SLACK_WEBHOOK_URL` - (Optional) For Slack notifications
-
-## 📝 License
-
-Proprietary - Certify Health Internal Use Only
-
-## 👥 Team
-
-Developed for Certify Health's competitive intelligence needs.
+- **Lead Developer**: Connor Hickey
+- **Project Repository**: [GitHub - Project_Intel](https://github.com/hicklax13/Project_Intel)
 
 ---
-
-**GitHub Repository**: https://github.com/hicklax13/Project_Intel
+*Confidential - For Internal Use Only*
