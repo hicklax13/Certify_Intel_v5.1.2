@@ -246,22 +246,32 @@ async def proxy_logo(url: str):
         if not url.startswith("http"):
             raise HTTPException(status_code=400, detail="Invalid URL")
             
-        # Fetch image with short timeout
-        resp = requests.get(url, timeout=5)
+        # Try Clearbit first
+        try:
+            resp = requests.get(url, timeout=3)
+            if resp.status_code == 200:
+                return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
+        except:
+            pass
+            
+        # Fallback to Google Favicon service if Clearbit fails
+        # Extract domain from the input URL (expected: https://logo.clearbit.com/domain.com)
+        domain = url.split("/")[-1]
+        google_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
         
-        if resp.status_code == 200:
-            return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
-        else:
-            # Return 404 transparent pixel if not found
-            # 1x1 transparent GIF
-            transparent_pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
-            return Response(content=transparent_pixel, media_type="image/gif")
+        try:
+            resp = requests.get(google_url, timeout=3)
+            if resp.status_code == 200:
+                return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
+        except:
+            pass
+
+        # Return 404 to trigger frontend onerror fallback
+        raise HTTPException(status_code=404, detail="Image not found")
             
     except Exception as e:
         print(f"Proxy error: {e}")
-        # Return 404 transparent pixel on error
-        transparent_pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
-        return Response(content=transparent_pixel, media_type="image/gif")
+        raise HTTPException(status_code=404, detail="Proxy error")
 
 
 # get_db imported from database.py
