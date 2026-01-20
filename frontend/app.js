@@ -273,8 +273,8 @@ async function loadDashboard() {
     stats = await fetchAPI('/api/dashboard/stats') || {};
     updateStatsCards();
 
-    // Load AI Summary
-    fetchDashboardSummary();
+    // Load AI Summary - REMOVED AUTO-TRIGGER
+    // fetchDashboardSummary();
 
     // Load competitors for table
     competitors = await fetchAPI('/api/competitors') || [];
@@ -290,10 +290,21 @@ async function loadDashboard() {
 }
 
 
-async function fetchDashboardSummary() {
+function clearAISummary() {
+    const contentDiv = document.getElementById('aiSummaryContent');
+    const metaDiv = document.getElementById('aiSummaryMeta');
+    if (contentDiv) {
+        contentDiv.innerHTML = '<div class="ai-empty-state">Ready to generate insights. Click "Generate Summary" to start.</div>';
+    }
+    if (metaDiv) metaDiv.innerHTML = '';
+}
+
+async function startAISummary() {
     const summaryCard = document.getElementById('aiSummaryCard');
     const contentDiv = document.getElementById('aiSummaryContent');
     const modelBadge = document.getElementById('aiModelBadge');
+
+    // modelBadge removal caused error in previous refactor, ignoring for now as it was removed from HTML
     const providerLogo = document.getElementById('aiProviderLogo');
     const metaDiv = document.getElementById('aiSummaryMeta');
 
