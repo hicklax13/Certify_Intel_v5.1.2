@@ -1034,6 +1034,7 @@ async function loadAnalytics() {
     renderMarketShareChart();
     renderHeatmap();
     renderFeatureGaps();
+    if (typeof renderMarketQuadrant === 'function') renderMarketQuadrant();
 }
 
 function renderMarketShareChart() {

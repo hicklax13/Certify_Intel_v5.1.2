@@ -15,7 +15,8 @@
         "build:all": "electron-builder --win --mac",
         "build:version-a": "cross-env BUILD_VERSION=A npm run build:all",
         "build:version-b": "cross-env BUILD_VERSION=B npm run build:all",
-        "postinstall": "electron-builder install-app-deps"
+        "postinstall": "electron-builder install-app-deps",
+        "build": "npm run build:backend && npm run build:win"
     },
     "dependencies": {
         "electron-updater": "^6.1.7",
