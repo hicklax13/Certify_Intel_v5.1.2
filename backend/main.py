@@ -225,6 +225,15 @@ async def serve_login():
     raise HTTPException(status_code=404, detail="Login page not found")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    from pathlib import Path
+    favicon_path = Path(__file__).parent / "../frontend/favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(favicon_path)
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+
 # get_db imported from database.py
 
 

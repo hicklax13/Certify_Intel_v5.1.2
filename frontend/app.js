@@ -1044,8 +1044,10 @@ function renderMarketShareChart() {
     if (marketShareChart) marketShareChart.destroy();
 
     // Estimate market share from customer counts
+    console.log('Rendering Market Share Chart. Competitors:', competitors);
     const shareData = competitors.slice(0, 8).map(c => {
         const count = parseInt((c.customer_count || '0').replace(/\D/g, '')) || 100;
+        console.log(`Competitor ${c.name}: count=${count}`);
         return { name: c.name, share: count };
     });
 

@@ -9,7 +9,7 @@
     "scripts": {
         "start": "electron .",
         "start:dev": "cross-env NODE_ENV=development electron .",
-        "build:backend": "cd ../backend && pyinstaller --onefile --name certify_backend main.py",
+        "build:backend": "cd ../backend && .venv\\Scripts\\pyinstaller --onefile --name certify_backend main.py",
         "build:win": "electron-builder --win",
         "build:mac": "electron-builder --mac",
         "build:all": "electron-builder --win --mac",
