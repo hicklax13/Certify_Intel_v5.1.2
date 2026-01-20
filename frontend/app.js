@@ -290,7 +290,8 @@ async function loadDashboard() {
 }
 
 
-function clearAISummary() {
+// Make functions global for button clicks
+window.clearAISummary = function () {
     console.log('clearAISummary called');
     const contentDiv = document.getElementById('aiSummaryContent');
     const metaDiv = document.getElementById('aiSummaryMeta');
@@ -303,7 +304,10 @@ function clearAISummary() {
     }
 
     if (metaDiv) metaDiv.innerHTML = '';
-}
+};
+
+// Make accessible to onclick
+window.startAISummary = startAISummary;
 
 async function startAISummary() {
     const summaryCard = document.getElementById('aiSummaryCard');
