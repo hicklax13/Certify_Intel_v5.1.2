@@ -123,9 +123,11 @@
                             <h3 class="ai-summary-title">AI-Generated Executive Summary</h3>
                         </div>
                         <div class="ai-actions">
-                            <button class="btn btn-primary btn-sm" onclick="startAISummary()">✨ Generate
+                            <button id="btnGenerateSummary" class="btn btn-primary btn-sm" onclick="startAISummary()">✨
+                                Generate
                                 Summary</button>
-                            <button class="btn btn-secondary btn-sm" onclick="clearAISummary()">🗑️ Clear</button>
+                            <button id="btnClearSummary" class="btn btn-secondary btn-sm" onclick="clearAISummary()">🗑️
+                                Clear</button>
                         </div>
                     </div>
                     <div id="aiSummaryContent" class="ai-summary-content">

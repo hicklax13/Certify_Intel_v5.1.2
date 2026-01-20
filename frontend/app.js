@@ -291,11 +291,17 @@ async function loadDashboard() {
 
 
 function clearAISummary() {
+    console.log('clearAISummary called');
     const contentDiv = document.getElementById('aiSummaryContent');
     const metaDiv = document.getElementById('aiSummaryMeta');
+
     if (contentDiv) {
+        console.log('Reseting content div');
         contentDiv.innerHTML = '<div class="ai-empty-state">Ready to generate insights. Click "Generate Summary" to start.</div>';
+    } else {
+        console.error('aiSummaryContent not found');
     }
+
     if (metaDiv) metaDiv.innerHTML = '';
 }
 
