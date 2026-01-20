@@ -216,10 +216,27 @@ def schedule_daily_high_priority_check():
         print(f"Scheduled daily check for {len(high_threat_ids)} high-priority competitors at 6 AM")
 
 
+def schedule_daily_backup():
+    """Schedule daily database backup."""
+    from backup_manager import create_backup
+    
+    # Run every day at 3 AM (system load is low)
+    scheduler.add_job(
+        create_backup,
+        CronTrigger(hour=3, minute=0),
+        id="daily_database_backup",
+        name="Daily Database Backup",
+        replace_existing=True
+    )
+    print("Scheduled daily database backup for 3 AM")
+
+
+
 def start_scheduler():
     """Start the scheduler with all jobs."""
     schedule_weekly_refresh()
     schedule_daily_high_priority_check()
+    schedule_daily_backup()
     scheduler.start()
     print("Scheduler started!")
 
