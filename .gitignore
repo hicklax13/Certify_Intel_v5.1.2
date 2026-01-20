@@ -42,19 +42,39 @@ env/
 *.swo
 *~
 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Binaries & Builds
+backend/dist/
+backend/build/
+desktop-app/dist/
+desktop-app/backend-bundle/
+*.exe
+*.dmg
+
+# Exports
+backend/exports/
+
+desktop.ini
+
 # Logs
 *.log
 logs/
 *.log.*
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
 # Build outputs
-backend/dist/
-backend/build/
 backend/*.spec
 backend/exports/*.pdf
 backend/exports/*.xlsx
