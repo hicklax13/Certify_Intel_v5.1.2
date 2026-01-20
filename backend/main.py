@@ -36,7 +36,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean
@@ -2426,7 +2426,54 @@ def get_competitor_market_intelligence(competitor_id: int, db: Session = Depends
     
     return pitchbook_scraper.get_pitchbook_data(competitor.name)
 
-# Comparison Endpoints
+# ============== EXPORT ENDPOINTS ==============
+
+@app.get("/api/export/excel")
+def get_export_excel(db: Session = Depends(get_db)):
+    """Export all competitor data to Excel."""
+    import pandas as pd
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
+    
+    if not competitors:
+        raise HTTPException(status_code=404, detail="No data to export")
+        
+    # Convert to list of dicts
+    data = []
+    for comp in competitors:
+        item = {
+            "ID": comp.id,
+            "Company Name": comp.name,
+            "Website": comp.website,
+            "Status": comp.status,
+            "Threat Level": comp.threat_level,
+            "Primary Market": comp.primary_market,
+            "Pricing Model": comp.pricing_model,
+            "Employee Count": comp.employee_count,
+            "Revenue": comp.annual_revenue,
+            "Net Income": comp.net_income,
+            "Stock Symbol": comp.ticker_symbol,
+            "Last Updated": comp.last_updated
+        }
+        data.append(item)
+        
+    df = pd.DataFrame(data)
+    
+    # Create Excel buffer
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name="Competitors")
+        
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer, 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=competitor_intelligence_export.xlsx"}
+    )
+
 
 @app.get("/api/innovations/compare")
 def compare_innovation_metrics(competitor_ids: str, db: Session = Depends(get_db)):
