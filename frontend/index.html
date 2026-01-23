@@ -5,20 +5,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Certify Intel - Competitive Intelligence Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="mobile-responsive.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700&display=swap"
         rel="stylesheet">
+    <link rel="icon" type="image/jpeg" href="browser_tab_icon.jpg">
 </head>
 
 <body>
+    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+        <span>☰</span>
+    </button>
+    <div class="mobile-overlay" onclick="toggleSidebar()"></div>
+
     <div id="app">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <img src="logo.png" alt="Certify Intel" class="logo-img"
+                <img src="certify_intel_logo.png" alt="Certify Intel" class="logo-img"
                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                 <h1 class="logo-fallback-hidden">Certify<span>Intel</span></h1>
             </div>
@@ -96,12 +103,25 @@
                     <button class="btn btn-primary" onclick="triggerScrapeAll()">
                         🔄 Refresh Data
                     </button>
-                    <div class="user-menu">
-                        <span class="user-avatar">CI</span>
-                        <button class="btn btn-secondary" onclick="logout()"
-                            style="margin-left: 8px; padding: 6px 12px; font-size: 0.85em;">
-                            🚪 Logout
-                        </button>
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar" onclick="toggleUserDropdown()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        <div class="user-dropdown" id="userDropdown">
+                            <div class="dropdown-user-info">
+                                <strong id="userName">User</strong>
+                                <span id="userEmail">user@certifyhealth.com</span>
+                                <span class="user-role" id="userRole">Analyst</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" onclick="logout()">
+                                🚪 Logout
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -114,6 +134,7 @@
                 </div>
 
                 <!-- AI-Generated Executive Summary -->
+                <!-- AI-Generated Executive Summary -->
                 <div id="aiSummaryCard" class="ai-summary-card">
                     <div class="ai-summary-header">
                         <div class="ai-summary-title-group">
@@ -123,9 +144,10 @@
                             <h3 class="ai-summary-title">AI-Generated Executive Summary</h3>
                         </div>
                         <div class="ai-actions">
+                            <button id="editPromptBtn" class="btn btn-secondary btn-sm" title="Edit Instructions">⚙️
+                                Edit Prompt</button>
                             <button id="btnGenerateSummary" class="btn btn-primary btn-sm" onclick="startAISummary()">✨
-                                Generate
-                                Summary</button>
+                                Generate Summary</button>
                             <button id="btnClearSummary" class="btn btn-secondary btn-sm" onclick="clearAISummary()">🗑️
                                 Clear</button>
                         </div>
@@ -148,6 +170,38 @@
                                 placeholder="Ask a question about competitors, pricing, threats..."
                                 onkeypress="if(event.key==='Enter') sendAIChat()">
                             <button class="btn btn-primary ai-chat-send" onclick="sendAIChat()">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompt Editor Modal -->
+                <div id="promptEditorModal" class="company-list-modal" style="display: none;">
+                    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;"
+                        onclick="this.style.display='none'">
+                        <div style="background: white; border-radius: 12px; max-width: 800px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;"
+                            onclick="event.stopPropagation()">
+                            <div
+                                style="background: #1B2B65; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; color: white !important;">Edit AI Instructions</h3>
+                                <button onclick="document.getElementById('promptEditorModal').style.display='none'"
+                                    style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">×</button>
+                            </div>
+                            <div style="padding: 20px; overflow-y: auto;">
+                                <div class="form-group">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Executive
+                                        Summary Prompt</label>
+                                    <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Instructions for the
+                                        AI on how to format and focus the Weekly Executive Briefing.</p>
+                                    <textarea id="summaryPromptInput"
+                                        style="width: 100%; height: 200px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+                                <div style="text-align: right; margin-top: 16px;">
+                                    <button class="btn btn-secondary"
+                                        onclick="document.getElementById('promptEditorModal').style.display='none'">Cancel</button>
+                                    <button class="btn btn-primary" onclick="saveSystemPrompt('dashboard_summary')">Save
+                                        Changes</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -270,31 +324,60 @@
             <section id="discoveredPage" class="page">
                 <div class="page-header">
                     <h2>🔮 Discovered Competitors</h2>
-                    <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="toggleConfigPanel()">⚙️ Configure & Schedule</button>
+                        <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
+                    </div>
                 </div>
 
-                <!-- Editable Scoring Criteria -->
-                <div class="criteria-editor">
-                    <div class="criteria-header">
-                        <h3 class="criteria-title">📋 Discovery Scoring Criteria</h3>
-                        <button class="btn btn-secondary criteria-reset-btn" onclick="resetCriteria()">Reset to
-                            Default</button>
+
+                <!-- Advanced Configuration Panel -->
+                <div id="discoveryConfigPanel" class="config-panel"
+                    style="display: none; padding: 20px; background: var(--bg-card); border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                    <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+                        <!-- Column 1: AI Context Refinement -->
+                        <div class="config-chat">
+                            <h3 style="margin-top: 0;">Refine Scope with AI</h3>
+                            <p class="text-secondary" style="font-size: 0.9em; margin-bottom: 10px;">Tell the AI what to
+                                look for (e.g., "Exclude variations of 'consulting'").</p>
+                            <div id="configChatMessages" class="chat-messages"
+                                style="height: 150px; overflow-y: auto; background: var(--bg-main); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.9em;">
+                                <div class="chat-message system">Ready to refine discovery criteria.</div>
+                            </div>
+                            <div class="chat-input-row" style="display: flex; gap: 10px;">
+                                <input type="text" id="configChatInput" class="form-control"
+                                    placeholder="e.g. 'Add dental software to core keywords'"
+                                    onkeypress="if(event.key==='Enter') sendConfigChat()">
+                                <button class="btn btn-primary" onclick="sendConfigChat()">Refine</button>
+                            </div>
+                        </div>
+
+                        <!-- Column 2: Scheduler & JSON Preview -->
+                        <div class="config-schedule">
+                            <h3 style="margin-top: 0;">Schedule Run</h3>
+                            <p class="text-secondary" style="font-size: 0.9em; margin-bottom: 10px;">Schedule a one-off
+                                Discovery Agent job.</p>
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                                <div style="flex-grow: 1;">
+                                    <label class="form-label">Date & Time</label>
+                                    <input type="datetime-local" id="scheduleRunTime" class="form-control">
+                                </div>
+                                <button class="btn btn-secondary" onclick="scheduleRun()">📅 Schedule</button>
+                            </div>
+
+                            <div style="margin-top: 15px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                    <label class="form-label" style="margin: 0;">Current Context Analysis</label>
+                                    <button class="btn btn-sm btn-link" onclick="loadDiscoveryContext()">🔄
+                                        Refresh</button>
+                                </div>
+                                <pre id="jsonContextPreview"
+                                    style="background: #111; color: #4ade80; padding: 10px; border-radius: 4px; max-height: 100px; overflow-y: auto; font-size: 0.75em; border: 1px solid #333;"></pre>
+                            </div>
+                        </div>
                     </div>
-                    <p class="criteria-description">
-                        Edit the criteria below to customize what the Discovery Agent searches for. Each criterion is
-                        weighted in the relevance score.
-                    </p>
-                    <textarea id="discoveryCriteria" rows="10" class="criteria-textarea"
-                        aria-label="Discovery scoring criteria" title="Edit the criteria for competitor discovery"
-                        placeholder="Enter discovery criteria here">• Target Market: Patient engagement, patient intake, healthcare check-in solutions
-• Company Size: 50-5000 employees (growth-stage or established)
-• Geography: US-based or significant US presence
-• Product Focus: Digital check-in, eligibility verification, patient payments, scheduling
-• Technology: Cloud-based SaaS, mobile-first, EHR integrations
-• Funding: Series A+ or profitable private company
-• Customer Base: Medical practices, health systems, ambulatory care
-• Competitive Signals: Similar keywords, overlapping customer segments
-• Exclude: Pure EHR vendors, hospital-only solutions, international-only</textarea>
                 </div>
 
                 <div class="discovery-info">
@@ -715,9 +798,51 @@
                             <span>Daily 6:00 AM</span>
                         </div>
                     </div>
+                    <div class="settings-card full-width">
+                        <h3>Team Management</h3>
+                        <div class="team-header"
+                            style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                            <p>Manage access and roles.</p>
+                            <button class="btn btn-primary btn-sm" onclick="showInviteUserModal()">+ Invite
+                                Member</button>
+                        </div>
+                        <div id="teamList">
+                            <div class="loading">Loading team...</div>
+                        </div>
+                    </div>
                 </div>
-            </section>
-        </main>
+
+                <div class="settings-card full-width icon-card" style="border: 1px solid var(--primary-color);">
+                    <h3>🤖 AI Admin & Knowledge Base</h3>
+                    <p>Manage AI personas, prompts, and internal knowledge sources (RAG).</p>
+                    <div class="admin-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="openPromptEditor()">✏️ Edit AI Prompts</button>
+                        <button class="btn btn-secondary" onclick="openKnowledgeBase()">📚 Manage Knowledge
+                            Base</button>
+                    </div>
+                </div>
+    </div>
+    </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <a href="#" class="bottom-nav-item active" onclick="navigateTo('dashboard'); return false;">
+            <span class="icon">📊</span>
+            <span>Dash</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('competitors'); return false;">
+            <span class="icon">🏢</span>
+            <span>Comps</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('analytics'); return false;">
+            <span class="icon">📈</span>
+            <span>Trends</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('settings'); return false;">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+        </a>
+    </nav>
     </div>
 
     <!-- Modal Template -->
@@ -728,10 +853,117 @@
         </div>
     </div>
 
+
+    <!-- Prompt Editor Modal -->
+    <div id="promptModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="modal-close" onclick="closePromptModal()">&times;</span>
+            <div class="modal-header">
+                <h2>Edit AI System Prompts</h2>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select Prompt</label>
+                    <select id="promptKeySelector" class="form-control" onchange="loadPromptContent()">
+                        <option value="dashboard_summary">Dashboard Executive Summary</option>
+                        <option value="chat_persona">Chat Analyst Persona</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>System Prompt Content</label>
+                    <textarea id="promptContentEditor" class="form-control" rows="15"
+                        style="font-family: monospace; font-size: 0.9em;"></textarea>
+                </div>
+                <div class="form-actions">
+                    <div id="promptSaveStatus" style="margin-right: 15px; color: var(--success-color); display: none;">
+                        Saved!</div>
+                    <button class="btn btn-primary" onclick="savePromptContent()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Knowledge Base Modal -->
+    <div id="kbModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="modal-close" onclick="closeKbModal()">&times;</span>
+            <div class="modal-header">
+                <h2>📚 Internal Knowledge Base</h2>
+                <button class="btn btn-primary btn-sm" onclick="showAddKbItem()">+ Add New Document</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary">Upload internal documents or strategy text for the AI to use as context (RAG).
+                </p>
+
+                <div id="kbList" class="kb-list"
+                    style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+                    <!-- Loading... -->
+                </div>
+
+                <div id="addKbForm"
+                    style="display: none; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <h3>Add New Knowledge Source</h3>
+                    <div class="form-group">
+                        <label>Title / Identifier</label>
+                        <input type="text" id="kbTitle" class="form-control" placeholder="e.g. Q3 Sales Strategy">
+                    </div>
+                    <div class="form-group">
+                        <label>Content Text</label>
+                        <textarea id="kbContent" class="form-control" rows="10"
+                            placeholder="Paste the text from the document here..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="hideAddKbForm()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveKbItem()">Save Document</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Correction Modal -->
+    <div id="correctionModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeCorrectionModal()">&times;</span>
+            <div class="modal-header">
+                <h2>Correct Data</h2>
+            </div>
+            <div class="modal-body">
+                <p>Provide a corrected value for <strong id="correctionFieldName"></strong>.</p>
+                <form id="correctionForm" onsubmit="handleCorrectionSubmit(event)">
+                    <input type="hidden" id="correctionCompetitorId">
+                    <input type="hidden" id="correctionField">
+
+                    <div class="form-group">
+                        <label for="correctionValue">Correct Value</label>
+                        <textarea id="correctionValue" class="form-control" rows="3" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="correctionReason">Reason for Change</label>
+                        <select id="correctionReason" class="form-control" required>
+                            <option value="Incorrect Source Data">Incorrect Source Data</option>
+                            <option value="Outdated Information">Outdated Information</option>
+                            <option value="Typo/Formatting Error">Typo/Formatting Error</option>
+                            <option value="New Announcement">New Announcement</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeCorrectionModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Correction</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="visualizations.js?v=2"></script>
     <script src="enhanced_analytics.js?v=2"></script>
-    <script src="app.js?v=3"></script>
+    <script src="app_v2.js?v=4"></script>
+    <script src="prompt_manager.js?v=3"></script>
 </body>
 
 </html>

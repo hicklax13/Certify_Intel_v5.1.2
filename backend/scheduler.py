@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 
 from scraper import CompetitorScraper, ScrapeResult
 from extractor import GPTExtractor, ExtractedData
@@ -24,6 +25,7 @@ class CompetitorRefreshJob:
         self.scraper = None
         self.extractor = GPTExtractor()
         
+
     async def run_full_refresh(self, competitor_ids: Optional[List[int]] = None):
         """Run a full data refresh for all or specified competitors."""
         print(f"[{datetime.now()}] Starting competitor refresh job...")
@@ -45,9 +47,32 @@ class CompetitorRefreshJob:
         
         results = []
         
+        # Initialize Traffic Scraper
+        from public_similarweb_scraper import PublicSimilarWebScraper
+        from urllib.parse import urlparse
+        import json
+        traffic_scraper = PublicSimilarWebScraper()
+        
         async with CompetitorScraper(headless=True) as scraper:
             for competitor in competitors:
                 try:
+                    # 1. TRAFFIC DATA (Real SimilarWeb)
+                    try:
+                        domain = urlparse(competitor.website).netloc.replace("www.", "")
+                        print(f"   🚦 Fetching traffic for {domain}...")
+                        traffic_data = await traffic_scraper.get_traffic_data(domain)
+                        
+                        if traffic_data and not traffic_data.get("is_mock"):
+                            traffic_json = json.dumps(traffic_data)
+                            if competitor.website_traffic != traffic_json:
+                                print(f"   ✅ Updated traffic data for {competitor.name}")
+                                competitor.website_traffic = traffic_json
+                                db.add(competitor)
+                                db.commit() # Commit immediately to save progress
+                    except Exception as te:
+                        print(f"   ⚠️ Traffic scrape failed: {te}")
+
+                    # 2. CONTENT SCRAPE (Playwright)
                     # Scrape competitor website
                     scrape_result = await scraper.scrape_competitor(
                         name=competitor.name,
@@ -232,9 +257,96 @@ def schedule_daily_backup():
 
 
 
+from discovery_agent import DiscoveryAgent
+
+# ... imports ...
+
+async def run_discovery_job():
+    """Run the autonomous discovery agent and save results."""
+    print(f"[{datetime.now()}] Starting autonomous discovery job...")
+    
+    db = SessionLocal()
+    try:
+        # Initialize Agent
+        agent = DiscoveryAgent(use_live_search=True, use_openai=True) # Enabled AI Qualification
+        
+        # Run Loop
+        candidates = await agent.run_discovery_loop(max_candidates=10)
+        
+        new_count = 0
+        
+        for cand in candidates:
+            # Check for duplicates (URL or Name)
+            exists = db.query(Competitor).filter(
+                (Competitor.website == cand['url']) | (Competitor.name == cand['name'])
+            ).first()
+            
+            if not exists:
+                # Create new "Discovered" competitor
+                new_comp = Competitor(
+                    name=cand['name'],
+                    website=cand['url'],
+                    status="Discovered",
+                    threat_level="Low", # Default until analyzing
+                    notes=f"Discovered by Certify Scout. Reasoning: {cand.get('reasoning')}",
+                    data_quality_score=int(cand.get('relevance_score', 0)),
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_comp)
+                db.flush() # Get ID
+                
+                # Log Event
+                log = ChangeLog(
+                    competitor_id=new_comp.id,
+                    competitor_name=new_comp.name,
+                    change_type="New Competitor Discovered",
+                    new_value=cand['url'],
+                    source="Certify Scout",
+                    severity="Medium"
+                )
+                db.add(log)
+                
+                new_count += 1
+                print(f"  + Added new candidate: {cand['name']}")
+            else:
+                print(f"  . Skipped existing: {cand['name']}")
+                
+        db.commit()
+        print(f"[{datetime.now()}] Discovery job complete. Added {new_count} new competitors.")
+        
+    except Exception as e:
+        print(f"Error in discovery job: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+def schedule_weekly_discovery():
+    """Schedule weekly discovery job."""
+    # Run every Saturday at 2 AM
+    scheduler.add_job(
+        lambda: asyncio.create_task(run_discovery_job()),
+        CronTrigger(day_of_week="sat", hour=2, minute=0),
+        id="weekly_discovery_job",
+        name="Weekly Competitor Discovery",
+        replace_existing=True
+    )
+    print("Scheduled weekly discovery job for Saturdays at 2 AM")
+
+def schedule_one_off_discovery(run_at: datetime):
+    """Schedule a one-off discovery job at a specific time."""
+    scheduler.add_job(
+        lambda: asyncio.create_task(run_discovery_job()),
+        DateTrigger(run_date=run_at),
+        id=f"one_off_discovery_{run_at.isoformat()}",
+        name=f"Manual Discovery Run ({run_at.isoformat()})",
+        replace_existing=True
+    )
+    print(f"Scheduled one-off discovery job for {run_at.isoformat()}")
+
 def start_scheduler():
     """Start the scheduler with all jobs."""
     schedule_weekly_refresh()
+    schedule_weekly_discovery()
     schedule_daily_high_priority_check()
     schedule_daily_backup()
     scheduler.start()

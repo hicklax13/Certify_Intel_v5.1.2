@@ -399,6 +399,8 @@ class AlertRuleEngine:
 
 # ============== Unified Notification Manager ==============
 
+from alerts import AlertSystem
+
 class NotificationManager:
     """Manages all notification channels."""
     
@@ -406,6 +408,7 @@ class NotificationManager:
         self.slack = SlackNotifier()
         self.teams = TeamsNotifier()
         self.sms = SMSNotifier()
+        self.email = AlertSystem()
         self.rule_engine = AlertRuleEngine()
     
     async def process_change(
@@ -434,6 +437,13 @@ class NotificationManager:
             if "teams" in rule.channels:
                 await self.teams.send_competitor_alert(competitor_name, [change_data])
             
+            if "email" in rule.channels:
+                 # Note: AlertSystem.send_change_alert expects ChangeLog objects, 
+                 # but here we have a dict. We'll use the raw send_alert for now.
+                 subject = f"🔔 Certify Intel Alert: {competitor_name} - {change_data['change_type']}"
+                 body = f"Change detected for {competitor_name}.\nType: {change_data['change_type']}\nNew Value: {new_value}"
+                 self.email.send_alert(subject, body, body)
+
             if "sms" in rule.channels and rule.severity == "High":
                 await self.sms.send_critical_alert(
                     competitor_name, 
@@ -445,6 +455,7 @@ class NotificationManager:
         """Send a message to all configured channels."""
         await self.slack.send_message(message)
         await self.teams.send_message(message)
+        self.email.send_alert("Certify Intel Notification", message, message)
     
     def get_alert_rules(self) -> List[Dict[str, Any]]:
         """Get all configured alert rules."""

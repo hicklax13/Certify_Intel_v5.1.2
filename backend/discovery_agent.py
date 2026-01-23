@@ -50,61 +50,35 @@ class DiscoveryAgent:
         self.use_live_search = use_live_search and DDGS_AVAILABLE
         self.use_openai = use_openai and OPENAI_AVAILABLE
         
-        # Certify Health DNA Profile - Expanded for all 7 Products & 11 Markets
-        self.profile = {
-            "core_keywords": [
-                # Patient Experience Platform (PXP)
-                "patient experience platform", "patient portal", "digital intake", 
-                "appointment scheduling", "self-scheduling", "patient check-in", "kiosk",
-                # Practice Management System (PMS)
-                "practice management", "medical scheduling", "patient registration",
-                # Revenue Cycle Management (RCM)
-                "revenue cycle management", "patient payments", "eligibility verification",
-                "insurance verification", "claims management", "denial management",
-                # Patient Management / Clinical
-                "clinical documentation", "ehr", "emr", "ai scribe", "care coordination",
-                # CERTIFY Pay
-                "healthcare payments", "patient payment collection", "text to pay",
-                # FaceCheck
-                "biometric authentication", "facial recognition", "patient identification",
-                # Interoperability
-                "ehr integration", "fhir", "hl7", "healthcare interoperability"
-            ],
-            "market_keywords": [
-                # Hospitals & Health Systems
-                "hospital", "health system", "inpatient",
-                # Ambulatory & Outpatient
-                "ambulatory", "outpatient", "urgent care", "asc", "imaging center",
-                # Behavioral Health
-                "behavioral health", "mental health", "substance abuse",
-                # Telehealth
-                "telehealth", "telemedicine", "virtual care",
-                # Labs & Diagnostics
-                "laboratory", "diagnostic", "pathology",
-                # Enterprise
-                "multi-specialty", "dso", "dental service organization", "group practice"
-            ],
-            "required_context": [
-                "healthcare", "medical", "hospital", "practice", "patient", "clinical",
-                "health system", "provider", "physician", "clinic", "ambulatory"
-            ],
-            "negative_keywords": [
-                "top 10", "best", "review", "blog", "news", "article", 
-                "job", "career", "salary", "investor", "stock", "press release",
-                "wikipedia", "linkedin.com/in/", "glassdoor", "indeed"
-            ],
-            "known_competitors": [
-                "phreesia", "clearwave", "kareo", "athenahealth", "kyruus",
-                "notable", "klara", "mend", "relatient", "modmed", "nextech",
-                "simplepractice", "drchrono", "advancedmd", "eclinicalworks",
-                "veradigm", "nextgen", "greenway", "carecloud", "tebra",
-                "solutionreach", "luma health", "yosi health", "qure4u"
-            ]
-        }
+        # Load Certify Health DNA Profile from JSON
+        self.profile = self._load_profile()
         
         # Rate limiting
         self.search_delay = 2.0  # seconds between searches
         self.last_search_time = 0
+        
+    def _load_profile(self) -> Dict[str, Any]:
+        """Load context profile from JSON file."""
+        import json
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            context_path = os.path.join(current_dir, "certify_context.json")
+            
+            if not os.path.exists(context_path):
+                print(f"⚠️ Warning: Context file not found at {context_path}. Using empty profile.")
+                return {
+                    "core_keywords": [], "market_keywords": [], 
+                    "required_context": [], "negative_keywords": [], "known_competitors": []
+                }
+                
+            with open(context_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Error loading context file: {e}")
+            return {
+                "core_keywords": [], "market_keywords": [], 
+                "required_context": [], "negative_keywords": [], "known_competitors": []
+            }
         
     async def run_discovery_loop(self, max_candidates: int = 10) -> List[Dict[str, Any]]:
         """
@@ -375,32 +349,48 @@ class DiscoveryAgent:
             return 0, {"error": "Could not scrape page"}
         
         try:
+
+            # Prepare Context for System Prompt
+            core_keywords = ", ".join(self.profile.get("core_keywords", [])[:10])
+            market_keywords = ", ".join(self.profile.get("market_keywords", [])[:10])
+            exclusions = ", ".join(self.profile.get("exclusions", []))
+            
+            system_prompt = f"""You are a competitive intelligence analyst for Certify Health.
+            
+            About Certify Health:
+            - Core Solutions: {core_keywords}
+            - Target Market: {market_keywords}
+            - Exclusions (NOT Competitors): {exclusions}
+            
+            Your job is to analyze website content and strictly determine if the company is a DIRECT COMPETITOR offering similar healthcare IT solutions.
+            """
+
             client = openai.OpenAI()
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are a competitive intelligence analyst for Certify Health, 
-                        a healthcare IT company focused on patient intake, digital check-in, 
-                        and revenue cycle management. Analyze the website content and determine 
-                        if this company is a potential competitor."""
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
-                        "content": f"""Analyze this website content and determine:
-1. Is this a healthcare IT company? (yes/no)
-2. Does it compete in patient intake, RCM, or patient engagement? (yes/no)
-3. Threat score (0-100)
-4. Brief reasoning (one sentence)
+                        "content": f"""Analyze this website content.
+                        
+                        URL: {url}
+                        Content Snippet: {text_content}
+                        
+                        Determine:
+                        1. Is this a healthcare IT company?
+                        2. Do they offer solutions competing with Certify Health (e.g., patient intake, RCM)?
+                        3. Assign a Threat Score (0-100). 0 = Irrelevant, 100 = Direct Competitor.
+                        4. Provide brief reasoning.
 
-Website URL: {url}
-Content: {text_content}
-
-Respond in JSON format: {{"is_healthcare_it": bool, "is_competitor": bool, "score": int, "reasoning": string}}"""
+                        Respond in JSON format: {{"is_healthcare_it": bool, "is_competitor": bool, "score": int, "reasoning": string}}"""
                     }
                 ],
-                max_tokens=200
+                max_tokens=250,
+                response_format={"type": "json_object"}
             )
             
             result = response.choices[0].message.content
@@ -408,9 +398,13 @@ Respond in JSON format: {{"is_healthcare_it": bool, "is_competitor": bool, "scor
             data = json.loads(result)
             
             score = data.get("score", 0)
-            if not data.get("is_healthcare_it"):
-                score = 0
             
+            # Double check exclusions via rule-based override if LLM missed it
+            if any(exc in text_content.lower() for exc in self.profile.get("exclusions", [])):
+                 if score > 20: 
+                     score = 20
+                     data["reasoning"] = f"Low score due to exclusion keyword match. {data.get('reasoning','')}"
+
             return score, {"reasoning": data.get("reasoning", "GPT analysis")}
             
         except Exception as e:

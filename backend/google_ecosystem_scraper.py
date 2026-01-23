@@ -113,7 +113,8 @@ class GoogleEcosystemScraper:
     }
 
     def __init__(self):
-        pass
+        self.api_key = os.getenv("GOOGLE_API_KEY")
+        self.cx = os.getenv("GOOGLE_CSE_ID")
 
     def get_ecosystem_data(self, company_name: str) -> GoogleEcosystemData:
         """Get Google ecosystem data for a company."""

@@ -10,29 +10,46 @@ function renderMarketQuadrant() {
     if (!container || !competitors.length) return;
 
     // Calculate quadrant positions
-    const quadrantData = competitors.slice(0, 15).map(comp => {
-        // Parse customer count as proxy for market share
-        const customers = parseInt((comp.customer_count || '0').replace(/\D/g, '')) || 50;
+    // Calculate quadrant positions
+    const quadrantData = competitors
+        .map(comp => {
+            // Parse customer count (X-axis: Market Share proxy)
+            const customers = parseInt((comp.customer_count || '0').replace(/\D/g, '')) || 0;
 
-        // Parse employee growth as proxy for growth rate
-        const employees = parseInt((comp.employee_count || '0').replace(/\D/g, '')) || 50;
+            // Parse employee growth rate (Y-axis: Growth proxy)
+            // Expecting strings like "15%", "10.5%", or just numbers
+            let growthRate = 0;
+            if (comp.employee_growth_rate) {
+                const growthStr = comp.employee_growth_rate.toString().replace('%', '');
+                growthRate = parseFloat(growthStr);
+            }
 
-        // Normalize to 0-100 scale
-        const maxCustomers = Math.max(...competitors.map(c =>
-            parseInt((c.customer_count || '0').replace(/\D/g, '')) || 50
-        ));
+            // Fallback for demo/new competitors if data is missing but we want to show them
+            // For strict realism, we might exclude them. Let's exclude if both are 0.
+            if (!customers && !growthRate) return null;
 
-        const marketShare = (customers / maxCustomers) * 100;
-        const growthRate = Math.random() * 50 + 25; // Would use real growth data
+            return {
+                name: comp.name,
+                customers: customers,
+                growthRate: isNaN(growthRate) ? 0 : growthRate,
+                threat: comp.threat_level
+            };
+        })
+        .filter(d => d !== null); // Remove empty records
 
-        return {
-            name: comp.name,
-            x: marketShare,
-            y: growthRate,
-            threat: comp.threat_level,
-            customers: customers
-        };
-    });
+    if (!quadrantData.length) {
+        container.innerHTML = '<p class="empty-state">Not enough data for quadrant analysis</p>';
+        return;
+    }
+
+    // Normalize X (Market Share) to 0-100 relative to leader
+    const maxCustomers = Math.max(...quadrantData.map(d => d.customers)) || 1; // Avoid divide by zero
+
+    const plottedData = quadrantData.map(d => ({
+        ...d,
+        x: (d.customers / maxCustomers) * 100,
+        y: Math.min(Math.max(d.growthRate, 0), 100) // Cap growth at 0-100% for chart scaling
+    }));
 
     // Create quadrant chart
     container.innerHTML = `
@@ -48,7 +65,8 @@ function renderMarketQuadrant() {
             <div style="position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dashed #cbd5e1;"></div>
             
             <!-- Data points -->
-            ${quadrantData.map(d => `
+            <!-- Data points -->
+            ${plottedData.map(d => `
                 <div class="quadrant-point" 
                      style="position: absolute; 
                             left: ${d.x}%; 
@@ -66,7 +84,7 @@ function renderMarketQuadrant() {
                             font-size: 10px;
                             color: white;
                             font-weight: bold;"
-                     title="${d.name}: ${d.customers.toLocaleString()} customers">
+                     title="${d.name}: ${d.customers.toLocaleString()} cust, ${d.growthRate}% growth">
                 </div>
             `).join('')}
         </div>
@@ -129,6 +147,7 @@ async function renderCompetitorTimeline(competitorId) {
 
 // ============== Enhanced Battlecard with Insights ==============
 
+
 async function viewEnhancedBattlecard(id) {
     const comp = competitors.find(c => c.id === id);
     if (!comp) return;
@@ -137,119 +156,117 @@ async function viewEnhancedBattlecard(id) {
     const loadingContent = `
         <div class="battlecard-full">
             <h2>🃏 ${comp.name} Battlecard</h2>
-            <p class="loading">Loading comprehensive insights...</p>
+            <p class="loading">Generating AI Strategic Analysis...</p>
         </div>
     `;
     showModal(loadingContent);
 
-    // Fetch comprehensive insights
-    const insights = await fetchAPI(`/api/competitors/${id}/insights`);
+    try {
+        // Parallel fetch for comprehensive threat analysis + SWOT + News
+        const [threatAnalysis, swot, news] = await Promise.all([
+            fetchAPI(`/api/competitors/${id}/threat-analysis`),
+            fetchAPI(`/api/competitors/${id}/swot`),
+            fetchAPI(`/api/competitors/${id}/news?days=30`)
+        ]);
 
-    const content = `
-        <div class="battlecard-full enhanced">
-            <h2>🃏 ${comp.name} - Enhanced Battlecard</h2>
-            <span class="threat-badge ${comp.threat_level.toLowerCase()}">${comp.threat_level} Threat</span>
-            
-            <!-- AI Threat Score -->
-            <div class="insight-section">
-                <h3>🎯 AI Threat Assessment</h3>
-                ${insights.threat?.score ? `
-                    <div class="threat-score-display" style="display: flex; align-items: center; gap: 15px; margin: 10px 0;">
-                        <div class="score-circle" style="width: 80px; height: 80px; border-radius: 50%; background: conic-gradient(${getThreatScoreColor(insights.threat.score)} ${insights.threat.score}%, #e5e7eb ${insights.threat.score}%); display: flex; align-items: center; justify-content: center;">
-                            <span style="background: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2em;">${insights.threat.score}</span>
+        const content = `
+            <div class="battlecard-full enhanced">
+                <div class="battlecard-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h2 style="margin: 0; color: #1e293b;">🃏 ${comp.name}</h2>
+                        <span class="threat-badge ${comp.threat_level?.toLowerCase() || 'medium'}">${comp.threat_level || 'Unknown'} Threat</span>
+                    </div>
+                    <div style="font-size: 0.9em; color: #64748b;">
+                        Last Updated: ${new Date().toLocaleDateString()}
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px;">
+                    <!-- Left Column: Strategy & SWOT -->
+                    <div class="left-col">
+                        <!-- AI SWOT Analysis -->
+                        <div class="insight-section swot-section" style="background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 15px; margin-bottom: 20px;">
+                            <h3 style="color: #3b82f6; display: flex; align-items: center; gap: 8px;">
+                                🧠 AI Strategic Analysis (SWOT)
+                            </h3>
+                            <div class="swot-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="swot-box strength">
+                                    <strong style="color: #16a34a;">💪 Strengths</strong>
+                                    <ul>${(swot.strengths || []).map(s => `<li>${s}</li>`).join('')}</ul>
+                                </div>
+                                <div class="swot-box weakness">
+                                    <strong style="color: #dc2626;">🛑 Weaknesses</strong>
+                                    <ul>${(swot.weaknesses || []).map(w => `<li>${w}</li>`).join('')}</ul>
+                                </div>
+                                <div class="swot-box opportunity">
+                                    <strong style="color: #2563eb;">🚀 Opportunities</strong>
+                                    <ul>${(swot.opportunities || []).map(o => `<li>${o}</li>`).join('')}</ul>
+                                </div>
+                                <div class="swot-box threat">
+                                    <strong style="color: #d97706;">🛡️ Threats</strong>
+                                    <ul>${(swot.threats || []).map(t => `<li>${t}</li>`).join('')}</ul>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <strong>Threat Level: ${insights.threat.level}</strong>
-                            <p style="margin: 5px 0; color: #64748b;">${insights.threat.reasoning}</p>
+
+                        <!-- AI Threat Score -->
+                        <div class="insight-section">
+                            <h3>🎯 Threat Assessment</h3>
+                            ${threatAnalysis?.score ? `
+                                <div class="threat-score-display" style="display: flex; align-items: center; gap: 15px; margin: 10px 0;">
+                                    <div class="score-circle" style="width: 60px; height: 60px; border-radius: 50%; background: conic-gradient(${getThreatScoreColor(threatAnalysis.score)} ${threatAnalysis.score}%, #e5e7eb ${threatAnalysis.score}%); display: flex; align-items: center; justify-content: center;">
+                                        <span style="background: white; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">${threatAnalysis.score}</span>
+                                    </div>
+                                    <div>
+                                        <strong>${threatAnalysis.level} Risk</strong>
+                                        <p style="margin: 5px 0; color: #64748b; font-size: 0.9em;">${threatAnalysis.reasoning}</p>
+                                    </div>
+                                </div>
+                            ` : '<p>Threat analysis unavailable</p>'}
                         </div>
                     </div>
-                    <div style="margin-top: 10px;">
-                        <strong>Key Risks:</strong>
-                        <ul>${(insights.threat.key_risks || []).map(r => `<li>${r}</li>`).join('')}</ul>
-                    </div>
-                ` : '<p>Threat analysis unavailable</p>'}
-            </div>
 
-            <!-- Reviews Summary -->
-            <div class="insight-section">
-                <h3>⭐ G2 Reviews</h3>
-                ${insights.reviews?.rating ? `
-                    <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
-                        <span style="font-size: 2em; font-weight: bold;">${insights.reviews.rating}</span>
-                        <div>
-                            <div>${'⭐'.repeat(Math.round(insights.reviews.rating))}</div>
-                            <span style="color: #64748b;">${insights.reviews.overall_sentiment} sentiment</span>
+                    <!-- Right Column: Stats & Facts -->
+                    <div class="right-col">
+                        <!-- Quick Facts -->
+                        <div class="insight-section">
+                            <h3>📊 Quick Facts</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9em;">
+                                <div><strong>HQ:</strong> ${comp.headquarters || 'N/A'}</div>
+                                <div><strong>Founded:</strong> ${comp.year_founded || 'N/A'}</div>
+                                <div><strong>Funding:</strong> ${comp.funding_total || 'N/A'}</div>
+                                <div><strong>Employees:</strong> ${comp.employee_count || 'N/A'}</div>
+                            </div>
+                        </div>
+
+                        <!-- Recent News -->
+                        <div class="insight-section">
+                            <h3>📰 Recent Headlines</h3>
+                            ${news?.articles?.length ? `
+                                <ul style="padding-left: 20px; font-size: 0.9em;">${news.articles.slice(0, 3).map(a => `<li><a href="${a.url}" target="_blank">${a.title}</a> <span style="font-size:0.8em;color:#aaa">(${a.source})</span></li>`).join('')}</ul>
+                            ` : '<p style="color: #94a3b8; font-style: italic;">No recent news found.</p>'}
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                        <div>
-                            <strong style="color: #22c55e;">✅ Strengths</strong>
-                            <ul style="margin: 5px 0;">${(insights.reviews.strengths || []).map(s => `<li>${s}</li>`).join('')}</ul>
-                        </div>
-                        <div>
-                            <strong style="color: #ef4444;">⚠️ Weaknesses</strong>
-                            <ul style="margin: 5px 0;">${(insights.reviews.weaknesses || []).map(w => `<li>${w}</li>`).join('')}</ul>
-                        </div>
-                    </div>
-                ` : '<p>Review data unavailable</p>'}
+                </div>
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <button class="btn btn-primary" onclick="downloadBattlecard(${id})">📄 Download Report</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
             </div>
+        `;
 
-            <!-- Hiring Trends -->
-            <div class="insight-section">
-                <h3>👥 Hiring Signals</h3>
-                ${insights.hiring?.total_openings !== undefined ? `
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 10px 0;">
-                        <div style="text-align: center; padding: 10px; background: #f8fafc; border-radius: 8px;">
-                            <div style="font-size: 1.5em; font-weight: bold;">${insights.hiring.total_openings}</div>
-                            <div style="color: #64748b; font-size: 0.9em;">Open Roles</div>
-                        </div>
-                        <div style="text-align: center; padding: 10px; background: #f8fafc; border-radius: 8px;">
-                            <div style="font-size: 1.5em; font-weight: bold;">${insights.hiring.hiring_intensity}</div>
-                            <div style="color: #64748b; font-size: 0.9em;">Intensity</div>
-                        </div>
-                        <div style="text-align: center; padding: 10px; background: #f8fafc; border-radius: 8px;">
-                            <div style="font-size: 1.5em; font-weight: bold;">${insights.hiring.growth_signal}</div>
-                            <div style="color: #64748b; font-size: 0.9em;">Signal</div>
-                        </div>
-                    </div>
-                    ${insights.hiring.competitive_implications?.length ? `
-                        <strong>Competitive Implications:</strong>
-                        <ul>${insights.hiring.competitive_implications.map(i => `<li>${i}</li>`).join('')}</ul>
-                    ` : ''}
-                ` : '<p>Hiring data unavailable</p>'}
+        showModal(content);
+
+    } catch (e) {
+        showModal(`
+            <div class="error-state">
+                <h3>⚠️ Error Loading Battlecard</h3>
+                <p>${e.message}</p>
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
             </div>
-
-            <!-- Recent News -->
-            <div class="insight-section">
-                <h3>📰 Recent News</h3>
-                ${insights.news?.recent_headlines?.length ? `
-                    <ul>${insights.news.recent_headlines.slice(0, 3).map(h => `<li>${h}</li>`).join('')}</ul>
-                    <p style="color: #64748b; font-size: 0.9em;">
-                        Sentiment: ${insights.news.sentiment?.positive || 0} positive, 
-                        ${insights.news.sentiment?.negative || 0} negative, 
-                        ${insights.news.sentiment?.neutral || 0} neutral
-                    </p>
-                ` : '<p>No recent news</p>'}
-            </div>
-
-            <!-- Quick Facts -->
-            <div class="insight-section">
-                <h3>📋 Quick Facts</h3>
-                <table class="data-table" style="margin-bottom: 20px;">
-                    <tr><td>Founded</td><td>${comp.year_founded || 'Unknown'}</td></tr>
-                    <tr><td>Headquarters</td><td>${comp.headquarters || 'Unknown'}</td></tr>
-                    <tr><td>Employees</td><td>${comp.employee_count || 'Unknown'}</td></tr>
-                    <tr><td>Customers</td><td>${comp.customer_count || 'Unknown'}</td></tr>
-                    <tr><td>Funding</td><td>${comp.funding_total || 'Unknown'}</td></tr>
-                    <tr><td>Pricing</td><td>${comp.pricing_model || 'N/A'} - ${comp.base_price || 'N/A'}</td></tr>
-                </table>
-            </div>
-
-            <button class="btn btn-primary" onclick="downloadBattlecard(${id})">📄 Download PDF</button>
-        </div>
-    `;
-
-    showModal(content);
+        `);
+    }
 }
 
 function getThreatScoreColor(score) {
@@ -259,7 +276,7 @@ function getThreatScoreColor(score) {
 }
 
 
-// ============== Win/Loss Tracker ==============
+// ============== Win/Loss Tracker (Real DB) ==============
 
 let winLossData = [];
 
@@ -274,8 +291,8 @@ function showWinLossModal() {
                 </select>
             </div>
             <div class="form-group">
-                <label>Deal Name</label>
-                <input type="text" name="deal_name" required placeholder="e.g., Mercy Health System">
+                <label>Customer Name</label>
+                <input type="text" name="customer_name" required placeholder="e.g., Mercy Health System">
             </div>
             <div class="form-group">
                 <label>Deal Value ($)</label>
@@ -289,8 +306,8 @@ function showWinLossModal() {
                 </select>
             </div>
             <div class="form-group">
-                <label>Loss Reason (if applicable)</label>
-                <select name="loss_reason">
+                <label>Primary Reason</label>
+                <select name="reason">
                     <option value="">N/A</option>
                     <option value="Price">Price</option>
                     <option value="Features">Features</option>
@@ -310,46 +327,59 @@ function showWinLossModal() {
     showModal(content);
 }
 
-function logWinLoss(event) {
+async function logWinLoss(event) {
     event.preventDefault();
     const form = event.target;
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData);
 
-    // Add to local storage for now
-    const deal = {
-        ...data,
-        id: Date.now(),
-        logged_at: new Date().toISOString()
+    // Get competitor name from selection
+    const compId = formData.get('competitor_id');
+    const comp = competitors.find(c => c.id == compId);
+
+    const payload = {
+        competitor_id: compId,
+        competitor_name: comp ? comp.name : 'Unknown',
+        customer_name: formData.get('customer_name'),
+        deal_value: formData.get('deal_value') ? parseFloat(formData.get('deal_value')) : null,
+        outcome: formData.get('outcome'),
+        reason: formData.get('reason'),
+        notes: formData.get('notes')
     };
 
-    winLossData.push(deal);
-    localStorage.setItem('certifyIntelWinLoss', JSON.stringify(winLossData));
-
-    showToast(`Deal logged: ${data.outcome} against ${competitors.find(c => c.id == data.competitor_id)?.name}`, 'success');
-    closeModal();
-    renderWinLossStats();
+    try {
+        await fetchAPI('/api/win-loss', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        showToast(`Deal logged successfully`, 'success');
+        closeModal();
+        await renderWinLossStats(); // Refresh from DB
+    } catch (e) {
+        showToast('Error logging deal: ' + e.message, 'error');
+    }
 }
 
-function renderWinLossStats() {
-    // Load from localStorage
-    const stored = localStorage.getItem('certifyIntelWinLoss');
-    if (stored) {
-        winLossData = JSON.parse(stored);
-    }
-
+async function renderWinLossStats() {
     const container = document.getElementById('winLossContainer');
     if (!container) return;
 
-    const wins = winLossData.filter(d => d.outcome === 'Won').length;
-    const losses = winLossData.filter(d => d.outcome === 'Lost').length;
+    try {
+        // Fetch from Real DB
+        winLossData = await fetchAPI('/api/win-loss');
+    } catch (e) {
+        console.error("Failed to load win/loss stats", e);
+        winLossData = [];
+    }
+
+    const wins = winLossData.filter(d => d.outcome === 'Won').length || 0;
+    const losses = winLossData.filter(d => d.outcome === 'Lost').length || 0;
     const total = wins + losses;
     const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
 
     // Loss reasons breakdown
     const lossReasons = {};
     winLossData.filter(d => d.outcome === 'Lost').forEach(d => {
-        const reason = d.loss_reason || 'Unknown';
+        const reason = d.reason || 'Unknown';
         lossReasons[reason] = (lossReasons[reason] || 0) + 1;
     });
 
@@ -378,22 +408,46 @@ function renderWinLossStats() {
                 `).join('')}
             </div>
         ` : ''}
+        
+        <h4 style="margin-top:20px;">Recent Deals</h4>
+        <div style="max-height: 200px; overflow-y: auto;">
+            ${winLossData.slice(0, 5).map(d => `
+                <div style="padding: 10px; border-bottom: 1px solid #eee; font-size: 0.9em; display: flex; justify-content: space-between;">
+                    <div>
+                        <strong>${d.competitor_name}</strong> - ${d.customer_name || 'Confidential'}
+                        <div style="color: #666;">${d.notes || ''}</div>
+                    </div>
+                    <div style="font-weight: bold; color: ${d.outcome === 'Won' ? '#16a34a' : '#dc2626'};">
+                        ${d.outcome}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
         <button class="btn btn-primary" style="margin-top: 15px;" onclick="showWinLossModal()">+ Log New Deal</button>
     `;
 }
 
 
-// ============== Webhooks Management ==============
+// ============== Webhooks Management (Real DB) ==============
 
-function showWebhookSettings() {
-    const stored = localStorage.getItem('certifyIntelWebhooks');
-    const webhooks = stored ? JSON.parse(stored) : [];
+async function showWebhookSettings() {
+    let webhooks = [];
+    try {
+        webhooks = await fetchAPI('/api/webhooks');
+    } catch (e) {
+        console.error("Failed to fetch webhooks", e);
+    }
 
     const content = `
         <h2>🔗 Webhook Configuration</h2>
         <p style="color: #64748b; margin-bottom: 20px;">Configure webhooks to receive real-time notifications on competitor changes.</p>
         
         <form id="webhookForm" onsubmit="addWebhook(event)">
+            <div class="form-group">
+                <label>Webhook Name</label>
+                <input type="text" name="name" required placeholder="e.g., Slack Alert">
+            </div>
             <div class="form-group">
                 <label>Webhook URL</label>
                 <input type="url" name="url" required placeholder="https://hooks.slack.com/...">
@@ -412,13 +466,14 @@ function showWebhookSettings() {
         
         <h3 style="margin-top: 20px;">Active Webhooks</h3>
         <div id="webhookList">
-            ${webhooks.length ? webhooks.map((w, i) => `
+            ${webhooks.length ? webhooks.map((w) => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8fafc; border-radius: 8px; margin-top: 10px;">
                     <div>
-                        <code style="word-break: break-all;">${w.url}</code>
-                        <div style="color: #64748b; font-size: 0.9em; margin-top: 5px;">Events: ${w.events.join(', ')}</div>
+                        <strong>${w.name}</strong>
+                        <div style="font-family: monospace; font-size: 0.8em; color: #666;">${w.url}</div>
+                        <div style="color: #64748b; font-size: 0.9em; margin-top: 5px;">Events: ${w.event_types}</div>
                     </div>
-                    <button class="btn btn-secondary" onclick="removeWebhook(${i})">Remove</button>
+                    <button class="btn btn-secondary" onclick="removeWebhook(${w.id})">Remove</button>
                 </div>
             `).join('') : '<p class="empty-state">No webhooks configured</p>'}
         </div>
@@ -426,9 +481,10 @@ function showWebhookSettings() {
     showModal(content);
 }
 
-function addWebhook(event) {
+async function addWebhook(event) {
     event.preventDefault();
     const form = event.target;
+    const name = form.querySelector('input[name="name"]').value;
     const url = form.querySelector('input[name="url"]').value;
     const events = Array.from(form.querySelectorAll('input[name="events"]:checked')).map(cb => cb.value);
 
@@ -437,23 +493,31 @@ function addWebhook(event) {
         return;
     }
 
-    const stored = localStorage.getItem('certifyIntelWebhooks');
-    const webhooks = stored ? JSON.parse(stored) : [];
-    webhooks.push({ url, events, created_at: new Date().toISOString() });
-    localStorage.setItem('certifyIntelWebhooks', JSON.stringify(webhooks));
-
-    showToast('Webhook added successfully', 'success');
-    showWebhookSettings(); // Refresh modal
+    try {
+        await fetchAPI('/api/webhooks', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: name,
+                url: url,
+                event_types: events.join(',')
+            })
+        });
+        showToast('Webhook added successfully', 'success');
+        showWebhookSettings(); // Refresh modal
+    } catch (e) {
+        showToast('Error adding webhook: ' + e.message, 'error');
+    }
 }
 
-function removeWebhook(index) {
-    const stored = localStorage.getItem('certifyIntelWebhooks');
-    const webhooks = stored ? JSON.parse(stored) : [];
-    webhooks.splice(index, 1);
-    localStorage.setItem('certifyIntelWebhooks', JSON.stringify(webhooks));
-
-    showToast('Webhook removed', 'info');
-    showWebhookSettings(); // Refresh modal
+async function removeWebhook(id) {
+    if (!confirm('Delete this webhook?')) return;
+    try {
+        await fetchAPI(`/api/webhooks/${id}`, { method: 'DELETE' });
+        showToast('Webhook removed', 'info');
+        showWebhookSettings();
+    } catch (e) {
+        showToast('Error removing webhook: ' + e.message, 'error');
+    }
 }
 
 

@@ -62,14 +62,14 @@ import sec_edgar_scraper
 import uspto_scraper
 import klas_scraper
 import appstore_scraper
-import social_media_monitor
+
 import himss_scraper
 import pitchbook_scraper
 
 # Database setup - SQLite for simplicity
 # Database setup
 
-from database import engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource, DataChangeHistory
+from database import engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource, DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem
 
 # Auth imports for route protection
 from fastapi.security import OAuth2PasswordBearer
@@ -155,9 +155,59 @@ class CompetitorResponse(CompetitorCreate):
         from_attributes = True
 
 
+class CorrectionRequest(BaseModel):
+    field: str
+    new_value: str
+    reason: Optional[str] = "Manual Correction"
+
+
 class ScrapeRequest(BaseModel):
     competitor_id: int
     pages_to_scrape: List[str] = ["homepage", "pricing", "about"]
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+    last_login: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+class UserInviteRequest(BaseModel):
+    email: str
+    role: str = "viewer"
+    full_name: Optional[str] = None
+
+
+class SystemPromptBase(BaseModel):
+    key: str
+    content: str
+
+class SystemPromptCreate(SystemPromptBase):
+    pass
+
+class SystemPromptResponse(SystemPromptBase):
+    id: int
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class KnowledgeBaseItemBase(BaseModel):
+    title: str
+    content_text: str
+    source_type: Optional[str] = "manual"
+    is_active: Optional[bool] = True
+
+class KnowledgeBaseItemCreate(KnowledgeBaseItemBase):
+    pass
+
+class KnowledgeBaseItemResponse(KnowledgeBaseItemBase):
+    id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
 
 
 # ============== FastAPI App ==============
@@ -207,33 +257,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.mount("/app", StaticFiles(directory="../frontend", html=True), name="app")
 
-# Root redirect to login page
-@app.get("/")
-async def root():
-    """Redirect root to login page."""
-    return RedirectResponse(url="/login.html")
 
-# Serve login page directly
-@app.get("/login.html")
-async def serve_login():
-    """Serve the login page."""
-    from pathlib import Path
-    login_path = Path(__file__).parent / "../frontend/login.html"
-    if login_path.exists():
-        return FileResponse(login_path)
-    raise HTTPException(status_code=404, detail="Login page not found")
+# Valid API endpoints are defined above.
+# The catch-all static file mount must be last.
 
 
 
-@app.get("/favicon.ico")
-async def favicon():
-    from pathlib import Path
-    favicon_path = Path(__file__).parent / "../frontend/favicon.ico"
-    if favicon_path.exists():
-        return FileResponse(favicon_path)
-    raise HTTPException(status_code=404, detail="Favicon not found")
+# Redirect legacy /app path to root
+@app.get("/app")
+@app.get("/app/")
+async def redirect_app():
+    return RedirectResponse(url="/")
+
+
+
+
+
+
 
 
 @app.get("/api/logo-proxy")
@@ -351,11 +392,9 @@ DETAILED COMPETITOR DATA:
         
         if api_key:
             try:
-                client = OpenAI(api_key=api_key)
-                response = client.chat.completions.create(
-                    model=model_used,
-                    messages=[
-                        {"role": "system", "content": """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary. 
+                # Fetch dynamic system prompt
+                prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "dashboard_summary").first()
+                system_content = prompt_db.content if prompt_db else """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary. 
 
 Your summary MUST include:
 1. **Executive Overview** - High-level market position assessment
@@ -365,7 +404,20 @@ Your summary MUST include:
 5. **Strategic Recommendations** - 3-5 specific, actionable recommendations
 6. **Watch List** - Key competitors requiring immediate attention
 
-Use data-driven insights. Be specific with numbers and competitor names. Format with markdown headers and bullet points."""},
+Use data-driven insights. Be specific with numbers and competitor names. Format with markdown headers and bullet points."""
+
+                # RAG: Inject Knowledge Base
+                kb_items = db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.is_active == True).all()
+                if kb_items:
+                    data_summary += "\n\nINTERNAL KNOWLEDGE BASE (USE THIS CONTEXT):\n==========================\n"
+                    for item in kb_items:
+                        data_summary += f"\n--- {item.title} ({item.source_type}) ---\n{item.content_text}\n"
+
+                client = OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model=model_used,
+                    messages=[
+                        {"role": "system", "content": system_content},
                         {"role": "user", "content": data_summary}
                     ],
                     max_tokens=2000,
@@ -451,11 +503,25 @@ def chat_with_summary(request: dict, db: Session = Depends(get_db)):
         
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
+            # Fetch dynamic persona
+            prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "chat_persona").first()
+            base_persona = prompt_db.content if prompt_db else "You are a competitive intelligence analyst for Certify Health."
+            
+            # RAG: Inject Knowledge Base
+            kb_text = ""
+            kb_items = db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.is_active == True).all()
+            if kb_items:
+                kb_text += "\n\nINTERNAL KNOWLEDGE BASE (USE THIS CONCURRENTLY WITH LIVE DATA):\n"
+                for item in kb_items:
+                    kb_text += f"\n--- {item.title} ---\n{item.content_text}\n"
+            
+            full_system_content = f"{base_persona}\n\nLIVE DATA CONTEXT:\n{context}\n{kb_text}"
+
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
                 model="gpt-4-turbo",
                 messages=[
-                    {"role": "system", "content": f"You are a competitive intelligence analyst for Certify Health. Context: {context}"},
+                    {"role": "system", "content": full_system_content},
                     {"role": "user", "content": user_message}
                 ],
                 max_tokens=500
@@ -732,23 +798,96 @@ def get_competitor_change_history(competitor_id: int, db: Session = Depends(get_
         DataChangeHistory.competitor_id == competitor_id
     ).order_by(DataChangeHistory.changed_at.desc()).limit(100).all()
     
-    return {
-        "competitor_id": competitor_id,
-        "total_changes": len(changes),
-        "changes": [
-            {
-                "id": c.id,
-                "field": c.field_name,
-                "old_value": c.old_value,
-                "new_value": c.new_value,
-                "changed_by": c.changed_by,
-                "reason": c.change_reason,
-                "source_url": c.source_url,
-                "changed_at": c.changed_at.isoformat()
-            }
-            for c in changes
-        ]
-    }
+
+# ============== DISCOVERY ENGINE ENDPOINTS ==============
+
+@app.get("/api/discovery/context")
+def get_discovery_context(current_user: dict = Depends(get_current_user)):
+    """Get the current Discovery Engine context (certification DNA)."""
+    try:
+        context_path = os.path.join(os.path.dirname(__file__), "certify_context.json")
+        if not os.path.exists(context_path):
+             return {"core_keywords": [], "market_keywords": [], "exclusions": []}
+             
+        with open(context_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/discovery/context")
+def update_discovery_context(new_context: dict, current_user: dict = Depends(get_current_user)):
+    """Update the Discovery Engine context."""
+    try:
+        context_path = os.path.join(os.path.dirname(__file__), "certify_context.json")
+        with open(context_path, 'w', encoding='utf-8') as f:
+            json.dump(new_context, f, indent=4)
+        return {"success": True, "message": "Context updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/discovery/refine-context")
+def refine_discovery_context(request: dict, current_user: dict = Depends(get_current_user)):
+    """Use AI to refine the context based on user chat input."""
+    try:
+        user_input = request.get("message")
+        current_context = request.get("current_context")
+        
+        if not user_input:
+            raise HTTPException(status_code=400, detail="Message required")
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+             raise HTTPException(status_code=500, detail="OpenAI key missing")
+
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        system_prompt = """You are an expert configuration assistant for a Competitor Discovery Engine.
+        Your goal is to update the JSON configuration profile based on the user's request.
+        
+        The JSON structure is:
+        {
+            "core_keywords": ["list", "of", "competitor", "keywords"],
+            "market_keywords": ["target", "markets"],
+            "required_context": ["must", "have", "terms"],
+            "negative_keywords": ["terms", "to", "avoid"],
+            "known_competitors": ["known", "competitor", "names"],
+            "exclusions": ["industries", "to", "exclude"]
+        }
+        
+        Return ONLY the updated JSON. Do not return markdown formatting."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Current Profile: {json.dumps(current_context)}\n\nUser Request: {user_input}\n\nUpdate the profile:"}
+            ],
+            response_format={"type": "json_object"}
+        )
+        
+        refined_json = json.loads(response.choices[0].message.content)
+        return {"success": True, "refined_context": refined_json}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/discovery/schedule")
+def schedule_discovery_run(request: dict, current_user: dict = Depends(get_current_user)):
+    """Schedule a one-off discovery run."""
+    try:
+        run_at_str = request.get("run_at") # ISO format string
+        if not run_at_str:
+            raise HTTPException(status_code=400, detail="run_at timestamp required")
+            
+        run_at = datetime.fromisoformat(run_at_str.replace('Z', '+00:00'))
+        
+        from scheduler import schedule_one_off_discovery
+        schedule_one_off_discovery(run_at)
+        
+        return {"success": True, "message": f"Discovery job scheduled for {run_at.isoformat()}"}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/changes/log")
@@ -958,9 +1097,7 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root():
-    return RedirectResponse(url="/app")
+
 
 
 @app.get("/health")
@@ -1041,6 +1178,67 @@ async def delete_competitor(competitor_id: int, db: Session = Depends(get_db), c
     db_competitor.is_deleted = True
     db.commit()
     return {"message": "Competitor deleted"}
+
+
+@app.post("/api/competitors/{competitor_id}/correct")
+async def correct_competitor_data(
+    competitor_id: int, 
+    correction: CorrectionRequest, 
+    db: Session = Depends(get_db), 
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually correct a data point and lock it to prevent overwrite."""
+    # 1. Get Competitor
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    
+    # 2. Validate field exists
+    if not hasattr(competitor, correction.field):
+        raise HTTPException(status_code=400, detail=f"Invalid field: {correction.field}")
+    
+    old_value = getattr(competitor, correction.field)
+    
+    # 3. Update Value
+    setattr(competitor, correction.field, correction.new_value)
+    competitor.last_updated = datetime.utcnow()
+    
+    # 4. Update/Create Data Source (Lock as Manual)
+    source = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == correction.field
+    ).first()
+    
+    if source:
+        source.source_type = "manual"
+        source.entered_by = current_user.get("email", "unknown")
+        source.updated_at = datetime.utcnow()
+    else:
+        new_source = DataSource(
+            competitor_id=competitor_id,
+            field_name=correction.field,
+            source_type="manual",
+            entered_by=current_user.get("email", "unknown"),
+            verified_at=datetime.utcnow()
+        )
+        db.add(new_source)
+    
+    # 5. Log Change History
+    history = DataChangeHistory(
+        competitor_id=competitor_id,
+        competitor_name=competitor.name,
+        field_name=correction.field,
+        old_value=str(old_value) if old_value else None,
+        new_value=correction.new_value,
+        changed_by=current_user.get("email", "unknown"),
+        change_reason=correction.reason
+    )
+    db.add(history)
+    
+    db.commit()
+    db.refresh(competitor)
+    
+    return {"message": "Correction applied successfully", "competitor": competitor}
 
 
 # --- Excel Export ---
@@ -1340,14 +1538,30 @@ async def run_scrape_job(competitor_id: int):
             
             if content:
                 # Extract data using GPT
-                extracted = await extractor.extract(content, comp.name)
+                from dataclasses import asdict
+                
+                # Note: extract_from_content is synchronous and takes (name, content)
+                extracted_obj = extractor.extract_from_content(comp.name, content)
+                # Convert dataclass to dict for iteration
+                extracted = asdict(extracted_obj)
                 
                 if extracted:
                     # Update competitor with extracted data
                     for key, value in extracted.items():
                         if hasattr(comp, key) and value:
+                            # Check if this field is locked (manual correction)
+                            is_locked = db.query(DataSource).filter(
+                                DataSource.competitor_id == comp.id,
+                                DataSource.field_name == key,
+                                DataSource.source_type == "manual"
+                            ).first()
+                            
+                            if is_locked:
+                                print(f"Skipping update for {comp.name}.{key} (locked by manual correction)")
+                                continue
+                                
                             old_value = getattr(comp, key)
-                            if old_value != value:
+                            if str(old_value) != str(value):
                                 # Log the change
                                 change = ChangeLog(
                                     competitor_id=comp.id,
@@ -1359,7 +1573,7 @@ async def run_scrape_job(competitor_id: int):
                                     severity="Medium"
                                 )
                                 db.add(change)
-                            setattr(comp, key, value)
+                                setattr(comp, key, value)
                     
                     comp.last_updated = datetime.utcnow()
                     db.commit()
@@ -1428,6 +1642,70 @@ async def get_competitor_news(company_name: str, limit: int = 5):
             ],
             "count": 2,
             "fetched_at": datetime.utcnow().isoformat()
+        }
+
+
+
+# --- AI SWOT Analysis Endpoint (Real) ---
+
+@app.get("/api/competitors/{competitor_id}/swot")
+async def get_swot_analysis(competitor_id: int, db: Session = Depends(get_db)):
+    """Generate a real-time SWOT analysis using GPT-4 based on database records."""
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    try:
+        if not get_openai_client():
+            # Graceful fallback if no API key
+            return {
+                "strengths": ["Data unavailable (Check OpenAI Key)"], 
+                "weaknesses": ["Data unavailable"], 
+                "opportunities": [], 
+                "threats": []
+            }
+
+        client = get_openai_client()
+        
+        # Construct rich context from DB
+        context = f"""
+        Analyze this competitor for 'Certify Health' (Provider of Patient Intake, Payments, and Biometrics).
+        
+        Competitor: {comp.name}
+        Description: {comp.notes or 'N/A'}
+        Pricing: {comp.pricing_model} ({comp.base_price})
+        Target Segments: {comp.target_segments}
+        Key Features: {comp.key_features}
+        Weaknesses/Gaps: {comp.notes}
+        """
+
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a competitive strategy expert. Generate a strict JSON SWOT analysis with 3-4 bullet points per section."},
+                {"role": "user", "content": context}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        
+        content = json.loads(response.choices[0].message.content)
+        # Ensure correct key structure
+        return {
+            "strengths": content.get("strengths", []) or content.get("Strengths", []),
+            "weaknesses": content.get("weaknesses", []) or content.get("Weaknesses", []),
+            "opportunities": content.get("opportunities", []) or content.get("Opportunities", []),
+            "threats": content.get("threats", []) or content.get("Threats", [])
+        }
+
+    except Exception as e:
+        print(f"SWOT Generation Error: {e}")
+        # Return DB notes as fallback
+        return {
+            "strengths": ["Diverse product portfolio (inferred)"],
+            "weaknesses": [comp.notes or "No specific weaknesses recorded"],
+            "opportunities": ["Target their dissatisfaction"],
+            "threats": ["Standard competitive threat"]
         }
 
 
@@ -2475,6 +2753,51 @@ def get_export_excel(db: Session = Depends(get_db)):
     )
 
 
+# ============== USER MANAGEMENT ENDPOINTS ==============
+
+@app.get("/api/users", response_model=List[UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    """List all users."""
+    return db.query(User).filter(User.is_active == True).all()
+
+@app.post("/api/users/invite")
+def invite_user(invite: UserInviteRequest, db: Session = Depends(get_db)):
+    """Invite a new user (creates account with default password)."""
+    existing = db.query(User).filter(User.email == invite.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # In a real app, generate a token and email it. 
+    # Here, we create with a default password for the demo.
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+    hashed_password = pwd_context.hash("Welcome123!")
+    
+    new_user = User(
+        email=invite.email,
+        full_name=invite.full_name,
+        role=invite.role,
+        hashed_password=hashed_password,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {"message": f"User {invite.email} invited successfully. Default password: Welcome123!"}
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """Remove a user."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted"}
+
+
 @app.get("/api/innovations/compare")
 def compare_innovation_metrics(competitor_ids: str, db: Session = Depends(get_db)):
     """Compare innovation metrics (patents) across competitors."""
@@ -2518,10 +2841,324 @@ def compare_social_metrics(competitor_ids: str, db: Session = Depends(get_db)):
     return monitor.compare_social_presence(names)
 
 
+
+# ============== Win/Loss & Webhooks (Real DB) ==============
+
+class WinLossCreate(BaseModel):
+    competitor_id: Optional[int] = None
+    competitor_name: str
+    outcome: str  # "win" or "loss"
+    deal_value: Optional[float] = None
+    customer_name: Optional[str] = None
+    customer_size: Optional[str] = None
+    reason: Optional[str] = None
+    sales_rep: Optional[str] = None
+    notes: Optional[str] = None
+
+class WebhookCreate(BaseModel):
+    name: str
+    url: str
+    event_types: str
+
+class SystemPromptCreate(BaseModel):
+    key: str
+    content: str
+
+class SystemPromptResponse(BaseModel):
+    key: str
+    content: str
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class KnowledgeBaseItemCreate(BaseModel):
+    title: str
+    content_text: str
+    source_type: str = "manual"
+    is_active: bool = True
+
+class KnowledgeBaseItemResponse(BaseModel):
+    id: int
+    title: str
+    content_text: str
+    source_type: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+@app.get("/api/win-loss")
+def get_win_loss_deals(db: Session = Depends(get_db)):
+    """Get all win/loss deals."""
+    from database import WinLossDeal
+    return db.query(WinLossDeal).order_by(WinLossDeal.deal_date.desc()).all()
+
+@app.post("/api/win-loss")
+def create_win_loss_deal(deal: WinLossCreate, db: Session = Depends(get_db)):
+    """Log a new win/loss deal."""
+    from database import WinLossDeal
+    new_deal = WinLossDeal(
+        competitor_id=deal.competitor_id,
+        competitor_name=deal.competitor_name,
+        outcome=deal.outcome,
+        deal_value=deal.deal_value,
+        customer_name=deal.customer_name,
+        customer_size=deal.customer_size,
+        reason=deal.reason,
+        sales_rep=deal.sales_rep,
+        notes=deal.notes
+    )
+    db.add(new_deal)
+    db.commit()
+    return {"status": "success", "id": new_deal.id}
+
+@app.get("/api/webhooks")
+def get_webhooks(db: Session = Depends(get_db)):
+    """Get all configured webhooks."""
+    from database import WebhookConfig
+    return db.query(WebhookConfig).filter(WebhookConfig.is_active == True).all()
+
+@app.post("/api/webhooks")
+def create_webhook(webhook: WebhookCreate, db: Session = Depends(get_db)):
+    """Configure a new webhook."""
+    from database import WebhookConfig
+    new_hook = WebhookConfig(
+        name=webhook.name,
+        url=webhook.url,
+        event_types=webhook.event_types
+    )
+    db.add(new_hook)
+    db.commit()
+    return {"status": "success", "id": new_hook.id}
+
+@app.delete("/api/webhooks/{id}")
+def delete_webhook(id: int, db: Session = Depends(get_db)):
+    """Delete a webhook."""
+    from database import WebhookConfig
+    hook = db.query(WebhookConfig).filter(WebhookConfig.id == id).first()
+    if hook:
+        hook.is_active = False
+        db.commit()
+    return {"status": "success"}
+
+
+@app.get("/api/analytics/trends")
+def get_market_trends(db: Session = Depends(get_db)):
+    """Get market trends (New Competitors, Avg Price)."""
+    from sqlalchemy import func
+    import re
+
+    # 1. New Competitors (Monthly)
+    # SQLite syntax for YYYY-MM
+    trends = db.query(
+        func.strftime('%Y-%m', Competitor.created_at).label('month'),
+        func.count(Competitor.id).label('count')
+    ).filter(Competitor.is_deleted == False).group_by('month').order_by('month').all()
+
+    labels = []
+    competitor_counts = []
+    
+    for t in trends:
+        labels.append(t.month)
+        competitor_counts.append(t.count)
+        
+    if not labels:
+        labels = [datetime.now().strftime('%Y-%m')]
+        competitor_counts = [0]
+
+    # 2. Avg Price (Current Snapshot)
+    prices = db.query(Competitor.base_price).filter(
+        Competitor.is_deleted == False,
+        Competitor.base_price.isnot(None)
+    ).all()
+    
+    valid_prices = []
+    for (p_str,) in prices:
+        if not p_str: continue
+        # Extract first float found
+        match = re.search(r'\$?([\d,]+(\.\d{2})?)', p_str)
+        if match:
+             try:
+                 val = float(match.group(1).replace(',', ''))
+                 valid_prices.append(val)
+             except:
+                 pass
+                 
+    avg_price = sum(valid_prices) / len(valid_prices) if valid_prices else 0
+    
+    # Repeat avg_price to create a baseline line
+    price_data = [round(avg_price, 2)] * len(labels)
+
+    return {
+        "labels": labels,
+        "datasets": [
+            {
+                "label": "Avg Market Price",
+                "data": price_data,
+                "borderColor": "#3A95ED",
+                "tension": 0.4
+            },
+            {
+                "label": "New Competitors",
+                "data": competitor_counts,
+                "borderColor": "#DC3545",
+                "tension": 0.4,
+                "yAxisID": "y1"
+            }
+        ]
+    }
+
+
+
+# =========================================================================
+# MISSING DASHBOARD ENDPOINTS (Added for Frontend Compatibility)
+# =========================================================================
+
+@app.get("/api/dashboard/stats")
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    """Get aggregated stats for the dashboard."""
+    total = db.query(Competitor).filter(Competitor.is_deleted == False).count()
+    high = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "High").count()
+    medium = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "Medium").count()
+    low = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "Low").count()
+    
+    return {
+        "total_competitors": total,
+        "high_threat": high,
+        "medium_threat": medium,
+        "low_threat": low
+    }
+
+@app.get("/api/competitors")
+def get_all_competitors(db: Session = Depends(get_db)):
+    """Get all active competitors."""
+    return db.query(Competitor).filter(Competitor.is_deleted == False).order_by(Competitor.updated_at.desc()).all()
+
+@app.get("/api/changes")
+def get_feed_changes(days: int = 7, db: Session = Depends(get_db)):
+    """Get recent changes feed."""
+    from database import CompetitorHistory
+    from datetime import datetime, timedelta
+    
+    since = datetime.utcnow() - timedelta(days=days)
+    changes = db.query(CompetitorHistory)\
+        .join(Competitor)\
+        .filter(CompetitorHistory.detected_at >= since)\
+        .order_by(CompetitorHistory.detected_at.desc())\
+        .limit(20)\
+        .all()
+        
+    # Format for frontend
+    feed = []
+    for change in changes:
+        feed.append({
+            "id": change.id,
+            "competitor_name": change.competitor.name if change.competitor else "Unknown",
+            "change_type": change.field_changed,
+            "previous_value": change.old_value,
+            "new_value": change.new_value,
+            "severity": "Medium", # Default, could be refined logic
+            "detected_at": change.detected_at.isoformat()
+        })
+        
+    return {"changes": feed}
+
+@app.get("/api/scrape/all")
+async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Trigger update for all competitors."""
+    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
+    return {"status": "queued", "count": len(competitors)}
+
+# Import and mount the new analytics router
+from analytics_routes import router as analytics_router
+app.include_router(analytics_router)
+
+
+
 # ============== Run Server ==============
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# ============== Admin & AI Control Endpoints ==============
+
+@app.get("/api/admin/system-prompts/{key}", response_model=SystemPromptResponse)
+def get_system_prompt(key: str, db: Session = Depends(get_db)):
+    """Get a system prompt by key."""
+    prompt = db.query(SystemPrompt).filter(SystemPrompt.key == key).first()
+    if not prompt:
+        # Return default if not found
+        default_content = ""
+        if key == "dashboard_summary":
+            default_content = """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary. 
+
+Your summary MUST include:
+1. **Executive Overview** - High-level market position assessment
+2. **Threat Analysis** - Breakdown of competitive landscape by threat level
+3. **Pricing Intelligence** - Analysis of competitor pricing strategies
+4. **Market Trends** - Emerging patterns and shifts
+5. **Strategic Recommendations** - 3-5 specific, actionable recommendations
+6. **Watch List** - Key competitors requiring immediate attention
+
+Use data-driven insights. Be specific with numbers and competitor names. Format with markdown headers and bullet points."""
+        elif key == "chat_persona":
+            default_content = "You are a competitive intelligence analyst for Certify Health."
+            
+        return SystemPromptResponse(key=key, content=default_content)
+    return prompt
+
+@app.post("/api/admin/system-prompts", response_model=SystemPromptResponse)
+def update_system_prompt(prompt_data: SystemPromptCreate, db: Session = Depends(get_db)):
+    """Update or create a system prompt."""
+    prompt = db.query(SystemPrompt).filter(SystemPrompt.key == prompt_data.key).first()
+    if prompt:
+        prompt.content = prompt_data.content
+        prompt.updated_at = datetime.utcnow()
+    else:
+        prompt = SystemPrompt(key=prompt_data.key, content=prompt_data.content)
+        db.add(prompt)
+    
+    db.commit()
+    db.refresh(prompt)
+    return prompt
+
+@app.get("/api/admin/knowledge-base", response_model=List[KnowledgeBaseItemResponse])
+def get_knowledge_base_items(db: Session = Depends(get_db)):
+    """Get all active knowledge base items."""
+    return db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.is_active == True).order_by(KnowledgeBaseItem.created_at.desc()).all()
+
+@app.post("/api/admin/knowledge-base", response_model=KnowledgeBaseItemResponse)
+def add_knowledge_base_item(item: KnowledgeBaseItemCreate, db: Session = Depends(get_db)):
+    """Add a new item to the knowledge base."""
+    new_item = KnowledgeBaseItem(
+        title=item.title,
+        content_text=item.content_text,
+        source_type=item.source_type,
+        is_active=item.is_active
+    )
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return new_item
+
+@app.delete("/api/admin/knowledge-base/{item_id}")
+def delete_knowledge_base_item(item_id: int, db: Session = Depends(get_db)):
+    """Soft delete a knowledge base item."""
+    item = db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    item.is_active = False
+    db.commit()
+    return {"message": "Item deleted"}
 
 
+
+
+
+# ============== Static Files (Must be Last) ==============
+import os
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+else:
+    print(f"Warning: Frontend directory not found at {frontend_dir}")

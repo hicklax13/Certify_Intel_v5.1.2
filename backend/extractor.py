@@ -111,9 +111,67 @@ Always respond with valid JSON matching the requested schema."""
     def _build_extraction_prompt(self, competitor_name: str, content: str, page_type: str) -> str:
         """Build the extraction prompt based on page type."""
         
-        base_prompt = f"""Analyze this content from {competitor_name}'s {page_type} page and extract the following information.
-Return a JSON object with these fields (use null if not found):
+        # 1. PRICING PAGE PROMPT
+        if page_type == "pricing":
+            return f"""Analyze this PRICING page for {competitor_name}.
+Extract the following pricing details. Be extremely specific with numbers.
+Return JSON:
+{{
+    "pricing_model": "Describe the model (e.g., 'Per Provider/Month', 'Per Visit', 'Platform Fee'). Look for tiers.",
+    "base_price": "Lowest numeric price found (e.g., '$299'). Include currency symbol.",
+    "price_unit": "The unit for the base price (e.g., 'per month', 'per provider', 'one-time').",
+    "free_trial": "True/False if mentioned",
+    "setup_fee": "Implementation or setup fee if mentioned",
+    "confidence_score": "Confidence 1-100",
+    "extraction_notes": "Quote the text where price was found"
+}}
 
+CONTENT:
+{content}"""
+
+        # 2. FEATURES/PRODUCT PAGE PROMPT
+        elif page_type == "features" or page_type == "product":
+            return f"""Analyze this FEATURES page for {competitor_name}.
+Identify key capabilities relevant to healthcare patient engagement.
+Return JSON:
+{{
+    "product_categories": "High-level categories (e.g., 'Intake', 'Payments', 'Telehealth'). Semicolon-separated.",
+    "key_features": "List specific features (e.g., 'Mobile Check-in', 'Real-time Eligibility', 'Biometric Auth'). Comma-separated.",
+    "integration_partners": "List EHRs/PMs mentioned (e.g., Epic, Cerner, Athena). Semicolon-separated.",
+    "certifications": "Security certs (HIPAA, SOC2, etc.) if mentioned.",
+    "confidence_score": "Confidence 1-100",
+    "extraction_notes": "Notes on feature availability"
+}}
+
+CONTENT:
+{content}"""
+
+        # 3. ABOUT/CUSTOMERS PAGE PROMPT
+        elif page_type == "about" or page_type == "customers":
+            return f"""Analyze this ABOUT/CUSTOMERS page for {competitor_name}.
+Extract company and market data.
+Return JSON:
+{{
+    "year_founded": "Year founded",
+    "headquarters": "City, State, Country",
+    "employee_count": "Number of employees",
+    "customer_count": "Number of customers/providers/users",
+    "key_customers": "List specific health system or client names",
+    "target_segments": "Who they serve (e.g. 'Large Health Systems', 'Small Practices')",
+    "geographic_focus": "Regions served",
+    "funding_total": "Total funding or investment details",
+    "confidence_score": "Confidence 1-100",
+    "extraction_notes": "Notes on company data"
+}}
+
+CONTENT:
+{content}"""
+
+        # 4. DEFAULT/HOMEPAGE PROMPT (General Fallback)
+        else:
+            return f"""Analyze this GENERAL content from {competitor_name}'s {page_type} page.
+Extract as much structured data as possible. Use null if not found.
+Return JSON:
 {{
     "pricing_model": "How they charge (e.g., 'Per Visit', 'Per Provider', 'Per Location', 'Subscription', 'Custom')",
     "base_price": "Starting price with currency symbol (e.g., '$3.00', '$199/month')",
@@ -138,8 +196,6 @@ Return a JSON object with these fields (use null if not found):
 
 CONTENT TO ANALYZE:
 {content}"""
-        
-        return base_prompt
     
     def _parse_result(self, result: Dict[str, Any]) -> ExtractedData:
         """Parse GPT response into ExtractedData."""

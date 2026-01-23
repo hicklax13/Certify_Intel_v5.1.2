@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from dataclasses import dataclass
 
-from main import SessionLocal, ChangeLog, Competitor
+# Moved imports inside methods to avoid circular dependency
+# from main import SessionLocal, ChangeLog, Competitor
 
 
 @dataclass
@@ -69,7 +70,7 @@ class AlertSystem:
             print(f"Failed to send alert: {e}")
             return False
     
-    def send_change_alert(self, changes: List[ChangeLog]) -> bool:
+    def send_change_alert(self, changes: List['ChangeLog']) -> bool:
         """Send alert for detected changes."""
         if not changes:
             return False
@@ -91,6 +92,8 @@ class AlertSystem:
     
     def send_daily_digest(self) -> bool:
         """Send daily digest of changes from last 24 hours."""
+        from main import SessionLocal, ChangeLog  # Local import
+        
         db = SessionLocal()
         
         yesterday = datetime.utcnow() - timedelta(days=1)
@@ -117,6 +120,8 @@ class AlertSystem:
     
     def send_weekly_summary(self) -> bool:
         """Send weekly summary email."""
+        from main import SessionLocal, ChangeLog, Competitor  # Local import
+        
         db = SessionLocal()
         
         last_week = datetime.utcnow() - timedelta(days=7)
@@ -189,7 +194,7 @@ class AlertSystem:
         
         return html
     
-    def _build_change_section(self, title: str, changes: List[ChangeLog], severity: str) -> str:
+    def _build_change_section(self, title: str, changes: List['ChangeLog'], severity: str) -> str:
         """Build HTML section for a change category."""
         html = f"""
         <div class="section {severity}">
@@ -279,7 +284,7 @@ class AlertSystem:
         
         return html
     
-    def _build_weekly_summary_html(self, stats: dict, changes: List[ChangeLog]) -> str:
+    def _build_weekly_summary_html(self, stats: dict, changes: List['ChangeLog']) -> str:
         """Build HTML for weekly summary email."""
         html = f"""
         <html>
@@ -339,7 +344,7 @@ class AlertSystem:
 
 # Quick send functions
 
-def send_immediate_alert(changes: List[ChangeLog]) -> bool:
+def send_immediate_alert(changes: List['ChangeLog']) -> bool:
     """Send an immediate alert for critical changes."""
     alert_system = AlertSystem()
     return alert_system.send_change_alert(changes)

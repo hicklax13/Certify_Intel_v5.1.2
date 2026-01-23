@@ -179,12 +179,66 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
 
 
+
+class SystemPrompt(Base):
+    """Dynamic system prompts for AI generation."""
+    __tablename__ = "system_prompts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)  # e.g., "dashboard_summary", "chat_persona"
+    content = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class KnowledgeBaseItem(Base):
+    """Internal documents and text for RAG."""
+    __tablename__ = "knowledge_base"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    content_text = Column(Text, nullable=False)   # Extracted text from PDF/Doc
+    source_type = Column(String, default="manual") # manual, upload, integration
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
     
     key = Column(String, primary_key=True, index=True)
     value = Column(Text, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WinLossDeal(Base):
+    """Record of a competitive deal (win or loss)."""
+    __tablename__ = "win_loss_deals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, index=True)
+    competitor_name = Column(String)
+    outcome = Column(String)  # "win" or "loss"
+    deal_value = Column(Float, nullable=True)
+    deal_date = Column(DateTime, default=datetime.utcnow)
+    customer_name = Column(String, nullable=True)
+    customer_size = Column(String, nullable=True)
+    reason = Column(String, nullable=True)  # "loss_reason" or "win_factor"
+    sales_rep = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WebhookConfig(Base):
+    """Configuration for outbound webhooks."""
+    __tablename__ = "webhooks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    url = Column(String)
+    event_types = Column(String)  # JSON-encoded list of events or comma-separated
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 # Create tables
 Base.metadata.create_all(bind=engine)

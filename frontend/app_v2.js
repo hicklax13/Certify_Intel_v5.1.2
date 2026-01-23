@@ -43,6 +43,59 @@ function getAuthHeaders() {
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
+/**
+ * Setup user menu info and toggle logic
+ */
+async function setupUserMenu() {
+    const avatar = document.getElementById('userAvatar');
+    const dropdown = document.getElementById('userDropdown');
+    const userNameEl = document.getElementById('userName');
+    const userEmailEl = document.getElementById('userEmail');
+    const userRoleEl = document.getElementById('userRole');
+
+    if (!avatar || !dropdown) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const user = await response.json();
+
+            // Update initials (as tooltip)
+            const initials = user.full_name ?
+                user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() :
+                user.email[0].toUpperCase();
+            avatar.title = initials;
+
+            // Update dropdown info
+            userNameEl.textContent = user.full_name || 'User';
+            userEmailEl.textContent = user.email;
+            userRoleEl.textContent = user.role || 'Analyst';
+        }
+    } catch (e) {
+        console.error('Error fetching user info:', e);
+    }
+
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+        if (!avatar.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('active');
+        }
+    });
+}
+
+/**
+ * Toggle the user profile dropdown
+ */
+function toggleUserDropdown() {
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
+}
+
 
 // ============== Source Attribution Helpers ==============
 
@@ -118,14 +171,11 @@ function createSourceLink(source, identifier = '', highlight = '') {
 /**
  * Create a value with source attribution
  */
-function createSourcedValue(value, source, identifier = '', highlight = '') {
-    if (value === null || value === undefined || value === '') return '<span style="color:#94a3b8;">—</span>';
-    return `<span class="sourced-value">${value}${createSourceLink(source, identifier, highlight)}</span>`;
-}
 
 /**
  * Format SEC filings into displayable HTML
  */
+
 function formatSecFilings(filingsJson, cik) {
     if (!filingsJson) return '';
     try {
@@ -167,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     loadDashboard();
     loadCompetitors();
+    setupUserMenu();
 });
 
 function initNavigation() {
@@ -484,9 +535,23 @@ function showCompanyList(threatLevel) {
         const publicBadge = c.is_public ?
             `<span style="background: #22c55e; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;">PUBLIC ${c.ticker_symbol || ''}</span>` :
             `<span style="background: #64748b; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;">PRIVATE</span>`;
-        return `<div style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-            <span><strong>${idx + 1}.</strong> ${c.name} ${publicBadge}</span>
-            <span style="color: #64748b; font-size: 0.85em;">${c.customer_count || 'N/A'} customers</span>
+        return `<div style="padding: 16px 0; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <span style="font-size: 1.1em;"><strong>${idx + 1}.</strong> ${c.name} ${publicBadge}</span>
+                <button class="btn btn-sm btn-secondary" onclick="viewCompetitor(${c.id})" style="padding: 2px 8px; font-size: 0.8em;">View Profile</button>
+            </div>
+            
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-left: 20px;">
+                <div class="qualification-item" style="font-size: 0.85em; color: #475569; display: flex; align-items: center; gap: 4px;">
+                    <span style="font-weight: 600;">Pricing:</span> ${createSourcedValue(c.pricing_model || 'N/A', c.id, 'pricing_model')}
+                </div>
+                <div class="qualification-item" style="font-size: 0.85em; color: #475569; display: flex; align-items: center; gap: 4px;">
+                    <span style="font-weight: 600;">Customers:</span> ${createSourcedValue(c.customer_count || 'N/A', c.id, 'customer_count')}
+                </div>
+                <div class="qualification-item" style="font-size: 0.85em; color: #475569; display: flex; align-items: center; gap: 4px;">
+                    <span style="font-weight: 600;">Founded:</span> ${createSourcedValue(c.year_founded || 'N/A', c.id, 'year_founded')}
+                </div>
+            </div>
         </div>`;
     }).join('');
 
@@ -528,8 +593,8 @@ function renderTopThreats() {
                 </div>
             </td>
             <td><span class="threat-badge ${comp.threat_level.toLowerCase()}">${comp.threat_level}</span></td>
-            <td>${createSourcedValue(comp.customer_count, 'website', comp.website, 'customers')}</td>
-            <td>${createSourcedValue(comp.base_price, 'website', comp.website, 'pricing')}</td>
+            <td>${createSourcedValue(comp.customer_count, comp.id, 'customer_count')}</td>
+            <td>${createSourcedValue(comp.base_price, comp.id, 'base_price')}</td>
             <td>${formatDate(comp.last_updated)}</td>
             <td>
                 <button class="btn btn-secondary" onclick="viewCompetitor(${comp.id})">View</button>
@@ -667,25 +732,26 @@ function renderCompetitorsGrid(comps = competitors) {
     if (!grid) return;
 
     grid.innerHTML = comps.map(comp => {
-        // Determine public/private badge
+        // Determine public/private status block
         const isPublic = comp.is_public;
         const ticker = comp.ticker_symbol || '';
         const exchange = comp.stock_exchange || '';
 
-        let statusBadge = '';
+        let statusBlock = '';
         if (isPublic && ticker) {
-            statusBadge = `
-                <div class="stock-inline-badge" data-ticker="${ticker}" style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
-                    <span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 600;">PUBLIC</span>
-                    <span style="font-weight: 600; color: #122753; font-size: 0.85em;">${ticker}</span>
-                    <span style="color: #64748b; font-size: 0.75em;">(${exchange})</span>
-                    <span class="live-price" id="price-${comp.id}" style="font-weight: 600; font-size: 0.85em; color: #122753;">---</span>
+            statusBlock = `
+                <div class="stock-info-block" data-ticker="${ticker}" style="margin-top: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
+                        <span style="background: #22c55e; color: white; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700;">PUBLIC</span>
+                        <span style="font-weight: 700; color: #122753; font-size: 12px;">${ticker} <small style="color: #64748b; font-weight: 400;">(${exchange})</small></span>
+                        <span id="price-${comp.id}" style="font-weight: 700; color: #122753; font-size: 13px;">---</span>
+                    </div>
                 </div>
             `;
         } else {
-            statusBadge = `
-                <div style="margin-top: 4px;">
-                    <span style="background: #64748b; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 600;">PRIVATE</span>
+            statusBlock = `
+                <div style="margin-top: 6px;">
+                    <span style="background: #64748b; color: white; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700;">PRIVATE</span>
                 </div>
             `;
         }
@@ -693,40 +759,49 @@ function renderCompetitorsGrid(comps = competitors) {
         return `
         <div class="competitor-card">
             <div class="competitor-header">
-                <div style="display:flex;align-items:center;gap:12px;">
+                <div style="display:flex;align-items:flex-start;gap:12px; width: 100%;">
                     ${createLogoImg(comp.website, comp.name, 40)}
-                    <div>
-                        <div class="competitor-name">${comp.name}</div>
-                        ${statusBadge}
-                        <a href="${comp.website}" target="_blank" class="competitor-website">${comp.website}</a>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <div class="competitor-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${comp.name}</div>
+                            <span class="threat-badge ${comp.threat_level.toLowerCase()}" style="font-size: 0.8em; margin-left: 8px;">${comp.threat_level}</span>
+                        </div>
+                        <a href="${comp.website}" target="_blank" class="competitor-website" style="display: block; margin-top: 0px;">${comp.website.replace('https://', '').replace('www.', '')}</a>
+                        ${statusBlock}
                     </div>
                 </div>
-                <span class="threat-badge ${comp.threat_level.toLowerCase()}">${comp.threat_level}</span>
+                <!-- threat-badge removed from here and moved to header line -->
             </div>
+            
             <div class="competitor-details">
                 <div class="detail-item">
+                    <span class="detail-icon">👥</span>
                     <span class="detail-label">Customers</span>
-                    <span class="detail-value">${createSourcedValue(comp.customer_count, 'website', comp.website, 'customers')}</span>
+                    <div class="detail-value">${createSourcedValue(comp.customer_count, comp.id, 'customer_count')}</div>
                 </div>
                 <div class="detail-item">
+                    <span class="detail-icon">💰</span>
                     <span class="detail-label">Pricing</span>
-                    <span class="detail-value">${createSourcedValue(comp.base_price, 'website', comp.website, 'pricing')}</span>
+                    <div class="detail-value">${createSourcedValue(comp.base_price, comp.id, 'base_price')}</div>
                 </div>
                 <div class="detail-item">
+                    <span class="detail-icon">👔</span>
                     <span class="detail-label">Employees</span>
-                    <span class="detail-value">${createSourcedValue(comp.employee_count, 'linkedin', comp.name)}</span>
+                    <div class="detail-value">${createSourcedValue(comp.employee_count, comp.id, 'employee_count')}</div>
                 </div>
                 <div class="detail-item">
+                    <span class="detail-icon">⭐</span>
                     <span class="detail-label">G2 Rating</span>
-                    <span class="detail-value">${createSourcedValue(comp.g2_rating ? comp.g2_rating + ' ⭐' : null, 'google', comp.name + ' G2 rating')}</span>
+                    <div class="detail-value">${createSourcedValue(comp.g2_rating ? comp.g2_rating : null, comp.id, 'g2_rating')}</div>
                 </div>
             </div>
+            
             <div class="competitor-actions">
-                <button class="btn btn-primary" onclick="viewBattlecard(${comp.id})">Battlecard</button>
-                <button class="btn btn-secondary" onclick="showCompetitorInsights(${comp.id})" style="background-color: var(--navy-dark); color: white;">📊 Insights</button>
-                <button class="btn btn-secondary" onclick="triggerScrape(${comp.id})">Refresh</button>
-                <button class="btn btn-secondary" onclick="editCompetitor(${comp.id})">Edit</button>
-                <button class="btn btn-secondary" onclick="deleteCompetitor(${comp.id})" style="background-color: #dc3545; color: white; border-color: #dc3545;">Delete</button>
+                <button class="btn btn-primary" onclick="viewBattlecard(${comp.id})" title="View Battlecard">Battlecard</button>
+                <button class="btn btn-secondary" onclick="showCompetitorInsights(${comp.id})" style="background-color: var(--navy-dark); color: white;" title="AI Analysis">Insights</button>
+                <button class="btn btn-secondary" onclick="triggerScrape(${comp.id})" title="Refresh Data">Refresh</button>
+                <button class="btn btn-secondary" onclick="editCompetitor(${comp.id})" title="Edit Profile">Edit</button>
+                <button class="btn btn-secondary" onclick="deleteCompetitor(${comp.id})" style="background-color: #dc3545; color: white; border-color: #dc3545;" title="Delete Profile">Delete</button>
             </div>
         </div>
     `}).join('');
@@ -744,9 +819,13 @@ async function fetchLiveStockPrice(competitorId, companyName) {
 
         const priceEl = document.getElementById(`price-${competitorId}`);
         if (priceEl && data.is_public && data.price) {
-            const changeClass = data.change >= 0 ? 'color: #22c55e' : 'color: #dc3545';
+            // Apply navy color for price, green/red for change only
+            const changeColor = data.change >= 0 ? '#22c55e' : '#dc3545';
             const changeSign = data.change >= 0 ? '+' : '';
-            priceEl.innerHTML = `<span style="${changeClass}">$${data.price.toFixed(2)} (${changeSign}${data.change_percent?.toFixed(1)}%)</span>`;
+            priceEl.innerHTML = `
+                <span style="color: #122753;">$${data.price.toFixed(2)}</span> 
+                <span style="color: ${changeColor}; font-size: 0.9em; margin-left: 4px;">(${changeSign}${data.change_percent?.toFixed(1)}%)</span>
+            `;
         }
     } catch (e) {
         // Silent fail for stock price fetch
@@ -789,22 +868,29 @@ function viewCompetitor(id) {
     const content = `
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
             ${createLogoImg(comp.website, comp.name, 64)}
-            <div>
-                <h2 style="margin:0;">${comp.name}</h2>
+            <div style="flex:1;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;">${comp.name}</h2>
+                    <span class="threat-badge ${(comp.threat_level || '').toLowerCase()}" style="font-size:0.9em; padding:4px 12px;">${comp.threat_level || '—'} Threat</span>
+                </div>
                 <p style="margin:4px 0;">
                     <a href="${comp.website}" target="_blank" style="color:#0ea5e9;">${comp.website}</a>
                     ${createSourceLink('website', comp.website)}
                 </p>
             </div>
         </div>
+        
+        <div id="stockSection">
+            <!-- Stock data loaded here via loadCompanyStockData -->
+        </div>
+
         <hr>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
             <div><strong>Status:</strong> ${createSourcedValue(comp.status, 'manual', comp.name)}</div>
-            <div><strong>Threat Level:</strong> <span class="threat-badge ${(comp.threat_level || '').toLowerCase()}">${comp.threat_level || '—'}</span></div>
             <div><strong>Pricing Model:</strong> ${createSourcedValue(comp.pricing_model, 'website', comp.website, 'pricing')}</div>
-            <div><strong>Base Price:</strong> ${createSourcedValue(comp.base_price, 'website', comp.website, 'pricing')}</div>
-            <div><strong>Customers:</strong> ${createSourcedValue(comp.customer_count, 'website', comp.website, 'customers')}</div>
-            <div><strong>Employees:</strong> ${createSourcedValue(comp.employee_count, 'linkedin', comp.name)}</div>
+            <div><strong>Base Price:</strong> ${createSourcedValue(comp.base_price, comp.id, 'base_price')}</div>
+            <div><strong>Customers:</strong> ${createSourcedValue(comp.customer_count, comp.id, 'customer_count')}</div>
+            <div><strong>Employees:</strong> ${createSourcedValue(comp.employee_count, comp.id, 'employee_count')}</div>
             <div><strong>G2 Rating:</strong> ${createSourcedValue(comp.g2_rating, 'google', comp.name + ' G2 rating')}</div>
             <div><strong>Founded:</strong> ${createSourcedValue(comp.year_founded, 'website', comp.website, 'founded')}</div>
             <div><strong>Headquarters:</strong> ${createSourcedValue(comp.headquarters, 'google', comp.name + ' headquarters')}</div>
@@ -822,6 +908,11 @@ function viewCompetitor(id) {
     `;
 
     showModal(content);
+
+    // Load stock data if company is public or we have a ticker
+    if (comp.ticker || comp.is_public) {
+        loadCompanyStockData(comp.name);
+    }
 }
 
 function editCompetitor(id) {
@@ -1376,8 +1467,15 @@ async function loadCompetitorNews(companyName) {
     if (!newsSection) return;
 
     try {
+        console.log(`Fetching news for: ${companyName}`);
         const response = await fetch(`${API_BASE}/api/news/${encodeURIComponent(companyName)}`);
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
         const data = await response.json();
+        console.log("News data received:", data);
 
         if (data.articles && data.articles.length > 0) {
             newsSection.innerHTML = data.articles.map(article => `
@@ -1385,7 +1483,7 @@ async function loadCompetitorNews(companyName) {
                     <a href="${article.url}" target="_blank" class="news-title">${article.title}</a>
                     <div class="news-meta">
                         <span class="news-source">${article.source}</span>
-                        <span class="news-date">${article.published_date}</span>
+                        <span class="news-date">${article.published_date || ''}</span>
                     </div>
                     <p class="news-snippet">${article.snippet || ''}</p>
                 </div>
@@ -1393,8 +1491,12 @@ async function loadCompetitorNews(companyName) {
         } else {
             newsSection.innerHTML = '<p class="empty-state">No recent news articles found</p>';
         }
-    } catch (error) {
-        newsSection.innerHTML = '<p class="empty-state">Unable to load news</p>';
+    } catch (e) {
+        console.error("Error loading news:", e);
+        newsSection.innerHTML = `<div class="error-state">
+            <p>Unable to load news.</p>
+            <small style="color: #ef4444;">${e.message}</small>
+        </div>`;
     }
 }
 
@@ -1428,17 +1530,13 @@ async function loadCompanyStockData(companyName) {
             stockSection.innerHTML = `
                 <div class="stock-section" style="background: white; padding: 20px; border-radius: 8px;">
                     <!-- Header -->
-                    <div class="stock-header-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
-                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="background: #22c55e; color: white; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 0.85em;">PUBLIC</span>
-                            <span style="font-size: 1.25em; font-weight: 700; color: #122753;">${data.ticker} <span style="font-size: 0.8em; color: #64748b; font-weight: 500;">(${data.exchange})</span></span>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 1.5em; font-weight: 700; color: #122753;">${fmtCur(data.price)}</div>
-                            <div class="stock-change ${changeClass}" style="font-weight: 600;">
-                                ${changeSign}${data.change?.toFixed(2)} (${changeSign}${data.change_percent?.toFixed(2)}%)
-                            </div>
-                        </div>
+                    <div class="stock-header-row" style="display: flex; align-items: center; flex-wrap: nowrap; gap: 12px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0; white-space: nowrap;">
+                        <span style="background: #22c55e; color: white; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 0.85em;">PUBLIC</span>
+                        <span style="font-size: 1.25em; font-weight: 700; color: #122753;">${data.ticker} <span style="font-size: 0.8em; color: #64748b; font-weight: 500;">(${data.exchange})</span></span>
+                        <span style="font-size: 1.25em; font-weight: 700; color: #122753;">${fmtCur(data.price)}</span>
+                        <span class="stock-change ${changeClass}" style="font-weight: 600;">
+                            ${changeSign}${data.change?.toFixed(2)} (${changeSign}${data.change_percent?.toFixed(2)}%)
+                        </span>
                     </div>
 
                     <!-- Financial Grid -->
@@ -2794,11 +2892,11 @@ const sourceCache = {};
  */
 function createSourcedValue(value, competitorId, fieldName, fallbackType = 'unknown') {
     if (!value || value === 'N/A' || value === 'Unknown' || value === 'null') {
-        return value || 'N/A';
+        return value || '<span style="color:#94a3b8;">—</span>';
     }
 
     const cacheKey = `${competitorId}-${fieldName}`;
-    const cached = sourceCache[cacheKey];
+    const cached = typeof sourceCache !== 'undefined' ? sourceCache[cacheKey] : null;
 
     const sourceType = cached?.source_type || fallbackType;
     const sourceUrl = cached?.source_url || null;
@@ -2832,6 +2930,10 @@ function createSourcedValue(value, competitorId, fieldName, fallbackType = 'unkn
             tooltipHtml = `<span class="source-tooltip">Source pending verification</span>`;
     }
 
+    // New Correction Icon logic
+    const cleanValue = String(value).replace(/['"]/g, '').substring(0, 50);
+    const editIcon = `<span class="edit-icon" onclick="openCorrectionModal(${competitorId}, '${fieldName}', '${cleanValue}')" style="cursor:pointer;margin-left:6px;font-size:10px;opacity:0.5;" title="Correct this data">✏️</span>`;
+
     return `
         <span class="sourced-value" data-competitor="${competitorId}" data-field="${fieldName}">
             ${value}
@@ -2839,6 +2941,7 @@ function createSourcedValue(value, competitorId, fieldName, fallbackType = 'unkn
                 ${iconHtml}
             </span>
             ${tooltipHtml}
+            ${editIcon}
         </span>
     `;
 }
@@ -2996,40 +3099,56 @@ function updatePositioningMatrix() {
     );
 }
 
-function renderMarketTrends() {
-    // Placeholder trend chart
+async function renderMarketTrends() {
     const ctx = document.getElementById('marketTrendChart').getContext('2d');
 
     // Destroy existing
     const existing = Chart.getChart('marketTrendChart');
     if (existing) existing.destroy();
 
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-            datasets: [{
-                label: 'Avg Market Price',
-                data: [1200, 1250, 1240, 1300, 1310, 1350],
-                borderColor: '#3A95ED',
-                tension: 0.4
-            }, {
-                label: 'New Competitors',
-                data: [2, 0, 1, 3, 0, 1],
-                borderColor: '#DC3545',
-                tension: 0.4,
-                yAxisID: 'y1'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: { beginAtZero: false, title: { display: true, text: 'Price ($)' } },
-                y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'Count' } }
+    try {
+        const response = await fetch('/api/analytics/trends', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        // Default data if fetch fails or is empty
+        let chartData = {
+            labels: [],
+            datasets: []
+        };
+
+        if (response.ok) {
+            chartData = await response.json();
+            // Assign yAxisID to the New Competitors dataset (index 1 usually, based on backend)
+            // Backend sends datasets. We need to ensure yAxisID is set correctly for the second dataset
+            if (chartData.datasets && chartData.datasets.length > 1) {
+                chartData.datasets[1].yAxisID = 'y1';
             }
         }
-    });
+
+        new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true, // Average price shouldn't obscure variations, but starting at 0 is safer
+                        title: { display: true, text: 'Price ($)' }
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        title: { display: true, text: 'New Competitors' },
+                        grid: { drawOnChartArea: false } // Only draw grid for left axis
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Failed to load trends:", e);
+    }
 }
 
 async function generateSWOT() {
@@ -3230,5 +3349,736 @@ async function saveThreatCriteria(event) {
         showToast('Error saving criteria: ' + e.message, 'error');
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
+    }
+}
+// ============== User Management ==============
+
+async function loadTeam() {
+    const list = document.getElementById('teamList');
+    if (!list) return;
+
+    list.innerHTML = '<div class="loading">Loading team...</div>';
+
+    try {
+        const users = await fetchAPI('/api/users');
+        if (!users || users.length === 0) {
+            list.innerHTML = '<p>No users found.</p>';
+            return;
+        }
+
+        list.innerHTML = `
+            <table class="table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th style="text-align:left">Email</th>
+                        <th style="text-align:left">Role</th>
+                        <th style="text-align:left">Status</th>
+                        <th style="text-align:right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${users.map(u => `
+                        <tr>
+                            <td>${u.email} ${u.full_name ? `(${u.full_name})` : ''}</td>
+                            <td><span class="badge badge-secondary">${u.role}</span></td>
+                            <td>${u.is_active ? '<span style="color:#22c55e">Active</span>' : '<span style="color:#64748b">Inactive</span>'}</td>
+                            <td style="text-align:right">
+                                <button class="btn btn-sm btn-icon" onclick="deleteUser(${u.id})" title="Remove User">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        list.innerHTML = `<p class="error">Error loading team: ${e.message}</p>`;
+    }
+}
+
+function showInviteUserModal() {
+    showModal(`
+        <h3>Invite Team Member</h3>
+        <form id="inviteUserForm" onsubmit="handleInviteUser(event)">
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" class="form-control" required placeholder="colleague@company.com">
+            </div>
+            <div class="form-group">
+                <label>Full Name (Optional)</label>
+                <input type="text" name="full_name" class="form-control" placeholder="John Doe">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select name="role" class="form-control">
+                    <option value="viewer">Viewer (Read-only)</option>
+                    <option value="analyst">Analyst (Can edit)</option>
+                    <option value="admin">Admin (Full access)</option>
+                </select>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Send Invite</button>
+            </div>
+        </form>
+    `);
+}
+
+async function handleInviteUser(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn.innerText;
+
+    btn.innerText = 'Sending...';
+    btn.disabled = true;
+
+    const data = {
+        email: form.email.value,
+        full_name: form.full_name.value,
+        role: form.role.value
+    };
+
+    try {
+        const result = await fetchAPI('/api/users/invite', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+
+        if (result) {
+            showToast('User invited successfully', 'success');
+            closeModal();
+            loadTeam();
+        }
+    } catch (err) {
+        showToast('Error inviting user: ' + err.message, 'error');
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function deleteUser(userId) {
+    if (!confirm('Are you sure you want to remove this user?')) return;
+
+    try {
+        await fetchAPI(`/api/users/${userId}`, { method: 'DELETE' });
+        showToast('User removed', 'success');
+        loadTeam();
+    } catch (e) {
+        showToast('Error removing user: ' + e.message, 'error');
+    }
+}
+
+async function loadSettings() {
+    loadTeam();
+    if (typeof loadAlertRules === 'function') loadAlertRules();
+    if (typeof checkIntegrations === 'function') checkIntegrations();
+}
+
+// ============== Mobile Responsiveness ==============
+
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.mobile-overlay');
+
+    if (sidebar) sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('open');
+}
+
+function navigateTo(pageName) {
+    // Wrapper for showPage that also handles mobile UI
+    if (typeof showPage === 'function') {
+        showPage(pageName);
+    }
+
+    // Update bottom nav active state
+    document.querySelectorAll('.bottom-nav-item').forEach(item => {
+        if (item.getAttribute('onclick') && item.getAttribute('onclick').includes('${pageName}')) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // Close sidebar on mobile
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar && sidebar.classList.contains('open')) {
+        toggleSidebar();
+    }
+
+    // Scroll to top
+    window.scrollTo(0, 0);
+}
+
+// ============== Data Corrections ==============
+
+// ============== Data Corrections ==============
+
+function openCorrectionModal(competitorId, field, currentValue) {
+    // Clean up value for display
+    const safeValue = (currentValue === 'null' || currentValue === 'undefined') ? '' : currentValue;
+    const cleanFieldName = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    // Find competitor name
+    const comp = competitors.find(c => c.id === competitorId);
+    const compName = comp ? comp.name : 'Unknown';
+
+    const content = `
+        <h2>Correct Data: ${cleanFieldName}</h2>
+        <div style="margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 6px; color: #64748b; font-size: 0.9em;">
+            <strong>Competitor:</strong> ${compName}<br>
+            <strong>Current Value:</strong> ${safeValue || '<em style="color:#94a3b8">Empty</em>'}
+        </div>
+        
+        <form id="correctionForm" onsubmit="submitCorrection(event, ${competitorId}, '${field}')">
+            <div class="form-group">
+                <label>New Correct Value</label>
+                <input type="text" name="new_value" value="${safeValue}" required placeholder="Enter the correct value...">
+            </div>
+            <div class="form-group">
+                <label>Reason for Change</label>
+                <select name="reason">
+                    <option value="Incorrect Data">Incorrect Data</option>
+                    <option value="Outdated">Outdated Information</option>
+                    <option value="Typo/Format">Typo or Formatting Issue</option>
+                    <option value="Manual Override">Manual Override (Force)</option>
+                </select>
+            </div>
+            <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Correction</button>
+            </div>
+        </form>
+    `;
+
+    showModal(content);
+}
+
+async function submitCorrection(event, competitorId, fieldName) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+
+    const payload = {
+        field: fieldName,
+        new_value: formData.get('new_value'),
+        reason: formData.get('reason')
+    };
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerText;
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Saving...';
+
+    try {
+        const result = await fetchAPI(`/api/competitors/${competitorId}/correct`, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (result) {
+            showToast('Correction saved and data point locked.', 'success');
+            closeModal();
+            // Reload data to reflect changes
+            await loadCompetitors();
+
+            // Also refresh changes list if visible
+            if (document.getElementById('recentChanges')) {
+                const changesData = await fetchAPI('/api/changes?days=7');
+                changes = changesData?.changes || [];
+                renderRecentChanges();
+            }
+        }
+    } catch (e) {
+        showToast('Error saving correction: ' + e.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalText;
+    }
+}
+
+
+// ============== Discovery Pipeline (Phase 4) ==============
+
+let discoveryContext = null;
+
+function toggleConfigPanel() {
+    const panel = document.getElementById('discoveryConfigPanel');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        loadDiscoveryContext();
+        // Scroll to panel
+        panel.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+async function loadDiscoveryContext() {
+    try {
+        const context = await fetchAPI('/api/discovery/context');
+        discoveryContext = context;
+        document.getElementById('jsonContextPreview').textContent = JSON.stringify(context, null, 2);
+    } catch (e) {
+        document.getElementById('jsonContextPreview').textContent = "Error loading context: " + e.message;
+    }
+}
+
+async function sendConfigChat() {
+    const input = document.getElementById('configChatInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // UI Updates
+    const msgContainer = document.getElementById('configChatMessages');
+    msgContainer.innerHTML += `<div class="chat-message user" style="text-align: right; margin: 5px 0; color: #3b82f6;">${message}</div>`;
+    input.value = '';
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    // Show loading indicator
+    const loadingId = 'chat-loading-' + Date.now();
+    msgContainer.innerHTML += `<div id="${loadingId}" class="chat-message system" style="font-style: italic; color: #64748b;">AI is thinking...</div>`;
+
+    try {
+        // Prepare payload - include current context so AI knows what to update
+        const payload = {
+            message: message,
+            current_context: discoveryContext || {}
+        };
+
+        const result = await fetchAPI('/api/discovery/refine-context', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        // Remove loading
+        document.getElementById(loadingId).remove();
+
+        if (result && result.success) {
+            // Update local context
+            discoveryContext = result.refined_context;
+
+            // Save to backend
+            await fetchAPI('/api/discovery/context', {
+                method: 'POST',
+                body: JSON.stringify(discoveryContext)
+            });
+
+            // Update UI
+            document.getElementById('jsonContextPreview').textContent = JSON.stringify(discoveryContext, null, 2);
+            msgContainer.innerHTML += `<div class="chat-message system" style="color: #22c55e;">✅ Context updated successfully based on your request.</div>`;
+
+        }
+    } catch (e) {
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+        msgContainer.innerHTML += `<div class="chat-message error" style="color: #ef4444;">Error: ${e.message}</div>`;
+    }
+}
+
+async function scheduleRun() {
+    const timeInput = document.getElementById('scheduleRunTime');
+    const isoTime = timeInput.value;
+
+    if (!isoTime) {
+        showToast("Please select a date and time.", "error");
+        return;
+    }
+
+    try {
+        // DateTime input gives local time 'YYYY-MM-DDTHH:MM' 
+        // We need to send it as ISO string. 
+        // Let's create a Date object to handle timezone correctly if needed, or send as is if backend expects ISO.
+        const dateObj = new Date(isoTime);
+        const isoString = dateObj.toISOString();
+
+        const result = await fetchAPI('/api/discovery/schedule', {
+            method: 'POST',
+            body: JSON.stringify({ run_at: isoString })
+        });
+
+        showToast(result.message, "success");
+        toggleConfigPanel(); // Close panel on success
+
+    } catch (e) {
+        showToast("Error scheduling run: " + e.message, "error");
+    }
+}
+
+async function runDiscovery() {
+    // Immediate Trigger (Manual) - Reuse existing or call new schedule for "now"
+    if (!confirm("Start a discovery scan now? This runs in the background.")) return;
+
+    try {
+        // We can just schedule it for 1 second in the future to reuse the schedule logic
+        const now = new Date();
+        now.setSeconds(now.getSeconds() + 1);
+
+        await fetchAPI('/api/discovery/schedule', {
+            method: 'POST',
+            body: JSON.stringify({ run_at: now.toISOString() })
+        });
+
+        showToast("Discovery scan started! Check back in a few minutes.", "success");
+        document.getElementById('discoveryStatus').style.display = 'block';
+
+    } catch (e) {
+        showToast("Error starting discovery: " + e.message, "error");
+    }
+}
+
+async function loadDiscoveredCandidates() {
+    const grid = document.getElementById('discoveredGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="loading">Loading discovered candidates...</div>';
+
+    try {
+        // Fetch competitors with status='Discovered'
+        // Using existing endpoint with added filter param support (client-side filter fallback if backend ignores it)
+        const allComps = await fetchAPI('/api/competitors');
+        const discovered = allComps.filter(c => c.status === 'Discovered');
+
+        if (discovered.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px; background: #f8fafc; border-radius: 8px;">
+                    <div style="font-size: 40px; margin-bottom: 10px;">🔭</div>
+                    <h3>No Candidates Found Yet</h3>
+                    <p style="color: #64748b; margin-bottom: 20px;">Use the 'Run Discovery' button to scan for new competitors.</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = discovered.map(c => renderCandidateCard(c)).join('');
+
+    } catch (e) {
+        grid.innerHTML = `<div class="error">Error loading candidates: ${e.message}</div>`;
+    }
+}
+
+function renderCandidateCard(c) {
+    // Parse notes for AI reasoning if available
+    let reasoning = "No AI analysis available.";
+    let score = c.relevance_score || 0;
+
+    // Notes often contain the JSON from the agent, let's try to extract or display nicely
+    // If notes is just a string, show it.
+    if (c.notes) {
+        reasoning = c.notes;
+    }
+
+    const scoreClass = score >= 80 ? 'high-score' : (score >= 50 ? 'med-score' : 'low-score');
+    const scoreColor = score >= 80 ? '#22c55e' : (score >= 50 ? '#eab308' : '#cbd5e1');
+
+    return `
+        <div class="competitor-card discovery-card" style="border-left: 4px solid ${scoreColor}; position: relative;">
+            <div class="card-header">
+                <h3>${c.name}</h3>
+                <span class="score-badge" style="background: ${scoreColor}; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold;">
+                    ${score}% Match
+                </span>
+            </div>
+            <div class="card-body">
+                <a href="${c.website}" target="_blank" class="website-link" style="font-size: 0.9em; display: inline-block; margin-bottom: 10px;">
+                    🔗 ${c.website}
+                </a>
+                <div class="ai-reasoning" style="background: #f1f5f9; padding: 10px; border-radius: 6px; font-size: 0.9em; color: #334155; margin-bottom: 15px; max-height: 100px; overflow-y: auto;">
+                    <strong>🤖 AI Analysis:</strong><br>
+                    ${reasoning}
+                </div>
+            </div>
+            <div class="card-footer" style="display: flex; gap: 8px; margin-top: auto;">
+                <button class="btn btn-primary btn-sm" style="flex: 1;" onclick="approveCandidate(${c.id})">✅ Approve</button>
+                <button class="btn btn-secondary btn-sm" style="flex: 1; border-color: #ef4444; color: #ef4444;" onclick="rejectCandidate(${c.id})">❌ Reject</button>
+            </div>
+        </div>
+    `;
+}
+
+async function approveCandidate(id) {
+    if (!confirm("Approve this competitor? It will be added to the main dashboard and a full scrape will be triggered.")) return;
+
+    try {
+        // 1. Update Status to Active
+        await fetchAPI(`/api/competitors/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'Active' })
+        });
+
+        // 2. Trigger Scrape
+        fetchAPI(`/api/scrape/${id}`, {
+            method: 'POST'
+        }); // Don't await, let it run in bg
+
+        showToast("Competitor approved! Moving to dashboard...", "success");
+        loadDiscoveredCandidates(); // Refresh list
+
+    } catch (e) {
+        showToast("Error approving candidate: " + e.message, "error");
+    }
+}
+
+async function rejectCandidate(id) {
+    if (!confirm("Reject this candidate? It will be hidden.")) return;
+
+    try {
+        await fetchAPI(`/api/competitors/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'Ignored' })
+        });
+
+        showToast("Candidate rejected.", "info");
+        loadDiscoveredCandidates();
+
+    } catch (e) {
+        showToast("Error rejecting candidate: " + e.message, "error");
+    }
+}
+
+// Hook into showPage to load data when tab is opened
+const originalShowPage = window.showPage;
+window.showPage = function (pageId) {
+    // Call original logic if it exists (it's defined in app.js globally usually)
+    // But since showPage is not exported/global in this snippet context (it might be earlier in file), 
+    // let's assume we are replacing/extending the navigation logic found in toggle/nav items.
+
+    // Actually, looking at previous code, navigateTo calls showPage. 
+    // Let's check if showPage is defined in the file...
+    // It is likely defined earlier. We should rely on adding a listener or check.
+
+    // Better approach: modifying the existing showPage if I could see it, OR just rely on the onclicks in HTML calling showPage.
+    // I will add a check in the global scope if possible.
+
+    // Instead of overriding, let's just expose loadDiscoveredCandidates and call it when the tab is clicked.
+    // I'll add an event listener for the nav item.
+
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(pageId + 'Page').classList.add('active');
+
+    if (pageId === 'discovered') {
+        loadDiscoveryCandidates();
+    }
+};
+
+// Also attach to the button in sidebar
+document.addEventListener('DOMContentLoaded', () => {
+    const discoveredLink = document.querySelector('a[data-page="discovered"]');
+    if (discoveredLink) {
+        discoveredLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showPage('discovered');
+        });
+    }
+});
+
+// ============== AI Admin & Knowledge Base ==============
+
+function openPromptEditor() {
+    const modal = document.getElementById('promptModal');
+    if (modal) modal.classList.add('active');
+    loadPromptContent();
+}
+
+function closePromptModal() {
+    const modal = document.getElementById('promptModal');
+    if (modal) modal.classList.remove('active');
+    document.getElementById('promptSaveStatus').style.display = 'none';
+}
+
+async function loadPromptContent() {
+    const key = document.getElementById('promptKeySelector').value;
+    const editor = document.getElementById('promptContentEditor');
+    editor.value = "Loading...";
+
+    try {
+        const response = await fetchAPI(`/api/admin/system-prompts/${key}`);
+        if (response) {
+            editor.value = response.content;
+        }
+    } catch (e) {
+        editor.value = "Error loading prompt.";
+    }
+}
+
+async function savePromptContent() {
+    const key = document.getElementById('promptKeySelector').value;
+    const content = document.getElementById('promptContentEditor').value;
+
+    const result = await fetchAPI('/api/admin/system-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, content })
+    });
+
+    if (result) {
+        const status = document.getElementById('promptSaveStatus');
+        status.style.display = 'inline-block';
+        setTimeout(() => status.style.display = 'none', 3000);
+    }
+}
+
+function openKnowledgeBase() {
+    const modal = document.getElementById('kbModal');
+    if (modal) modal.classList.add('active');
+    loadKbItems();
+}
+
+function closeKbModal() {
+    const modal = document.getElementById('kbModal');
+    if (modal) modal.classList.remove('active');
+    hideAddKbForm();
+}
+
+async function loadKbItems() {
+    const list = document.getElementById('kbList');
+    list.innerHTML = '<div class="loading">Loading...</div>';
+
+    const items = await fetchAPI('/api/admin/knowledge-base');
+    if (items && items.length > 0) {
+        list.innerHTML = items.map(item => `
+            <div class="kb-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
+                <div>
+                    <strong>${item.title}</strong>
+                    <div style="font-size: 0.8em; color: #666;">Source: ${item.source_type} • Added: ${formatDate(item.created_at)}</div>
+                    <div style="font-size: 0.8em; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px;">${item.content_text.substring(0, 100)}...</div>
+                </div>
+                <button class="btn btn-sm btn-secondary" style="color: red; border-color: red;" onclick="deleteKbItem(${item.id})">Delete</button>
+            </div>
+        `).join('');
+    } else {
+        list.innerHTML = '<div class="empty-state">No knowledge base items found. Add documents to give the AI context.</div>';
+    }
+}
+
+function showAddKbItem() {
+    document.getElementById('addKbForm').style.display = 'block';
+    document.getElementById('kbList').style.display = 'none';
+}
+
+function hideAddKbForm() {
+    document.getElementById('addKbForm').style.display = 'none';
+    document.getElementById('kbList').style.display = 'block';
+}
+
+async function saveKbItem() {
+    const title = document.getElementById('kbTitle').value;
+    const content = document.getElementById('kbContent').value;
+
+    if (!title || !content) {
+        showToast("Please provide both title and content", "error");
+        return;
+    }
+
+    const result = await fetchAPI('/api/admin/knowledge-base', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            title: title,
+            content_text: content,
+            source_type: "manual"
+        })
+    });
+
+    if (result) {
+        showToast("Document added to Knowledge Base", "success");
+        document.getElementById('kbTitle').value = "";
+        document.getElementById('kbContent').value = "";
+        hideAddKbForm();
+        loadKbItems();
+    }
+}
+
+/**
+ * Open modal to correct a specific data point
+ */
+function openCorrectionModal(id, field, currentValue) {
+    const humanField = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const content = `
+        <h3>Correct Data: ${humanField}</h3>
+        <p style="color: #64748b; margin-bottom: 16px;">Update this value and provide a source if available.</p>
+        <form onsubmit="submitCorrection(event, ${id}, '${field}')">
+            <div class="form-group">
+                <label>Current Value</label>
+                <input type="text" value="${currentValue}" disabled style="background: #f1f5f9; cursor: not-allowed;">
+            </div>
+            <div class="form-group">
+                <label>New Value</label>
+                <input type="text" name="value" required placeholder="Enter correct value" autofocus>
+            </div>
+            <div class="form-group">
+                <label>Source URL (Evidence)</label>
+                <input type="url" name="source_url" placeholder="https://example.com/source">
+            </div>
+            <div class="form-group">
+                <label>Notes (Optional)</label>
+                <textarea name="notes" placeholder="Why is this change being made?" rows="2"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit Correction</button>
+            </div>
+        </form>
+    `;
+    showModal(content);
+}
+
+/**
+ * Handle correction submission
+ */
+async function submitCorrection(event, id, field) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const value = formData.get('value');
+    const sourceUrl = formData.get('source_url');
+    const notes = formData.get('notes');
+
+    // Create partial update payload
+    const payload = {};
+    payload[field] = value;
+    if (notes) payload.notes = notes;
+
+    try {
+        // Try PUT (assuming backend supports partial update)
+        const res = await fetchAPI(`/api/competitors/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+
+        if (res) {
+            showToast('Correction submitted successfully', 'success');
+            closeModal();
+
+            // Update local state
+            const comp = competitors.find(c => c.id === id);
+            if (comp) {
+                comp[field] = value;
+            }
+
+            // Refresh main grid and lists
+            loadCompetitors();
+
+            // Re-render the open list modal by calling showCompanyList again if it was open
+            // We can detect if the modal title contains "All Competitors"
+            const modalTitle = document.querySelector('.modal-header h3');
+            if (modalTitle && modalTitle.textContent.includes('All Competitors')) {
+                // Determine current filter from modal title or state? 
+                // Currently showCompanyList takes 'threatLevel'. 
+                // We'll just default to refeshing 'all' if unsure, or close it.
+                // Safest to just let user re-open or reload.
+            }
+        }
+    } catch (e) {
+        showToast('Error submitting correction: ' + e.message, 'error');
+    }
+}
+
+async function deleteKbItem(id) {
+    if (!confirm("Are you sure you want to delete this item?")) return;
+
+    const result = await fetchAPI(`/api/admin/knowledge-base/${id}`, { method: 'DELETE' });
+    if (result) {
+        showToast("Item deleted", "info");
+        loadKbItems();
     }
 }
