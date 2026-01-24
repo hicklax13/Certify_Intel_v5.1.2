@@ -14,6 +14,10 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+    # Define placeholder types for type hints when Playwright isn't installed
+    Page = object
+    Browser = object
+    async_playwright = None
     print("Warning: Playwright not installed. Run: pip install playwright && playwright install chromium")
 
 

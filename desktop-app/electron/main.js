@@ -13,6 +13,11 @@ const fs = require('fs');
 // Configure logging
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+
+// Auto-updater configuration
+autoUpdater.autoDownload = false;  // Ask user before downloading
+autoUpdater.autoInstallOnAppQuit = true;  // Install when app closes
 
 // Keep references to prevent garbage collection
 let mainWindow = null;
@@ -162,32 +167,92 @@ function createTray() {
 }
 
 // Auto-updater events
+autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for updates...');
+});
+
 autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info.version);
+
     dialog.showMessageBox({
         type: 'info',
         title: 'Update Available',
-        message: `A new version (${info.version}) is available. It will be downloaded in the background.`,
-        buttons: ['OK']
-    });
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-    log.info('Update downloaded:', info.version);
-    dialog.showMessageBox({
-        type: 'info',
-        title: 'Update Ready',
-        message: 'A new version has been downloaded. Restart now to apply the update?',
-        buttons: ['Restart', 'Later']
+        message: `A new version (${info.version}) is available!`,
+        detail: 'Would you like to download and install it now?',
+        buttons: ['Download Now', 'Later'],
+        defaultId: 0
     }).then((result) => {
         if (result.response === 0) {
-            autoUpdater.quitAndInstall();
+            autoUpdater.downloadUpdate();
         }
     });
 });
 
+autoUpdater.on('update-not-available', () => {
+    log.info('No updates available - app is up to date');
+});
+
+autoUpdater.on('download-progress', (progress) => {
+    log.info(`Download progress: ${Math.round(progress.percent)}%`);
+
+    // Show progress in taskbar/dock
+    if (mainWindow) {
+        mainWindow.setProgressBar(progress.percent / 100);
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    log.info('Update downloaded:', info.version);
+
+    // Clear progress bar
+    if (mainWindow) {
+        mainWindow.setProgressBar(-1);
+    }
+
+    // Check if this is a critical update
+    const isCritical = info.releaseNotes?.includes('[CRITICAL]') ||
+                       info.releaseNotes?.includes('[SECURITY]');
+
+    if (isCritical) {
+        dialog.showMessageBox({
+            type: 'warning',
+            title: 'Critical Security Update',
+            message: 'A critical security update must be installed now.',
+            detail: `Version ${info.version} contains important security fixes.`,
+            buttons: ['Install Now'],
+            defaultId: 0
+        }).then(() => {
+            autoUpdater.quitAndInstall(true, true);
+        });
+    } else {
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'Update Ready',
+            message: 'Update downloaded!',
+            detail: 'The update will be installed when you close the app. Restart now?',
+            buttons: ['Restart Now', 'Later'],
+            defaultId: 0
+        }).then((result) => {
+            if (result.response === 0) {
+                autoUpdater.quitAndInstall(false, true);
+            }
+        });
+    }
+});
+
 autoUpdater.on('error', (err) => {
     log.error('AutoUpdater error:', err);
+
+    // Don't show error dialog for network issues during background checks
+    if (err.message && !err.message.includes('net::ERR')) {
+        dialog.showMessageBox({
+            type: 'error',
+            title: 'Update Error',
+            message: 'Failed to check for updates',
+            detail: 'Please check your internet connection and try again.',
+            buttons: ['OK']
+        });
+    }
 });
 
 // App lifecycle
@@ -231,7 +296,17 @@ app.whenReady().then(async () => {
 
     // Check for updates (production only)
     if (!isDev) {
-        autoUpdater.checkForUpdatesAndNotify();
+        // Initial check 10 seconds after startup
+        setTimeout(() => {
+            log.info('Performing initial update check...');
+            autoUpdater.checkForUpdates();
+        }, 10000);
+
+        // Check every 4 hours while app is running
+        setInterval(() => {
+            log.info('Performing periodic update check...');
+            autoUpdater.checkForUpdates();
+        }, 4 * 60 * 60 * 1000);
     }
 });
 
