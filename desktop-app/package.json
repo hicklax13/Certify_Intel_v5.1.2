@@ -1,7 +1,7 @@
 {
-    "name": "certify-intel-v4",
-    "version": "4.0.0",
-    "description": "Certify Intel v4 - Competitive Intelligence Dashboard with Live Refresh",
+    "name": "certify-intel",
+    "version": "2.0.1",
+    "description": "Certify Intel - Competitive Intelligence Platform for Healthcare Technology",
     "main": "electron/main.js",
     "author": "Certify Health",
     "license": "UNLICENSED",
@@ -64,7 +64,8 @@
                     ]
                 }
             ],
-            "icon": "resources/icons/icon.ico"
+            "icon": "resources/icons/icon.ico",
+            "artifactName": "20260125_Certify_Intel_v${version}_Setup.${ext}"
         },
         "mac": {
             "target": [
@@ -77,7 +78,8 @@
                 }
             ],
             "icon": "resources/icons/icon.icns",
-            "category": "public.app-category.business"
+            "category": "public.app-category.business",
+            "artifactName": "20260125_Certify_Intel_v${version}_${arch}.${ext}"
         },
         "nsis": {
             "oneClick": false,
@@ -86,7 +88,8 @@
             "uninstallerIcon": "resources/icons/icon.ico",
             "installerHeaderIcon": "resources/icons/icon.ico",
             "createDesktopShortcut": true,
-            "createStartMenuShortcut": true
+            "createStartMenuShortcut": true,
+            "artifactName": "20260125_Certify_Intel_v${version}_Setup.${ext}"
         },
         "dmg": {
             "contents": [

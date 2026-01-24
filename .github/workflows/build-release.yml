@@ -250,7 +250,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: "Certify Intel v${{ steps.get_version.outputs.version }}"
+          name: "20260125_Certify_Intel_v${{ steps.get_version.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
@@ -261,14 +261,17 @@ jobs:
             ./installers/macos/*.dmg
             ./installers/macos/latest-mac.yml
           body: |
-            ## Certify Intel Desktop App v${{ steps.get_version.outputs.version }}
+            ## Certify Intel v${{ steps.get_version.outputs.version }}
+
+            **Competitive Intelligence Platform for Healthcare Technology**
 
             ### Downloads
 
             | Platform | File | Notes |
             |----------|------|-------|
-            | Windows | `Certify-Intel-Setup-${{ steps.get_version.outputs.version }}.exe` | Windows 10/11 (64-bit) |
-            | macOS | `Certify-Intel-${{ steps.get_version.outputs.version }}.dmg` | macOS 11+ (Intel & Apple Silicon) |
+            | Windows | `20260125_Certify_Intel_v${{ steps.get_version.outputs.version }}_Setup.exe` | Windows 10/11 (64-bit) |
+            | macOS (Intel) | `20260125_Certify_Intel_v${{ steps.get_version.outputs.version }}_x64.dmg` | macOS 11+ (Intel) |
+            | macOS (Apple Silicon) | `20260125_Certify_Intel_v${{ steps.get_version.outputs.version }}_arm64.dmg` | macOS 11+ (M1/M2/M3) |
 
             ### Installation
 
@@ -276,15 +279,28 @@ jobs:
             1. Download the `.exe` file
             2. Run the installer (click "More info" → "Run anyway" if SmartScreen appears)
             3. Follow the installation wizard
+            4. Launch "Certify Intel" from desktop or Start Menu
 
             **macOS:**
-            1. Download the `.dmg` file
-            2. Open the DMG and drag the app to Applications
-            3. Right-click the app and select "Open" on first launch
+            1. Download the appropriate `.dmg` for your Mac (Intel or Apple Silicon)
+            2. Open the DMG and drag "Certify Intel" to Applications
+            3. Right-click the app and select "Open" on first launch (required for unsigned apps)
 
             ### Auto-Updates
 
-            This version includes automatic updates. You'll be notified when new versions are available.
+            This version includes automatic updates. The app checks for updates:
+            - On every launch
+            - Every 4 hours while running
+
+            You'll be notified when new versions are available with options to update immediately or later.
+
+            ### What's Included
+
+            - Full competitive intelligence dashboard
+            - 30+ competitor tracking
+            - Real-time data collection
+            - Export to Excel, PDF, and JSON
+            - AI-powered analytics and insights
 
             ---
             *Built automatically by GitHub Actions*

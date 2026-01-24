@@ -2,11 +2,13 @@
 
 ## Overview
 
-This document provides a complete plan to package Certify Health Intel into production-ready desktop installers for **Windows** and **macOS**, and distribute them to your team via GitHub Releases.
+This document provides a complete plan to package **Certify Intel** into production-ready desktop installers for **Windows** and **macOS**, and distribute them to your team via GitHub Releases.
 
-**Current Status**: 🟢 90% Complete (ready for first release!)
-**Effort Required**: ~2 hours to test and create first release
-**End Result**: Downloadable `.exe` (Windows) and `.dmg` (macOS) installers
+**App Name**: Certify Intel
+**Current Version**: 2.0.1
+**Installer Naming**: `20260125_Certify_Intel_v2.0.1_Setup.exe` (Windows), `20260125_Certify_Intel_v2.0.1_x64.dmg` / `_arm64.dmg` (macOS)
+**Current Status**: 🟢 100% Complete - Ready to create first release!
+**End Result**: Downloadable `.exe` (Windows) and `.dmg` (macOS) installers from GitHub Releases
 
 ---
 
@@ -357,8 +359,8 @@ npm run build:mac
 
 ```bash
 # Tag and push to trigger release
-git tag -a v1.0.0 -m "First production release"
-git push origin v1.0.0
+git tag -a v2.0.1 -m "First production release"
+git push origin v2.0.1
 ```
 
 Or manually trigger via GitHub Actions UI.
@@ -385,11 +387,11 @@ Once the release is created, download the Windows installer:
 
 2. **Click "Releases"** (right sidebar or tab)
 
-3. **Find the latest release** (e.g., v1.0.0)
+3. **Find the latest release** (e.g., v2.0.1)
 
 4. **Under "Assets", click to download:**
-   - `Certify-Health-Intel-Setup-1.0.0.exe` (Windows)
-   - `Certify-Health-Intel-1.0.0.dmg` (macOS)
+   - `20260125_Certify_Intel_v2.0.1_Setup-1.0.0.exe` (Windows)
+   - `20260125_Certify_Intel_v2.0.1_x64.dmg` (macOS)
 
 5. **Run the installer** on your Windows desktop
 
@@ -397,8 +399,8 @@ Once the release is created, download the Windows installer:
 
 Once released, direct links will be:
 ```
-https://github.com/hicklax13/Project_Intel_v4/releases/download/v1.0.0/Certify-Health-Intel-Setup-1.0.0.exe
-https://github.com/hicklax13/Project_Intel_v4/releases/download/v1.0.0/Certify-Health-Intel-1.0.0.dmg
+https://github.com/hicklax13/Project_Intel_v4/releases/download/v2.0.1/20260125_Certify_Intel_v2.0.1_Setup-1.0.0.exe
+https://github.com/hicklax13/Project_Intel_v4/releases/download/v2.0.1/20260125_Certify_Intel_v2.0.1_x64.dmg
 ```
 
 ### Windows SmartScreen Warning
@@ -447,7 +449,7 @@ This warning goes away with code signing (Phase 7).
 
 2. **Send to teammates via email/Slack/Teams**:
    ```
-   Hi team! Here are the installers for Certify Health Intel:
+   Hi team! Here are the installers for Certify Intel:
 
    Windows: [download link]
    macOS: [download link]
@@ -477,11 +479,11 @@ This warning goes away with code signing (Phase 7).
 
 4. **Create a README.txt** in the folder:
    ```
-   Certify Health Intel - Desktop App
+   Certify Intel - Desktop App
    ==================================
 
-   Windows Users: Run "Certify-Health-Intel-Setup-1.0.0.exe"
-   Mac Users: Open "Certify-Health-Intel-1.0.0.dmg"
+   Windows Users: Run "20260125_Certify_Intel_v2.0.1_Setup-1.0.0.exe"
+   Mac Users: Open "20260125_Certify_Intel_v2.0.1_x64.dmg"
 
    First-time Windows install may show SmartScreen warning:
    - Click "More info"
@@ -539,8 +541,8 @@ When you create a release, GitHub Actions automatically publishes:
 
 | File | Purpose |
 |------|---------|
-| `Certify-Health-Intel-Setup-1.0.1.exe` | Windows installer |
-| `Certify-Health-Intel-1.0.1.dmg` | macOS installer |
+| `20260125_Certify_Intel_v2.0.1_Setup-2.0.2.exe` | Windows installer |
+| `Certify-Health-Intel-2.0.2.dmg` | macOS installer |
 | `latest.yml` | Windows update manifest (version, checksum, URL) |
 | `latest-mac.yml` | macOS update manifest |
 
@@ -658,15 +660,15 @@ git commit -m "Fix bug in analytics dashboard"
 Edit `desktop-app/package.json`:
 ```json
 {
-  "version": "1.0.1"  // Increment from 1.0.0
+  "version": "2.0.2"  // Increment from 1.0.0
 }
 ```
 
 **Step 3: Commit and tag the release**
 ```bash
 git add desktop-app/package.json
-git commit -m "Bump version to 1.0.1"
-git tag -a v1.0.1 -m "Version 1.0.1 - Bug fixes"
+git commit -m "Bump version to 2.0.2"
+git tag -a v2.0.2 -m "Version 2.0.2 - Bug fixes"
 git push origin main --tags
 ```
 
@@ -724,7 +726,7 @@ autoUpdater.on('update-downloaded', (info) => {
 | Event | What User Sees |
 |-------|----------------|
 | App starts | Nothing (update check happens in background) |
-| Update found | Dialog: "A new version (1.0.1) is available!" |
+| Update found | Dialog: "A new version (2.0.2) is available!" |
 | User clicks "Download" | Progress bar in taskbar/dock |
 | Download complete | Dialog: "Update ready! Restart now?" |
 | User clicks "Restart" | App closes, installs update, reopens |
@@ -742,8 +744,8 @@ npm run build:win  # or build:mac
 
 # 2. Install it on your machine
 
-# 3. Build version 1.0.1
-npm version 1.0.1
+# 3. Build version 2.0.2
+npm version 2.0.2
 npm run build:win
 
 # 4. Manually place the new installer and latest.yml
@@ -827,23 +829,23 @@ cd desktop-app && npm run build:all
 
 ```bash
 # Create a new release tag
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+git tag -a v2.0.1 -m "Release version 1.0.0"
+git push origin v2.0.1
 
 # List all tags
 git tag -l
 
 # Delete a tag (if needed)
-git tag -d v1.0.0
-git push origin --delete v1.0.0
+git tag -d v2.0.1
+git push origin --delete v2.0.1
 ```
 
 ### Output Locations
 
 After building, installers are in:
 ```
-desktop-app/dist/Certify-Health-Intel-Setup-1.0.0.exe  (Windows)
-desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
+desktop-app/dist/20260125_Certify_Intel_v2.0.1_Setup-1.0.0.exe  (Windows)
+desktop-app/dist/20260125_Certify_Intel_v2.0.1_x64.dmg        (macOS)
 ```
 
 ---
@@ -861,7 +863,7 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 - [x] Push all changes to main branch ✅ DONE
 
 ### Creating a Release
-- [ ] Create and push git tag: `git tag -a v1.0.0 -m "message" && git push origin v1.0.0`
+- [ ] Create and push git tag: `git tag -a v2.0.1 -m "message" && git push origin v2.0.1`
 - [ ] Wait for GitHub Actions to complete (~15-20 minutes)
 - [ ] Verify installers AND `latest.yml` files appear in release assets
 - [ ] Download and test on both platforms
@@ -875,7 +877,7 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 ### Pushing Updates to All Users
 - [ ] Make code changes and commit
 - [ ] Increment version in `desktop-app/package.json`
-- [ ] Create and push new tag: `git tag -a v1.0.1 -m "message" && git push origin v1.0.1`
+- [ ] Create and push new tag: `git tag -a v2.0.2 -m "message" && git push origin v2.0.2`
 - [ ] Wait for GitHub Actions to build (~15-20 min)
 - [ ] Verify `latest.yml` and `latest-mac.yml` in release assets
 - [ ] Users receive update notification within 4 hours (or on next app launch)
