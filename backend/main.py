@@ -29,7 +29,7 @@ except ImportError:
     yf = MockYF()
     print("yfinance not found, using mock")
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
 
