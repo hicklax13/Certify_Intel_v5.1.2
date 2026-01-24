@@ -159,6 +159,7 @@ class CorrectionRequest(BaseModel):
     field: str
     new_value: str
     reason: Optional[str] = "Manual Correction"
+    source_url: Optional[str] = None
 
 
 class ScrapeRequest(BaseModel):
@@ -234,10 +235,10 @@ async def lifespan(app: FastAPI):
         print("Ensuring default admin user exists...")
         auth_manager.ensure_default_admin(db)
         
-        # 2. Run Classification Workflow
-        workflow = ClassificationWorkflow(db)
-        print("Running 'Private vs Public' Classification Workflow...")
-        workflow.run_classification_pipeline()
+        # 2. Run Classification Workflow - DISABLED (costs money, use button instead)
+        # workflow = ClassificationWorkflow(db)
+        # print("Running 'Private vs Public' Classification Workflow...")
+        # workflow.run_classification_pipeline()
         
         db.close()
     except Exception as e:
@@ -327,10 +328,9 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
         import os
         from openai import OpenAI
         
-        # Get all active competitors
+        # Get all non-deleted competitors (matching dashboard count)
         competitors = db.query(Competitor).filter(
-            Competitor.is_deleted == False,
-            Competitor.status == "Active"
+            Competitor.is_deleted == False
         ).all()
         
         if not competitors:
@@ -357,6 +357,7 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
         data_summary = f"""
 COMPETITIVE INTELLIGENCE DATA SNAPSHOT:
 ========================================
+TIMESTAMP: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 TRACKING OVERVIEW:
 - Total Competitors Monitored: {total}
@@ -371,18 +372,23 @@ TOP HIGH-THREAT COMPETITORS: {', '.join(top_threats) if top_threats else 'None i
 PRICING MODEL DISTRIBUTION:
 {chr(10).join(f'- {model}: {count} competitors' for model, count in pricing_models.items())}
 
-DETAILED COMPETITOR DATA:
+DETAILED COMPETITOR DATA (ALL ACTIVE COMPETITORS):
 """
-        for c in competitors[:20]:  # Top 20 for context
+        # INCLUDED ALL COMPETITORS (No limit) for maximum context
+        for c in competitors: 
             data_summary += f"""
-{c.name}:
-  - Threat Level: {c.threat_level}
-  - Pricing: {c.base_price or 'Unknown'}
-  - Customers: {c.customer_count or 'Unknown'}
-  - Employees: {c.employee_count or 'Unknown'}
-  - G2 Rating: {c.g2_rating or 'N/A'}
-  - Funding: {c.funding_total or 'Unknown'}
-  - Categories: {c.product_categories or 'Unknown'}
+---
+COMPETITOR: {c.name}
+THREAT: {c.threat_level}
+WEBSITE: {c.website or 'N/A'}
+PRICING: {c.base_price or 'N/A'} ({c.pricing_model or 'Unknown Model'})
+OFFERING: {c.product_categories or 'N/A'}
+FEATURES: {c.key_features or 'N/A'}
+CUSTOMERS: {c.customer_count or 'N/A'}
+EMPLOYEES: {c.employee_count or 'N/A'}
+FOUNDED: {c.year_founded or 'N/A'}
+NOTES: {c.notes or ''}
+---
 """
 
         # Try OpenAI first
@@ -431,7 +437,7 @@ Use data-driven insights. Be specific with numbers and competitor names. Format 
                     "provider": provider,
                     "provider_logo": "/static/openai-logo.svg",
                     "data_points_analyzed": total,
-                    "generated_at": datetime.utcnow().isoformat()
+                    "generated_at": datetime.utcnow().isoformat() + "Z"
                 }
             except Exception as e:
                 print(f"OpenAI Error: {e}")
@@ -494,28 +500,76 @@ def chat_with_summary(request: dict, db: Session = Depends(get_db)):
             return {"response": "Please provide a message.", "success": False}
         
         # Get competitor data for context
+        # Get ALL non-deleted competitors for consistency
         competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
-        context = f"We track {len(competitors)} competitors. "
-        context += f"High threat: {sum(1 for c in competitors if c.threat_level == 'High')}, "
-        context += f"Medium: {sum(1 for c in competitors if c.threat_level == 'Medium')}, "
-        context += f"Low: {sum(1 for c in competitors if c.threat_level == 'Low')}. "
-        context += f"Top competitors: {', '.join([c.name for c in competitors[:10]])}"
         
+        # Build Comprehensive Context (Same as Summary Generation to ensure consistency)
+        pricing_models = {}
+        for c in competitors:
+            model = c.pricing_model or "Unknown"
+            pricing_models[model] = pricing_models.get(model, 0) + 1
+
+        context = f"""
+FULL DATA SNAPSHOT (LIVE):
+==========================
+Total Competitors: {len(competitors)}
+High Threat: {sum(1 for c in competitors if c.threat_level == 'High')}
+Medium Threat: {sum(1 for c in competitors if c.threat_level == 'Medium')}
+Low Threat: {sum(1 for c in competitors if c.threat_level == 'Low')}
+
+COMPETITORS:
+"""
+        # Include ALL competitors in chat context too
+        for c in competitors:
+             context += f"""
+---
+COMPETITOR: {c.name}
+THREAT: {c.threat_level}
+WEBSITE: {c.website or 'N/A'}
+PRICING: {c.base_price or 'N/A'} ({c.pricing_model or 'Unknown Model'})
+OFFERING: {c.product_categories or 'N/A'}
+FEATURES: {c.key_features or 'N/A'}
+NOTES: {c.notes or ''}
+---
+"""
+
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
-            # Fetch dynamic persona
+            # Fetch Chat Persona
             prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "chat_persona").first()
             base_persona = prompt_db.content if prompt_db else "You are a competitive intelligence analyst for Certify Health."
             
+            # Fetch Summary Prompt (Context alignment)
+            summary_prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "dashboard_summary").first()
+            summary_instructions = summary_prompt_db.content if summary_prompt_db else "Focus on strategic insights."
+
             # RAG: Inject Knowledge Base
             kb_text = ""
             kb_items = db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.is_active == True).all()
             if kb_items:
-                kb_text += "\n\nINTERNAL KNOWLEDGE BASE (USE THIS CONCURRENTLY WITH LIVE DATA):\n"
+                kb_text += "\n\nINTERNAL KNOWLEDGE BASE:\n"
                 for item in kb_items:
                     kb_text += f"\n--- {item.title} ---\n{item.content_text}\n"
             
-            full_system_content = f"{base_persona}\n\nLIVE DATA CONTEXT:\n{context}\n{kb_text}"
+
+            full_system_content = f"""{base_persona}
+
+ALIGNMENT INSTRUCTION:
+The user has defined the following strategy for the Dashboard Summary. Use this as context for your tone and priorities:
+"{summary_instructions}"
+
+CRITICAL INSTRUCTION:
+You have access to a LIVE database of competitors below. 
+- If the user asks for a website, LOOK at the 'WEBSITE' field for that competitor and provide it.
+- If the user asks for pricing details, LOOK at the 'PRICING' field.
+- Do NOT say "I cannot browse the web" if the answer is in the data below.
+- Do NOT say "I am working with hypothetical data". This IS the live data.
+
+LIVE DATA CONTEXT:
+{context}
+
+{kb_text}
+"""
 
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
@@ -524,7 +578,7 @@ def chat_with_summary(request: dict, db: Session = Depends(get_db)):
                     {"role": "system", "content": full_system_content},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=500
+                max_tokens=600
             )
             return {"response": response.choices[0].message.content, "success": True}
         else:
@@ -784,7 +838,7 @@ def get_changes(competitor_id: Optional[int] = None, days: int = 30, db: Session
                 "new_value": c.new_value,
                 "severity": "Medium", # Default severity as DB model doesn't have it yet, or map from field
                 "detected_at": c.changed_at.isoformat(),
-                "source": c.source_url
+                "source": c.source_url or "manual"
             }
             for c in changes
         ]
@@ -1059,6 +1113,7 @@ async def bulk_update_competitors(
                         field_name=field,
                         old_value=str(old_value) if old_value else None,
                         new_value=str(new_value) if new_value else None,
+                        source_url=data.get("source_url"), # Capture Source URL from bulk/correction payload
                         changed_by=changed_by
                     )
                     db.add(change)
@@ -1218,6 +1273,7 @@ async def correct_competitor_data(
             competitor_id=competitor_id,
             field_name=correction.field,
             source_type="manual",
+            source_url=correction.source_url,
             entered_by=current_user.get("email", "unknown"),
             verified_at=datetime.utcnow()
         )
@@ -1230,6 +1286,7 @@ async def correct_competitor_data(
         field_name=correction.field,
         old_value=str(old_value) if old_value else None,
         new_value=correction.new_value,
+        source_url=correction.source_url, # Capture Evidence URL
         changed_by=current_user.get("email", "unknown"),
         change_reason=correction.reason
     )
@@ -2520,17 +2577,56 @@ def get_most_competitive(limit: int = 5):
 
 
 @app.get("/api/scrape/all")
-def trigger_scrape_all(db: Session = Depends(get_db)):
-    """Trigger a refresh of all competitor data."""
-    # This endpoint is called by the frontend 'Refresh Data' button.
-    # For now, we return a success status to simulate the refresh trigger.
-    # In production, this would dispatch Celery tasks.
-    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
+async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Trigger a live refresh of all competitor data."""
+    from refresh_orchestrator import refresh_orchestrator
+    
+    # Count competitors for immediate response
+    count = db.query(Competitor).filter(Competitor.is_deleted == False).count()
+    
+    # Run full refresh in background
+    async def run_refresh():
+        result = await refresh_orchestrator.refresh_all(priority_order=False)
+        print(f"Refresh complete: {result}")
+    
+    background_tasks.add_task(asyncio.create_task, run_refresh())
+    
     return {
         "success": True, 
-        "message": f"Started refresh for {len(competitors)} competitors",
-        "count": len(competitors)
+        "message": f"Live refresh started for {count} competitors",
+        "count": count,
+        "note": "Check /api/refresh/history for results"
     }
+
+
+@app.get("/api/refresh/history")
+def get_refresh_history(competitor_id: int = None, limit: int = 100, db: Session = Depends(get_db)):
+    """Get refresh history showing what changed."""
+    from database import RefreshSnapshot
+    
+    query = db.query(RefreshSnapshot)
+    if competitor_id:
+        query = query.filter(RefreshSnapshot.competitor_id == competitor_id)
+    
+    snapshots = query.order_by(RefreshSnapshot.created_at.desc()).limit(limit).all()
+    
+    return {
+        "total": len(snapshots),
+        "history": [
+            {
+                "refresh_id": s.refresh_id,
+                "competitor": s.competitor_name,
+                "field": s.field_name,
+                "old_value": s.old_value[:100] if s.old_value else None,
+                "new_value": s.new_value[:100] if s.new_value else None,
+                "source": s.source,
+                "changed": s.changed,
+                "date": s.created_at.isoformat()
+            }
+            for s in snapshots
+        ]
+    }
+
 
 
 # ============== Webhook Endpoints ==============
@@ -3154,11 +3250,102 @@ def delete_knowledge_base_item(item_id: int, db: Session = Depends(get_db)):
 
 
 
+# ============== Settings API Endpoints ==============
+
+# In-memory settings store (would use DB in production)
+user_settings = {
+    "schedule": {},
+    "notifications": {}
+}
+
+@app.post("/api/settings/schedule")
+async def save_schedule_settings(settings: dict):
+    """Save user refresh schedule preferences."""
+    user_settings["schedule"] = settings
+    return {"success": True, "message": "Schedule settings saved"}
+
+@app.get("/api/settings/schedule")
+async def get_schedule_settings():
+    """Get saved schedule settings."""
+    return user_settings.get("schedule", {})
+
+@app.post("/api/settings/notifications")
+async def save_notification_settings(settings: dict):
+    """Save user notification preferences."""
+    user_settings["notifications"] = settings
+    return {"success": True, "message": "Notification settings saved"}
+
+@app.get("/api/settings/notifications")
+async def get_notification_settings():
+    """Get saved notification settings."""
+    return user_settings.get("notifications", {})
+
+
+# ============== WebSocket for Real-time Refresh Progress ==============
+
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import List
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                pass
+
+ws_manager = ConnectionManager()
+
+@app.websocket("/ws/refresh-progress")
+async def websocket_refresh_progress(websocket: WebSocket):
+    """WebSocket endpoint for real-time refresh progress updates."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive, actual updates sent via broadcast
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+
 
 # ============== Static Files (Must be Last) ==============
 import os
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+import sys
+
+# Determine the directory where the backend executable (or script) is running
+if getattr(sys, 'frozen', False):
+    # If we are running as a bundle (PyInstaller)
+    base_dir = os.path.dirname(sys.executable)
+    # In bundle, we expect 'frontend' to be a sibling of the executable (or in resources/frontend)
+    # The 'backend-bundle' is usually in 'resources/backend-bundle'
+    # So we look at 'resources/frontend' which is 1 level up from 'backend-bundle'
+    frontend_dir = os.path.join(os.path.dirname(base_dir), "frontend")
+else:
+    # Running in normal dev environment
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+
+
 if os.path.exists(frontend_dir):
+    from fastapi.responses import FileResponse
+    
+    @app.get("/app")
+    async def read_app_root():
+        """Serve the frontend app root for Electron."""
+        return FileResponse(os.path.join(frontend_dir, 'index.html'))
+
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    print(f"Serving frontend from: {frontend_dir}")
 else:
     print(f"Warning: Frontend directory not found at {frontend_dir}")

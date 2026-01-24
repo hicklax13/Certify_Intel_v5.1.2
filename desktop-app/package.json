@@ -1,7 +1,7 @@
 {
-    "name": "certify-intel",
-    "version": "1.0.0",
-    "description": "Competitive Intelligence Dashboard for Healthcare",
+    "name": "certify-intel-v4",
+    "version": "4.0.0",
+    "description": "Certify Intel v4 - Competitive Intelligence Dashboard with Live Refresh",
     "main": "electron/main.js",
     "author": "Certify Health",
     "license": "UNLICENSED",
@@ -36,7 +36,6 @@
         },
         "files": [
             "electron/**/*",
-            "frontend/**/*",
             "backend-bundle/**/*",
             "data/**/*",
             "!**/*.pyc",
@@ -50,6 +49,10 @@
             {
                 "from": "data",
                 "to": "data"
+            },
+            {
+                "from": "frontend",
+                "to": "frontend"
             }
         ],
         "win": {
