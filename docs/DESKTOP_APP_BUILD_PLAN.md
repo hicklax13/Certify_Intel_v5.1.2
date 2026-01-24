@@ -13,10 +13,11 @@ This document provides a complete plan to package Certify Health Intel into prod
 ## Table of Contents
 
 1. [Current State Analysis](#1-current-state-analysis)
-2. [Implementation Plan (7 Phases)](#2-implementation-plan)
+2. [Implementation Plan (8 Phases)](#2-implementation-plan)
 3. [How to Download from GitHub](#3-how-to-download-installers-from-github)
 4. [How to Distribute to Teammates](#4-how-to-distribute-to-teammates)
-5. [Quick Reference Commands](#5-quick-reference-commands)
+5. [Live Auto-Updates (Push Updates to All Users)](#5-live-auto-updates-push-updates-to-all-users)
+6. [Quick Reference Commands](#6-quick-reference-commands)
 
 ---
 
@@ -48,7 +49,7 @@ This document provides a complete plan to package Certify Health Intel into prod
 
 ---
 
-## 2. Implementation Plan
+## 2. Implementation Plan (8 Phases)
 
 ### Phase 1: Create Backend Entry Point (30 minutes)
 
@@ -498,7 +499,306 @@ This warning goes away with code signing (Phase 7).
 
 ---
 
-## 5. Quick Reference Commands
+## 5. Live Auto-Updates (Push Updates to All Users)
+
+This is the **most important feature** for maintaining your deployed apps. Once set up, you can push code changes to ALL installed apps with a single command.
+
+### How Auto-Updates Work
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  You push new   │────▶│  GitHub Actions  │────▶│ GitHub Releases │
+│  version tag    │     │  builds new app  │     │ hosts installer │
+└─────────────────┘     └──────────────────┘     └────────┬────────┘
+                                                          │
+                    ┌─────────────────────────────────────┘
+                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ALL INSTALLED APPS                           │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │ User 1   │  │ User 2   │  │ User 3   │  │ User 4   │        │
+│  │ Windows  │  │ Windows  │  │ macOS    │  │ macOS    │        │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
+│       │             │             │             │               │
+│       └─────────────┴──────┬──────┴─────────────┘               │
+│                            ▼                                    │
+│              "Update Available!" popup                          │
+│              User clicks "Install" → App restarts               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### What Gets Published with Each Release
+
+When you create a release, GitHub Actions automatically publishes:
+
+| File | Purpose |
+|------|---------|
+| `Certify-Health-Intel-Setup-1.0.1.exe` | Windows installer |
+| `Certify-Health-Intel-1.0.1.dmg` | macOS installer |
+| `latest.yml` | Windows update manifest (version, checksum, URL) |
+| `latest-mac.yml` | macOS update manifest |
+
+The `latest.yml` files tell installed apps where to download updates from.
+
+### Phase 8: Configure Auto-Updater (NEW - 1 hour)
+
+The existing `electron/main.js` already has electron-updater code, but we need to enhance it.
+
+**Update `desktop-app/electron/main.js`** - Add this enhanced auto-update configuration:
+
+```javascript
+// Add near the top of main.js
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+
+// Configure logging for auto-updater
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+
+// Auto-updater configuration
+autoUpdater.autoDownload = false;  // Ask user before downloading
+autoUpdater.autoInstallOnAppQuit = true;  // Install when app closes
+
+// Check for updates on startup (after app is ready)
+app.whenReady().then(() => {
+    // Check for updates 10 seconds after startup
+    setTimeout(() => {
+        if (!isDev) {
+            autoUpdater.checkForUpdates();
+        }
+    }, 10000);
+
+    // Also check every 4 hours while app is running
+    setInterval(() => {
+        if (!isDev) {
+            autoUpdater.checkForUpdates();
+        }
+    }, 4 * 60 * 60 * 1000);
+});
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    log.info('Update available:', info.version);
+
+    dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Available',
+        message: `A new version (${info.version}) is available!`,
+        detail: 'Would you like to download and install it now?',
+        buttons: ['Download Now', 'Later'],
+        defaultId: 0
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.downloadUpdate();
+        }
+    });
+});
+
+autoUpdater.on('update-not-available', () => {
+    log.info('No updates available - app is up to date');
+});
+
+autoUpdater.on('download-progress', (progress) => {
+    log.info(`Download progress: ${Math.round(progress.percent)}%`);
+
+    // Update splash screen or show progress in tray tooltip
+    if (mainWindow) {
+        mainWindow.setProgressBar(progress.percent / 100);
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    log.info('Update downloaded:', info.version);
+
+    // Clear progress bar
+    if (mainWindow) {
+        mainWindow.setProgressBar(-1);
+    }
+
+    dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Ready',
+        message: 'Update downloaded!',
+        detail: 'The update will be installed when you close the app. Restart now?',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall(false, true);
+        }
+    });
+});
+
+autoUpdater.on('error', (error) => {
+    log.error('Auto-updater error:', error);
+});
+```
+
+### How to Push an Update to All Users
+
+**Step 1: Make your code changes**
+```bash
+# Edit files, fix bugs, add features
+git add .
+git commit -m "Fix bug in analytics dashboard"
+```
+
+**Step 2: Update the version number**
+
+Edit `desktop-app/package.json`:
+```json
+{
+  "version": "1.0.1"  // Increment from 1.0.0
+}
+```
+
+**Step 3: Commit and tag the release**
+```bash
+git add desktop-app/package.json
+git commit -m "Bump version to 1.0.1"
+git tag -a v1.0.1 -m "Version 1.0.1 - Bug fixes"
+git push origin main --tags
+```
+
+**Step 4: Wait for GitHub Actions** (~15-20 minutes)
+- GitHub automatically builds Windows and macOS installers
+- Creates a new release with the installers
+- Publishes `latest.yml` and `latest-mac.yml` update manifests
+
+**Step 5: All installed apps auto-detect the update**
+- Within 4 hours (or on next app launch), users see "Update Available!"
+- They click "Download Now" → app downloads in background
+- They click "Restart Now" → app installs and restarts
+
+### Update Behavior Options
+
+You can customize update behavior in `main.js`:
+
+| Option | Behavior | Code |
+|--------|----------|------|
+| **Ask before download** (default) | User decides when to download | `autoUpdater.autoDownload = false` |
+| **Silent download** | Downloads automatically, asks to install | `autoUpdater.autoDownload = true` |
+| **Fully automatic** | Downloads and installs on quit | `autoDownload = true` + `autoInstallOnAppQuit = true` |
+| **Force immediate update** | Quits and installs immediately | `autoUpdater.quitAndInstall(true, true)` |
+
+### Forcing a Critical Update
+
+For security patches or critical bugs, you can force immediate updates:
+
+```javascript
+// In main.js - for critical updates
+autoUpdater.on('update-downloaded', (info) => {
+    // Check if this is a critical update (you define the logic)
+    const isCritical = info.version.includes('security') ||
+                       info.releaseNotes?.includes('[CRITICAL]');
+
+    if (isCritical) {
+        dialog.showMessageBox({
+            type: 'warning',
+            title: 'Critical Security Update',
+            message: 'A critical security update must be installed now.',
+            buttons: ['Install Now'],
+            defaultId: 0
+        }).then(() => {
+            autoUpdater.quitAndInstall(true, true);  // Force quit and install
+        });
+    } else {
+        // Normal update flow - ask user
+        // ... existing code
+    }
+});
+```
+
+### User Experience Timeline
+
+| Event | What User Sees |
+|-------|----------------|
+| App starts | Nothing (update check happens in background) |
+| Update found | Dialog: "A new version (1.0.1) is available!" |
+| User clicks "Download" | Progress bar in taskbar/dock |
+| Download complete | Dialog: "Update ready! Restart now?" |
+| User clicks "Restart" | App closes, installs update, reopens |
+| Next launch | Running new version |
+
+### Testing Auto-Updates Locally
+
+Before deploying, test the update flow:
+
+```bash
+# 1. Build version 1.0.0
+cd desktop-app
+npm version 1.0.0
+npm run build:win  # or build:mac
+
+# 2. Install it on your machine
+
+# 3. Build version 1.0.1
+npm version 1.0.1
+npm run build:win
+
+# 4. Manually place the new installer and latest.yml
+#    in a local server or use electron-builder's
+#    --publish=never and test with a local update server
+```
+
+### Monitoring Update Adoption
+
+To see how many users have updated, you can:
+
+1. **Check GitHub Release download counts**
+   - Go to Releases → click on a release → see download count per asset
+
+2. **Add analytics to the app** (optional)
+   - Send anonymous version info to your analytics service
+   - Track update success/failure rates
+
+### Rollback Strategy
+
+If an update has a critical bug:
+
+1. **Create a new release immediately** with the fix (v1.0.2)
+2. **Or** delete the bad release from GitHub Releases
+   - Users who haven't updated yet won't get it
+   - Users who already updated need v1.0.2
+
+### Update Server Alternatives
+
+GitHub Releases is free and works great, but alternatives exist:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **GitHub Releases** (recommended) | Free, automatic, no setup | Public visibility (unless private repo) |
+| **Amazon S3** | Private, scalable | Costs money, more setup |
+| **Your own server** | Full control | Maintenance burden |
+| **Electron Forge / Update Server** | Advanced features | Complex setup |
+
+### Troubleshooting Auto-Updates
+
+**Updates not working?**
+
+1. **Check version numbers** - new version must be higher than installed
+2. **Check `latest.yml` exists** in the GitHub Release assets
+3. **Check GitHub publish config** in `package.json` matches your repo
+4. **Check logs** - look in:
+   - Windows: `%APPDATA%\certify-intel\logs\`
+   - macOS: `~/Library/Logs/certify-intel/`
+
+**Common issues:**
+
+| Issue | Solution |
+|-------|----------|
+| "No update available" but there is one | Version in `package.json` not incremented |
+| Download fails | Check internet, firewall, or GitHub rate limits |
+| Install fails | Close all app windows, try manual install |
+| Update loop | Clear app data folder and reinstall |
+
+---
+
+## 6. Quick Reference Commands
 
 ### Build Commands
 
@@ -549,6 +849,7 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 - [ ] Create `backend/certify_backend.spec`
 - [ ] Update `desktop-app/package.json` with GitHub owner/repo
 - [ ] Create `.github/workflows/build-release.yml`
+- [ ] Configure auto-updater in `electron/main.js`
 - [ ] Test local build on Windows
 - [ ] Test local build on macOS
 - [ ] Push all changes to main branch
@@ -556,7 +857,7 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 ### Creating a Release
 - [ ] Create and push git tag: `git tag -a v1.0.0 -m "message" && git push origin v1.0.0`
 - [ ] Wait for GitHub Actions to complete (~15-20 minutes)
-- [ ] Verify installers appear in release assets
+- [ ] Verify installers AND `latest.yml` files appear in release assets
 - [ ] Download and test on both platforms
 
 ### Distributing to Team
@@ -564,6 +865,14 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 - [ ] Share releases URL or direct download links
 - [ ] Include installation instructions
 - [ ] Note SmartScreen warning workaround for Windows
+
+### Pushing Updates to All Users
+- [ ] Make code changes and commit
+- [ ] Increment version in `desktop-app/package.json`
+- [ ] Create and push new tag: `git tag -a v1.0.1 -m "message" && git push origin v1.0.1`
+- [ ] Wait for GitHub Actions to build (~15-20 min)
+- [ ] Verify `latest.yml` and `latest-mac.yml` in release assets
+- [ ] Users receive update notification within 4 hours (or on next app launch)
 
 ---
 
@@ -578,7 +887,8 @@ desktop-app/dist/Certify-Health-Intel-1.0.0.dmg        (macOS)
 | 5 | Test local builds | 2-3 hours |
 | 6 | Create first release | 30 min |
 | 7 | Code signing (optional) | 2-4 hours |
-| **Total** | | **5-10 hours** |
+| 8 | Configure auto-updater | 1 hour |
+| **Total** | | **6-11 hours** |
 
 ---
 
