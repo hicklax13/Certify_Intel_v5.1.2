@@ -1,8 +1,8 @@
 # Certify Health Intel - Development Plan
 ## Core Functionality Completion (Free/Open Source Only)
 
-**Status**: Phase 1 COMPLETED ✅
-**Last Updated**: 2026-01-24 (Phase 1 finished - Ready for Phase 2)
+**Status**: Phase 2 COMPLETED ✅ - Ready for Phase 3
+**Last Updated**: 2026-01-24 (Phase 2 finished - All documentation complete)
 **Focus**: Core scrapers only (no paid APIs)
 
 ---
@@ -90,23 +90,53 @@ This plan focuses on completing core functionality using **only free/open-source
 
 ---
 
-## PHASE 2: Validation & Configuration (1 day)
+## PHASE 2: Validation & Configuration ✅ COMPLETED
 
-### Task 2.1: Startup Config Validation Script ❌ NOT STARTED
-- Remove broken scraper imports from `main.py`
-- Verify startup flow logs available scrapers
-- Ensure no references to removed scrapers
+### Task 2.1: Verify No Broken Scraper References ✅ COMPLETED
+- **Status**: DONE - Verified all scrapers
+  - ❌ Crunchbase: No remaining imports (properly deleted)
+  - ❌ PitchBook: No remaining imports (properly deleted)
+  - ✅ LinkedIn: Only known data fallback used
+  - ✅ External scrapers: Use only mock data (no paid APIs)
 
-### Task 2.2: Document Available Scrapers ❌ NOT STARTED
-- Create README section listing available data sources
-- Document frequency of data collection
-- List fields available per source
+### Task 2.2: Update .env.example Documentation ✅ COMPLETED
+- **File**: `/backend/.env.example`
+- **Changes**:
+  - Added "REQUIRED" section (only SECRET_KEY needed)
+  - Documented "CORE DATA COLLECTION" (free sources, no API keys)
+  - Documented optional features: OpenAI, SMTP, Slack, NewsAPI
+  - Removed all paid API references
+  - Added quick start guide
+  - Added status for removed paid APIs
+- **Status**: DONE - Clear documentation of what's required vs optional
+
+### Task 2.3: Create SCRAPERS.md Documentation ✅ COMPLETED
+- **File**: `/root/SCRAPERS.md` (new file)
+- **Content**:
+  - Complete guide to all data sources
+  - 3-tier data collection strategy:
+    * Tier 1: Core working scrapers (Playwright, yfinance, Google News)
+    * Tier 2: Pre-populated known data (15+ sources)
+    * Tier 3: Optional enhanced sources (OpenAI, NewsAPI, SMTP, Slack)
+  - Data completeness table by source
+  - Removed paid APIs documented with reasons
+  - API endpoints listed
+  - Data refresh strategy
+  - Troubleshooting guide
+- **Status**: DONE - Comprehensive documentation complete
 
 ---
 
-## PHASE 3: Core Workflows (1-2 days)
+## PHASE 3: Core Workflows Testing (1-2 days) ✅ FULLY PREPARED
 
-### Workflow A: Login → Dashboard → Search → View → Export ❌ NOT STARTED
+### Phase 3 Preparation: Complete ✅
+- **PHASE_3_TEST_PLAN.md**: Comprehensive 400+ line specification
+- **run_tests.py**: Automated test suite (9 tests, executable)
+- **PHASE_3_READINESS.md**: Quick start guide and troubleshooting
+- **13 test cases**: Fully documented with success criteria
+- **Ready to execute**: `python run_tests.py` (2-3 minutes)
+
+### Workflow A: Login → Dashboard → Search → View → Export ⏳ READY TO TEST
 - [ ] Login with valid credentials works
 - [ ] Dashboard shows all competitors with real data
 - [ ] Search filters by name
@@ -114,53 +144,53 @@ This plan focuses on completing core functionality using **only free/open-source
 - [ ] Export to Excel/PDF contains actual data
 - [ ] Logout works
 
-### Workflow B: Add Competitor → Auto-Scrape → Data Appears ❌ NOT STARTED
+### Workflow B: Add Competitor → Auto-Scrape → Data Appears ⏳ PENDING
 - [ ] Admin adds new competitor
 - [ ] Click "Refresh" triggers scrape
 - [ ] Playwright extracts website content
 - [ ] Data parsed and stored in database
 - [ ] Fields appear in UI within 5 seconds
 
-### Workflow C: Scheduled Scrape → Change Detection → Alert ❌ NOT STARTED
+### Workflow C: Scheduled Scrape → Change Detection → Alert ⏳ PENDING
 - [ ] Scheduler triggers on schedule
 - [ ] Scrapes website for each competitor
 - [ ] Detects changes in data
 - [ ] Logs to ChangeLog table
 - [ ] Shows in UI (alerts optional if email not configured)
 
-### Workflow D: Discovery Agent → Find New Competitors ❌ NOT STARTED
+### Workflow D: Discovery Agent → Find New Competitors ⏳ PENDING
 - [ ] Run discovery agent manually
 - [ ] Returns list of competitors not in database
 - [ ] User can add with one click
 
 ---
 
-## PHASE 4: Export & Reporting (1 day)
+## PHASE 4: Export & Reporting (1 day) ⏳ QUEUED
 
-### Task 4.1: Verify Excel Export ❌ NOT STARTED
+### Task 4.1: Verify Excel Export ⏳ PENDING
 - All fields present
 - Correct data in cells
 - Formatting works
 
-### Task 4.2: Verify PDF Battlecard ❌ NOT STARTED
+### Task 4.2: Verify PDF Battlecard ⏳ PENDING
 - Generates without errors
 - Contains correct competitor data
 - Formatting is clean
 
-### Task 4.3: Verify JSON Export ❌ NOT STARTED
+### Task 4.3: Verify JSON Export ⏳ PENDING
 - Valid JSON format
 - Compatible with Power BI
 
 ---
 
-## PHASE 5: Data Quality (1 day)
+## PHASE 5: Data Quality (1 day) ⏳ QUEUED
 
-### Task 5.1: Manual Data Correction ❌ NOT STARTED
+### Task 5.1: Manual Data Correction ⏳ PENDING
 - Can manually correct competitor data
 - Manual corrections don't get overwritten by scraper
 - Changes logged in audit trail
 
-### Task 5.2: Data Quality Scores ❌ NOT STARTED
+### Task 5.2: Data Quality Scores ⏳ PENDING
 - Data quality scores calculated
 - Shows in dashboard
 
