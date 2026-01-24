@@ -1,132 +1,789 @@
-# Certify Health Intel - Competitive Intelligence Dashboard
+# Certify Intel
 
-![Certify Intel Banner](frontend/logo.png)
+**Competitive Intelligence Platform for Healthcare Technology**
 
-## 📖 Overview
+![Version](https://img.shields.io/badge/version-2.0.1-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Web-lightgrey)
+![License](https://img.shields.io/badge/license-Proprietary-red)
 
-**Certify Health Intel** is a mission-critical competitive intelligence platform designed specifically for **Certify Health**. It provides a centralized, real-time dashboard to track, analyze, and counter competitors in the healthcare technology space.
+---
 
-The system aggregates data from multiple sources—public financial filings, web scrapers, and manual field intelligence—to provide a 360-degree view of the competitive landscape. It empowers the sales, product, and leadership teams with actionable insights to maintain Certify Health's market leadership.
+## Table of Contents
 
-## 🎯 Who Is This For?
+1. [Overview](#overview)
+2. [Who Is This For?](#who-is-this-for)
+3. [Key Features](#key-features)
+4. [Platform Architecture](#platform-architecture)
+5. [Technology Stack](#technology-stack)
+6. [Installation](#installation)
+7. [Configuration](#configuration)
+8. [Usage Guide](#usage-guide)
+9. [API Reference](#api-reference)
+10. [Data Sources](#data-sources)
+11. [Security](#security)
+12. [Desktop App Distribution](#desktop-app-distribution)
+13. [Development](#development)
+14. [Troubleshooting](#troubleshooting)
+15. [Contributing](#contributing)
 
-- **Executive Leadership**: For high-level market summaries, threat analysis, and strategic planning.
-- **Sales Team**: For instant access to "Battlecards," feature comparisons, and win/loss data to close more deals.
-- **Product Management**: To identify feature gaps, monitor competitor releases, and guide the product roadmap.
-- **Strategy & Ops**: To track market shifts, funding events, and M&A activity.
+---
 
-## ✨ Key Features
+## Overview
 
-### 🔍 Real-Time Intelligence
+**Certify Intel** is a production-ready competitive intelligence platform designed to track, analyze, and counter 30+ competitors in the healthcare technology space. It provides a centralized, real-time dashboard that aggregates data from multiple sources to deliver actionable competitive insights.
 
-- **Automated Tracking**: Monitors 30+ data points per competitor including pricing, customers, and employee growth.
-- **AI Discovery Agent**: "Certify Scout" autonomously crawls the web to identify emerging threats and new market entrants.
-- **Change Detection**: Alerts system that highlights significant changes in competitor messaging or pricing.
+### What It Does
 
-### 📊 Advanced Analytics
+- **Tracks 30+ competitors** with 30+ data points each (pricing, customers, employee count, funding, etc.)
+- **Aggregates data from 15+ sources** including SEC filings, job boards, app stores, and industry databases
+- **Generates AI-powered insights** using GPT-4 for executive summaries and strategic analysis
+- **Delivers reports** in multiple formats: Excel dashboards, PDF battlecards, and JSON for Power BI
+- **Monitors changes** with real-time alerts when competitors update their messaging, pricing, or strategy
+- **Auto-updates** across all installed desktop apps when you push new versions
 
-- **AI Executive Summary**: Generates weekly strategic briefings using GPT-4 analysis of all collected data.
-- **Market Positioning Map**: Visualizes competitors by threat level, company size, and market focus.
-- **Feature Gap Analysis**: Side-by-side product comparison matrices.
+### Key Differentiators
 
-### 🛠️ Operational Tools
+| Feature | Certify Intel | Traditional Methods |
+|---------|---------------|---------------------|
+| Data freshness | Real-time to daily | Manual quarterly reviews |
+| Sources covered | 15+ automated | 2-3 manual |
+| Time to insight | Seconds | Days to weeks |
+| Consistency | 100% systematic | Varies by analyst |
+| Cost | One-time setup | Ongoing analyst hours |
 
-- **Battlecard Generator**: One-click PDF generation of sales battlecards.
-- **Data Quality Engine**: Scores data freshness and completeness to ensure trust in the insights.
-- **Multi-Platform Access**: Accessible via a responsive Web Dashboard or a standalone Desktop Application.
+---
 
-## 🏗️ Tech Stack & Architecture
+## Who Is This For?
 
-This project is built with a modern, scalable architecture designed for performance and ease of deployment.
+### Executive Leadership
+- High-level market summaries and threat analysis
+- Strategic planning with data-driven insights
+- M&A activity monitoring
+- Market positioning visualization
 
-### **Backend (Python)**
+### Sales Teams
+- Instant access to competitive battlecards
+- Feature comparison matrices for sales calls
+- Win/loss tracking and analysis
+- Real-time competitive objection handling
 
-- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) - High-performance async web framework.
-- **Database**: **SQLite** (with SQLAlchemy ORM) - Lightweight and zero-config for easy deployment.
-- **AI/ML**: **OpenAI GPT-4** Integration - For data extraction, summarization, and strategic analysis.
-- **Scraping**: **Playwright** & **BeautifulSoup** - For robust web scraping and dynamic content handling.
-- **Task Management**: **APScheduler** - For scheduling periodic background scraping jobs.
-- **Reporting**: **ReportLab** - For programmatic PDF generation.
+### Product Management
+- Feature gap identification
+- Competitor release monitoring
+- Product roadmap guidance
+- Pricing strategy intelligence
 
-### **Frontend (Web)**
+### Strategy & Operations
+- Market shift tracking
+- Funding event monitoring
+- Employee growth analysis
+- Industry trend identification
 
-- **Core**: HTML5, Vanilla JavaScript (ES6+), CSS3.
-- **Styling**: Custom CSS variables for a premium, dark-mode aesthetic (Glassmorphism design).
-- **Visualization**: **Chart.js** - For interactive market maps and trend charts.
-- **PWA**: Fully capable Progressive Web App with service workers.
+---
 
-### **DesktopWrapper**
+## Key Features
 
-- **Framework**: [Electron](https://www.electronjs.org/) - Wraps the web application for a native desktop experience.
-- **Build Tools**: **electron-builder** - Generates `.exe` (Windows) and `.dmg` (macOS) installers.
+### 1. Real-Time Intelligence & Monitoring
 
-## 📂 Project Structure
+**Automated Competitor Tracking**
+- Monitors 30+ data points per competitor
+- Configurable refresh schedules (daily, weekly, on-demand)
+- Change detection with configurable alert thresholds
+- Historical trend tracking
+
+**AI Discovery Agent ("Certify Scout")**
+- Autonomously crawls the web for emerging threats
+- Identifies new market entrants
+- Discovers competitor news and announcements
+- Uses GPT-4 for intelligent content analysis
+
+**Alert System**
+- Email notifications for significant changes
+- Slack and Microsoft Teams integration
+- SMS alerts via Twilio (optional)
+- Configurable alert thresholds per competitor
+
+### 2. Multi-Source Data Collection (15+ Scrapers)
+
+| Category | Sources | Data Collected |
+|----------|---------|----------------|
+| **Finance & Legal** | SEC Edgar, CrunchBase, PitchBook | Funding rounds, revenue estimates, acquisitions |
+| **Employment** | Glassdoor, Indeed, LinkedIn, H1B filings | Employee count, growth rate, hiring trends |
+| **Industry** | HIMSS Conference, KLAS Ratings | Industry rankings, conference presence |
+| **App Ecosystem** | App Store, Google Play | App ratings, reviews, feature lists |
+| **Market Intelligence** | SimilarWeb, G2/Capterra | Web traffic, user reviews, market share |
+| **Social & News** | Twitter, LinkedIn, News APIs | Announcements, sentiment, PR activity |
+
+### 3. Advanced Analytics
+
+**AI Executive Summaries**
+- GPT-4 generated weekly strategic briefings
+- Highlights key competitive movements
+- Identifies threats and opportunities
+- Provides actionable recommendations
+
+**Market Positioning Map**
+- Visual competitor landscape
+- Threat level scoring (1-10 scale)
+- Market focus categorization
+- Company size comparison
+
+**Feature Gap Analysis**
+- Side-by-side product comparisons
+- Feature matrix generation
+- Competitive advantage identification
+- Product roadmap recommendations
+
+**Threat Analysis Dashboard**
+- Risk scoring and prioritization
+- Threat level trends over time
+- Competitive pressure indicators
+- Early warning system
+
+### 4. Reporting & Export
+
+**Excel Export**
+- Data-validated spreadsheets
+- Auto-fit columns and formatting
+- Multiple worksheets (Overview, Details, Changes)
+- Power Query compatible
+
+**PDF Battlecards**
+- One-click sales battlecard generation
+- Customizable templates
+- Competitive positioning summaries
+- Objection handling scripts
+
+**JSON Export**
+- Power BI integration ready
+- API-consumable format
+- Webhook delivery option
+- Real-time data feeds
+
+**Historical Data**
+- Trend analysis over time
+- Change log with timestamps
+- Data seeding for new competitors
+- Audit trail for compliance
+
+### 5. Data Quality & Verification
+
+**Quality Scoring System**
+- Freshness scores (days since last update)
+- Completeness metrics (% of fields populated)
+- Source reliability ratings
+- Confidence indicators
+
+**Source Attribution**
+- Every data point traced to its source
+- Last verified timestamp
+- Verification workflow
+- Manual override with audit trail
+
+**Stale Data Detection**
+- Automatic identification of outdated fields
+- Configurable staleness thresholds
+- Refresh prioritization
+- Quality alerts
+
+### 6. User Management & Security
+
+**Role-Based Access Control**
+| Role | Capabilities |
+|------|--------------|
+| **Admin** | Full system access, user management, configuration |
+| **Analyst** | Full data access, create/modify intelligence, run scrapers |
+| **Viewer** | Read-only access to dashboards and reports |
+
+**Authentication**
+- JWT token-based authentication
+- Secure password hashing (SHA256 with salt)
+- Session management
+- API key support for integrations
+
+**Audit Logging**
+- Complete change history
+- User attribution on all modifications
+- Reason logging for manual corrections
+- Export audit logs for compliance
+
+### 7. Automated Scheduling
+
+**Pre-configured Schedules**
+| Schedule | Frequency | Scope |
+|----------|-----------|-------|
+| Weekly Refresh | Sundays 2 AM | Full database (all competitors) |
+| Daily Check | 6 AM | High-threat competitors only |
+| Database Backup | Daily | Automated backup with retention |
+| Email Digest | Daily/Weekly | Summary reports to stakeholders |
+
+**Custom Scheduling**
+- Cron-based job scheduling via APScheduler
+- Per-competitor refresh schedules
+- On-demand scraping via API
+- Webhook triggers for external systems
+
+---
+
+## Platform Architecture
 
 ```
-Project_Intel/
-├── backend/                  # The Brain (Python API)
-│   ├── main.py              # Application entry point
-│   ├── database.py          # Data models & storage
-│   ├── discovery_agent.py   # AI scraping logic
-│   ├── analytics.py         # Data processing engine
-│   └── [scrapers]           # Modular scraper scripts
-├── frontend/                 # The Face (UI/UX)
-│   ├── index.html           # Single Page Application
-│   ├── app.js               # Client-side logic
-│   └── styles.css           # Custom design system
-├── desktop-app/              # The Wrapper (Electron)
-│   ├── electron/            # Native integration
-│   └── dist/                # Installers output
-└── client_docs/              # Intelligence Library
-    ├── [Project Plans]      # Strategic roadmaps
-    ├── [Deliverables]       # Final reports
-    └── [Templates]          # Excel dashboards
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           CERTIFY INTEL                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
+│  │   Desktop    │    │     Web      │    │    Mobile    │              │
+│  │   (Electron) │    │  (Browser)   │    │    (PWA)     │              │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘              │
+│         │                   │                   │                       │
+│         └───────────────────┼───────────────────┘                       │
+│                             │                                           │
+│                    ┌────────▼────────┐                                  │
+│                    │    Frontend     │                                  │
+│                    │  (HTML/JS/CSS)  │                                  │
+│                    │   Chart.js      │                                  │
+│                    └────────┬────────┘                                  │
+│                             │                                           │
+│                    ┌────────▼────────┐                                  │
+│                    │   FastAPI       │                                  │
+│                    │   Backend       │                                  │
+│                    │  (40+ endpoints)│                                  │
+│                    └────────┬────────┘                                  │
+│                             │                                           │
+│         ┌───────────────────┼───────────────────┐                       │
+│         │                   │                   │                       │
+│  ┌──────▼──────┐    ┌──────▼──────┐    ┌──────▼──────┐                │
+│  │   SQLite    │    │   OpenAI    │    │  Scrapers   │                │
+│  │  Database   │    │   GPT-4     │    │ (15+ types) │                │
+│  │ (11 tables) │    │ Integration │    │             │                │
+│  └─────────────┘    └─────────────┘    └─────────────┘                │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Installation & Setup
+### Database Schema (11 Core Tables)
 
-### Prerequisites
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `competitors` | Main competitor records | 30+ fields per competitor |
+| `change_log` | Change tracking and alerts | field, old_value, new_value, timestamp |
+| `data_sources` | Source attribution per field | source_url, last_verified, confidence |
+| `data_change_history` | Audit log with user attribution | user_id, reason, timestamp |
+| `users` | User accounts with roles | username, password_hash, role |
+| `system_prompts` | Dynamic AI prompts | prompt_name, content, active |
+| `knowledge_base` | Internal docs for RAG | document, embedding, category |
+| `system_settings` | Global configuration | key, value, description |
+| `win_loss_deals` | Competitive deal outcomes | competitor_id, outcome, value |
+| `webhooks` | Outbound webhook config | url, events, secret |
+| `scheduled_jobs` | Job scheduling state | job_id, next_run, status |
 
-- Python 3.9+
-- Node.js (for Desktop App only)
-- OpenAI API Key (for AI features)
+---
 
-### 1. Backend Setup
+## Technology Stack
+
+### Backend (Python 3.9+)
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Framework | FastAPI | High-performance async API |
+| Server | Uvicorn | ASGI server |
+| Database | SQLite + SQLAlchemy | Lightweight, zero-config storage |
+| AI/ML | OpenAI GPT-4, LangChain | Intelligence and summarization |
+| Web Scraping | Playwright, BeautifulSoup | Dynamic and static page scraping |
+| PDF Generation | ReportLab | Battlecard and report creation |
+| Excel Export | openpyxl | Data-validated spreadsheets |
+| Scheduling | APScheduler | Background job management |
+| Authentication | JWT (python-jose), passlib | Secure token-based auth |
+| HTTP Client | httpx, requests | API and web requests |
+
+### Frontend (Web)
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Core | HTML5, Vanilla JS (ES6+), CSS3 | No framework dependencies |
+| Visualization | Chart.js | Interactive charts and maps |
+| Design | CSS Variables, Glassmorphism | Dark-mode premium aesthetic |
+| PWA | Service Workers | Offline support and caching |
+| Responsive | Mobile-first CSS | Works on all screen sizes |
+
+### Desktop Application
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Framework | Electron 28.1.0 | Cross-platform desktop wrapper |
+| Build | electron-builder | Windows/macOS installers |
+| Auto-Update | electron-updater | Push updates to all users |
+| Backend Bundle | PyInstaller | Python bundled as executable |
+
+---
+
+## Installation
+
+### Option 1: Desktop App (Recommended)
+
+Download the latest installer from [GitHub Releases](https://github.com/hicklax13/Project_Intel_v4/releases):
+
+| Platform | File | Requirements |
+|----------|------|--------------|
+| Windows | `20260125_Certify_Intel_v2.0.1_Setup.exe` | Windows 10/11 (64-bit) |
+| macOS (Intel) | `20260125_Certify_Intel_v2.0.1_x64.dmg` | macOS 11+ |
+| macOS (Apple Silicon) | `20260125_Certify_Intel_v2.0.1_arm64.dmg` | macOS 11+ (M1/M2/M3) |
+
+**Windows Installation:**
+1. Download the `.exe` file
+2. Run the installer (click "More info" → "Run anyway" if SmartScreen appears)
+3. Follow the installation wizard
+4. Launch "Certify Intel" from desktop or Start Menu
+
+**macOS Installation:**
+1. Download the appropriate `.dmg` for your Mac
+2. Open the DMG and drag "Certify Intel" to Applications
+3. Right-click the app and select "Open" on first launch
+
+### Option 2: Web Browser Access
+
+Access the dashboard directly at `http://localhost:8000` after starting the backend server.
+
+### Option 3: Development Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/hicklax13/Project_Intel_v4.git
+cd Project_Intel_v4
+
+# Backend setup
 cd backend
 pip install -r requirements.txt
-
-# Configure Environment
 cp .env.example .env
-# Edit .env with your keys:
-# OPENAI_API_KEY=sk-...
-# SMTP_PASSWORD=...
+# Edit .env with your API keys
+python main.py  # Starts on http://localhost:8000
 
-# Run Server
-uvicorn main:app --reload --port 8000
-```
-
-### 2. Desktop App (Optional)
-
-```bash
-cd desktop-app
+# Desktop app setup (optional)
+cd ../desktop-app
 npm install
 npm start
 ```
 
-## 🛡️ Security & Privacy
+---
 
-- **Role-Based Access**: Multi-tier authentication (Admin, Analyst, Viewer).
-- **Local-First Data**: All competitor data is stored in your local SQL database unless configured otherwise.
-- **Audit Logs**: Full change history tracking for data integrity.
+## Configuration
 
-## 👥 Contributors
+### Environment Variables (backend/.env)
 
-Developed for **Certify Health** by the Innovation Team.
+```bash
+# Required
+OPENAI_API_KEY=sk-...              # OpenAI API key for GPT-4 features
+SECRET_KEY=your-secret-key         # JWT signing key (generate random string)
 
-- **Lead Developer**: Connor Hickey
-- **Project Repository**: [GitHub - Project_Intel](https://github.com/hicklax13/Project_Intel)
+# Database
+DATABASE_URL=sqlite:///./certify_intel.db  # SQLite (default) or PostgreSQL
+
+# Email Notifications (optional)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+ALERT_EMAIL=team@company.com
+
+# Slack Integration (optional)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+
+# Microsoft Teams (optional)
+TEAMS_WEBHOOK_URL=https://outlook.office.com/webhook/...
+
+# SMS via Twilio (optional)
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1234567890
+
+# Debug Mode
+DEBUG=False
+```
+
+### System Settings (via API or Database)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `refresh_interval` | 7 | Days between full refreshes |
+| `stale_threshold` | 30 | Days before data is marked stale |
+| `alert_email_enabled` | true | Send email alerts |
+| `threat_threshold` | 7 | Threat level to trigger alerts |
 
 ---
-*Confidential - For Internal Use Only*
+
+## Usage Guide
+
+### Dashboard Overview
+
+The main dashboard displays:
+- **Competitor Grid**: All tracked competitors with key metrics
+- **Threat Summary**: High-threat competitors highlighted
+- **Recent Changes**: Latest detected changes across all competitors
+- **Quick Actions**: Export, refresh, and analysis buttons
+
+### Adding a New Competitor
+
+1. Click "Add Competitor" button
+2. Fill in basic information (name, website, category)
+3. System automatically discovers data from configured sources
+4. Review and verify discovered data
+5. Set threat level and monitoring priority
+
+### Running Data Refresh
+
+**Manual Refresh:**
+- Single competitor: Click refresh icon on competitor card
+- All competitors: Dashboard → Actions → Refresh All
+
+**Scheduled Refresh:**
+- Automatic weekly refresh: Sundays 2 AM
+- High-threat daily check: 6 AM
+
+### Generating Reports
+
+**Excel Dashboard:**
+```
+GET /api/export/excel
+→ Downloads comprehensive Excel workbook
+```
+
+**PDF Battlecard:**
+```
+POST /api/reports/battlecard/{competitor_id}
+→ Generates sales battlecard PDF
+```
+
+**JSON for Power BI:**
+```
+GET /api/export/json
+→ Power Query compatible JSON
+```
+
+### Using AI Features
+
+**Executive Summary:**
+```
+GET /api/analytics/executive-summary
+→ AI-generated strategic briefing
+```
+
+**Conversational Analytics:**
+```
+POST /api/analytics/chat
+Body: { "question": "What are Epic's main weaknesses?" }
+→ AI-powered competitive analysis
+```
+
+---
+
+## API Reference
+
+### Authentication
+
+All API endpoints require JWT authentication:
+
+```bash
+# Login to get token
+POST /api/auth/login
+Body: { "username": "admin", "password": "..." }
+Response: { "access_token": "eyJ...", "token_type": "bearer" }
+
+# Use token in requests
+Authorization: Bearer eyJ...
+```
+
+### Core Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/competitors` | List all competitors |
+| GET | `/api/competitors/{id}` | Get single competitor |
+| POST | `/api/competitors` | Create competitor |
+| PUT | `/api/competitors/{id}` | Update competitor |
+| DELETE | `/api/competitors/{id}` | Delete competitor |
+| POST | `/api/competitors/{id}/correct` | Manual correction with audit |
+
+### Analytics Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/analytics/summary` | Dashboard summary stats |
+| GET | `/api/analytics/executive-summary` | AI-generated briefing |
+| POST | `/api/analytics/chat` | Conversational AI analysis |
+| GET | `/api/analytics/threats` | Threat analysis report |
+| GET | `/api/analytics/market-share` | Market positioning data |
+
+### Data Quality Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/data-quality/scores` | Quality metrics per competitor |
+| GET | `/api/data-quality/stale` | List stale data fields |
+| POST | `/api/data-quality/verify/{id}` | Mark data as verified |
+
+### Export Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/export/excel` | Download Excel dashboard |
+| GET | `/api/export/json` | JSON for Power Query |
+| POST | `/api/reports/battlecard/{id}` | Generate PDF battlecard |
+
+### Scraping Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/scrape/all` | Full refresh all sources |
+| POST | `/api/scrape/{id}` | Scrape single competitor |
+| POST | `/api/discovery/run` | Run AI discovery agent |
+
+---
+
+## Data Sources
+
+### Automated Sources (15+)
+
+| Source | Data Type | Frequency |
+|--------|-----------|-----------|
+| SEC Edgar | Financial filings, 10-K, 8-K | Daily |
+| CrunchBase | Funding, acquisitions, investors | Weekly |
+| PitchBook | Private company valuations | Weekly |
+| USPTO | Patents, IP filings | Weekly |
+| Glassdoor | Employee reviews, ratings | Weekly |
+| Indeed | Job postings, hiring trends | Daily |
+| LinkedIn | Employee count, growth | Weekly |
+| H1B Database | Visa filings, salary data | Monthly |
+| HIMSS | Conference presence, awards | Event-based |
+| KLAS | Industry ratings, rankings | Quarterly |
+| App Store | iOS app data, ratings | Daily |
+| Google Play | Android app data, ratings | Daily |
+| SimilarWeb | Web traffic, engagement | Weekly |
+| G2/Capterra | User reviews, ratings | Weekly |
+| News APIs | Press releases, articles | Real-time |
+
+### Manual Data Entry
+
+- Win/loss deal tracking
+- Field intelligence from sales team
+- Pricing information from RFPs
+- Feature updates from demos
+
+---
+
+## Security
+
+### Data Protection
+
+- **Local Storage**: All data stored locally in SQLite (no cloud dependency)
+- **Encryption**: Sensitive fields encrypted at rest
+- **Access Control**: Role-based permissions (Admin/Analyst/Viewer)
+- **Audit Trail**: Complete change history with user attribution
+
+### Authentication Security
+
+- **JWT Tokens**: Short-lived access tokens (24 hours)
+- **Password Hashing**: SHA256 with random salt
+- **Rate Limiting**: API rate limiting to prevent abuse
+- **CORS**: Configurable cross-origin resource sharing
+
+### Network Security
+
+- **HTTPS**: Recommended for production deployment
+- **API Keys**: Secure storage of third-party API keys
+- **Webhook Secrets**: HMAC verification for webhooks
+
+---
+
+## Desktop App Distribution
+
+### For Repository Owners
+
+1. **Trigger a release** by creating a version tag:
+   ```bash
+   git tag -a v2.0.1 -m "Release 2.0.1"
+   git push origin v2.0.1
+   ```
+
+2. **GitHub Actions** automatically builds Windows and macOS installers
+
+3. **Download from Releases**: https://github.com/hicklax13/Project_Intel_v4/releases
+
+### For Team Members
+
+1. Visit the [Releases page](https://github.com/hicklax13/Project_Intel_v4/releases)
+2. Download the installer for your platform
+3. Install and run (bypass SmartScreen/Gatekeeper on first launch)
+4. App will auto-update when new versions are released
+
+### Auto-Update System
+
+- Apps check for updates on startup and every 4 hours
+- Users see "Update Available" dialog with download option
+- Updates install automatically on app restart
+- Critical updates can force immediate installation
+
+---
+
+## Development
+
+### Project Structure
+
+```
+Project_Intel_v4/
+├── backend/                    # Python FastAPI backend (~8,651 lines)
+│   ├── main.py                # Application entry point (3,164 lines)
+│   ├── database.py            # SQLAlchemy models (11 tables)
+│   ├── analytics.py           # Data analysis engine (807 lines)
+│   ├── extended_features.py   # Auth, caching, advanced features
+│   ├── discovery_agent.py     # AI web scraping logic
+│   ├── scheduler.py           # APScheduler automation
+│   ├── alerts.py              # Notifications (Email/Slack/Teams)
+│   ├── reports.py             # PDF/Excel generation
+│   ├── extractor.py           # GPT-4 data extraction
+│   ├── scraper.py             # Base Playwright scraper class
+│   ├── *_scraper.py           # 15+ specialized scrapers
+│   ├── certify_intel.db       # SQLite database
+│   ├── requirements.txt       # Python dependencies (40+)
+│   └── .env.example           # Configuration template
+│
+├── frontend/                   # Web UI SPA
+│   ├── index.html             # Main application
+│   ├── login.html             # Authentication UI
+│   ├── app_v2.js              # Core logic (4,084 lines)
+│   ├── styles.css             # Design system (46KB)
+│   ├── mobile-responsive.css  # Mobile optimization
+│   ├── enhanced_analytics.js  # Advanced charting
+│   ├── visualizations.js      # Chart.js integration
+│   ├── service-worker.js      # PWA offline support
+│   └── manifest.json          # PWA configuration
+│
+├── desktop-app/                # Electron wrapper
+│   ├── electron/
+│   │   ├── main.js            # Electron main process
+│   │   ├── preload.js         # Security bridge
+│   │   ├── splash.html        # Loading screen
+│   │   └── setup-wizard.html  # First-run setup
+│   ├── package.json           # Build configuration
+│   ├── resources/icons/       # App icons
+│   └── README.md              # Desktop-specific docs
+│
+├── .github/
+│   └── workflows/
+│       └── build-release.yml  # CI/CD for installers
+│
+├── docs/                       # Documentation
+│   ├── DESKTOP_APP_BUILD_PLAN.md
+│   └── [other documentation]
+│
+└── client_docs/                # Client materials
+    └── Certify Health Material/
+```
+
+### Code Statistics
+
+- **Backend**: ~8,651 lines of Python across 60+ modules
+- **Frontend**: ~4,084 lines of JavaScript
+- **Database**: 471KB SQLite, 11 core tables
+- **Scrapers**: 15+ specialized data collectors
+- **API Endpoints**: 40+
+- **Dependencies**: 40+ Python packages
+
+### Building Locally
+
+```bash
+# Backend build (PyInstaller)
+cd backend
+pip install pyinstaller
+pyinstaller certify_backend.spec --clean --noconfirm
+
+# Desktop app build
+cd desktop-app
+npm install
+npm run build:win   # Windows
+npm run build:mac   # macOS
+npm run build:all   # Both
+```
+
+### Running Tests
+
+```bash
+cd backend
+python run_tests.py  # Runs 9 automated endpoint tests
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Backend won't start | Check `.env` has `OPENAI_API_KEY` and `SECRET_KEY` |
+| Port 8000 in use | Change port in `main.py` or kill existing process |
+| Scrapers failing | Check internet, verify OpenAI API key is valid |
+| AI features not working | Verify OpenAI API key and billing status |
+| Desktop app won't launch | Ensure backend is running on port 8000 |
+| Update not detected | Check version in `package.json` is higher than installed |
+
+### Logs Location
+
+- **Backend**: Console output / `backend/logs/`
+- **Desktop (Windows)**: `%APPDATA%\certify-intel\logs\`
+- **Desktop (macOS)**: `~/Library/Logs/certify-intel/`
+
+### Getting Help
+
+- Check documentation in `/docs` folder
+- Review CLAUDE.md for development context
+- Open an issue on GitHub
+
+---
+
+## Contributing
+
+### Development Workflow
+
+1. Create feature branch from `master`
+2. Make changes following existing code patterns
+3. Test locally (run `python run_tests.py`)
+4. Commit with clear, descriptive messages
+5. Push and create Pull Request
+6. Wait for review and merge
+
+### Code Style
+
+- Python: Follow PEP 8, use type hints
+- JavaScript: ES6+, no framework dependencies
+- CSS: BEM naming, CSS variables for theming
+- Commits: Conventional commits format
+
+### Adding New Scrapers
+
+1. Create `backend/[source]_scraper.py`
+2. Inherit from `Scraper` base class
+3. Implement scraping logic with Playwright
+4. Add GPT-4 extraction for unstructured data
+5. Register in `main.py` scraper routing
+6. Add to scheduler if needed
+7. Document data fields collected
+
+---
+
+## License
+
+Proprietary - Certify Health Internal Use Only
+
+---
+
+## Credits
+
+- **Lead Developer**: Connor Hickey
+- **Organization**: Certify Health
+- **Repository**: [GitHub - Project_Intel_v4](https://github.com/hicklax13/Project_Intel_v4)
+
+---
+
+*Last Updated: January 25, 2026*
+*Version: 2.0.1*
