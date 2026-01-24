@@ -76,6 +76,7 @@ logs/
 
 # Build outputs
 backend/*.spec
+!backend/certify_backend.spec
 backend/exports/*.pdf
 backend/exports/*.xlsx
 backend/reports/

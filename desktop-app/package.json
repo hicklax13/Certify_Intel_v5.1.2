@@ -104,8 +104,9 @@
         },
         "publish": {
             "provider": "github",
-            "owner": "YOUR_GITHUB_USERNAME",
-            "repo": "certify-intel-releases"
+            "owner": "hicklax13",
+            "repo": "Project_Intel_v4",
+            "releaseType": "release"
         }
     }
 }

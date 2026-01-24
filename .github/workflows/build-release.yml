@@ -1,0 +1,305 @@
+name: Build and Release Desktop App
+
+# Trigger on version tags or manual dispatch
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: false
+        default: ''
+
+# Permissions needed for creating releases
+permissions:
+  contents: write
+
+jobs:
+  # ===========================================
+  # Build Windows Installer
+  # ===========================================
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller certify_backend.spec --clean --noconfirm
+
+      - name: Verify backend build
+        run: |
+          if (Test-Path "backend/dist/certify_backend.exe") {
+            Write-Host "Backend build successful!"
+            Get-Item "backend/dist/certify_backend.exe" | Select-Object Name, Length
+          } else {
+            Write-Error "Backend build failed - executable not found"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Prepare desktop app directories
+        run: |
+          # Create necessary directories
+          New-Item -ItemType Directory -Force -Path "desktop-app/backend-bundle"
+          New-Item -ItemType Directory -Force -Path "desktop-app/frontend"
+          New-Item -ItemType Directory -Force -Path "desktop-app/data"
+
+          # Copy backend executable
+          Copy-Item "backend/dist/certify_backend.exe" -Destination "desktop-app/backend-bundle/"
+
+          # Copy database if it exists (as template)
+          if (Test-Path "backend/certify_intel.db") {
+            Copy-Item "backend/certify_intel.db" -Destination "desktop-app/backend-bundle/"
+          }
+
+          # Copy .env.example as .env template
+          if (Test-Path "backend/.env.example") {
+            Copy-Item "backend/.env.example" -Destination "desktop-app/backend-bundle/.env"
+          }
+
+          # Copy frontend files
+          Copy-Item -Path "frontend/*" -Destination "desktop-app/frontend/" -Recurse -Force
+        shell: pwsh
+
+      - name: Install Node dependencies
+        run: |
+          cd desktop-app
+          npm ci
+
+      - name: Build Windows installer
+        run: |
+          cd desktop-app
+          npm run build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build output
+        run: |
+          Write-Host "Build output:"
+          Get-ChildItem -Path "desktop-app/dist" -Recurse | Select-Object FullName, Length
+        shell: pwsh
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            desktop-app/dist/*.exe
+            desktop-app/dist/latest.yml
+          if-no-files-found: error
+
+  # ===========================================
+  # Build macOS Installer
+  # ===========================================
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller certify_backend.spec --clean --noconfirm
+
+      - name: Verify backend build
+        run: |
+          if [ -f "backend/dist/certify_backend" ]; then
+            echo "Backend build successful!"
+            ls -la backend/dist/certify_backend
+          else
+            echo "Backend build failed - executable not found"
+            exit 1
+          fi
+
+      - name: Prepare desktop app directories
+        run: |
+          # Create necessary directories
+          mkdir -p desktop-app/backend-bundle
+          mkdir -p desktop-app/frontend
+          mkdir -p desktop-app/data
+
+          # Copy backend executable
+          cp backend/dist/certify_backend desktop-app/backend-bundle/
+
+          # Copy database if it exists (as template)
+          if [ -f "backend/certify_intel.db" ]; then
+            cp backend/certify_intel.db desktop-app/backend-bundle/
+          fi
+
+          # Copy .env.example as .env template
+          if [ -f "backend/.env.example" ]; then
+            cp backend/.env.example desktop-app/backend-bundle/.env
+          fi
+
+          # Copy frontend files
+          cp -r frontend/* desktop-app/frontend/
+
+      - name: Install Node dependencies
+        run: |
+          cd desktop-app
+          npm ci
+
+      - name: Build macOS installer
+        run: |
+          cd desktop-app
+          npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build output
+        run: |
+          echo "Build output:"
+          ls -laR desktop-app/dist/
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: |
+            desktop-app/dist/*.dmg
+            desktop-app/dist/latest-mac.yml
+          if-no-files-found: error
+
+  # ===========================================
+  # Create GitHub Release
+  # ===========================================
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: ./installers/windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installer
+          path: ./installers/macos
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find ./installers -type f -ls
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            if [ -z "$VERSION" ]; then
+              VERSION="0.0.0-manual"
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Certify Intel v${{ steps.get_version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ./installers/windows/*.exe
+            ./installers/windows/latest.yml
+            ./installers/macos/*.dmg
+            ./installers/macos/latest-mac.yml
+          body: |
+            ## Certify Intel Desktop App v${{ steps.get_version.outputs.version }}
+
+            ### Downloads
+
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | Windows | `Certify-Intel-Setup-${{ steps.get_version.outputs.version }}.exe` | Windows 10/11 (64-bit) |
+            | macOS | `Certify-Intel-${{ steps.get_version.outputs.version }}.dmg` | macOS 11+ (Intel & Apple Silicon) |
+
+            ### Installation
+
+            **Windows:**
+            1. Download the `.exe` file
+            2. Run the installer (click "More info" → "Run anyway" if SmartScreen appears)
+            3. Follow the installation wizard
+
+            **macOS:**
+            1. Download the `.dmg` file
+            2. Open the DMG and drag the app to Applications
+            3. Right-click the app and select "Open" on first launch
+
+            ### Auto-Updates
+
+            This version includes automatic updates. You'll be notified when new versions are available.
+
+            ---
+            *Built automatically by GitHub Actions*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Release Created Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows installer (.exe)" >> $GITHUB_STEP_SUMMARY
+          echo "- macOS installer (.dmg)" >> $GITHUB_STEP_SUMMARY
+          echo "- Update manifests (latest.yml, latest-mac.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Users will receive auto-update notifications within 4 hours." >> $GITHUB_STEP_SUMMARY
