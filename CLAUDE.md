@@ -69,66 +69,80 @@
 - Full end-to-end test suite created
 - Expected success rate: 95%+
 
-### Next 10 Critical Steps
+### Next 11 Critical Steps
 
-1. **Deploy to Production Environment**
+1. **🚀 BUILD & DISTRIBUTE DESKTOP INSTALLERS (Windows + Mac)** ⬅️ NEW PRIORITY
+   - Create production-ready installers for Windows (.exe) and macOS (.dmg)
+   - Set up GitHub Releases for automated distribution
+   - Enable teammates to download installers directly from GitHub
+   - **Sub-tasks**:
+     - Create PyInstaller spec file for backend bundling
+     - Create backend `__main__.py` entry point
+     - Set up GitHub Actions workflow for automated builds
+     - Configure code signing (Windows) and notarization (macOS)
+     - Create first release with downloadable installers
+     - Document distribution process for team
+   - **See**: `docs/DESKTOP_APP_BUILD_PLAN.md` for full implementation guide
+   - Expected time: 3-5 days
+
+2. **Deploy to Production Environment**
    - Migrate from sandbox to standard server environment
    - Verify all dependencies install cleanly
    - Expected time: 30 minutes
 
-2. **Execute Phase 3A Automated Tests**
+3. **Execute Phase 3A Automated Tests**
    - Run: `python run_tests.py`
    - Validate: 7-9/9 tests pass
    - Expected time: 5 minutes
    - Expected result: ✅ All pass
 
-3. **Validate Core Endpoints (Phase 3B)**
+4. **Validate Core Endpoints (Phase 3B)**
    - Test: Database persistence
    - Test: Change detection accuracy
    - Test: Data transformation
    - Expected time: 1 hour
 
-4. **Execute Phase 4 Export Validation**
+5. **Execute Phase 4 Export Validation**
    - Test: Excel export functionality
    - Test: PDF battlecard generation
    - Test: JSON export for Power BI
    - Verify: Data accuracy in exports
    - Expected time: 1 hour
 
-5. **Execute Phase 5 Data Quality Testing**
+6. **Execute Phase 5 Data Quality Testing**
    - Test: Quality score calculations
    - Test: Stale data detection
    - Test: Manual corrections and audit trails
    - Test: Source attribution tracking
    - Expected time: 1.5 hours
 
-6. **Performance & Load Testing**
+7. **Performance & Load Testing**
    - Baseline: Response times
    - Test: 30+ competitors with full data
    - Test: Concurrent user handling
    - Expected time: 2 hours
 
-7. **Security & Compliance Audit**
+8. **Security & Compliance Audit**
    - Verify: JWT authentication working
    - Verify: Password hashing (passlib)
    - Verify: No sensitive data in logs
    - Verify: CORS configuration correct
    - Expected time: 1 hour
 
-8. **Database Backup & Recovery Testing**
+9. **Database Backup & Recovery Testing**
    - Test: Automated backup system
    - Test: Restore from backup
    - Verify: Data integrity after restore
    - Expected time: 1 hour
 
-9. **User Acceptance Testing (UAT)**
-   - Dashboard: 30+ competitors visible
-   - Search: Filtering works correctly
-   - Export: All formats generate correctly
-   - Analytics: Reports display accurate data
-   - Expected time: 2 hours
+10. **User Acceptance Testing (UAT)**
+    - Dashboard: 30+ competitors visible
+    - Search: Filtering works correctly
+    - Export: All formats generate correctly
+    - Analytics: Reports display accurate data
+    - Expected time: 2 hours
 
-10. **Production Deployment & Monitoring**
+11. **Production Deployment & Monitoring**
     - Deploy to production server
     - Configure monitoring and alerting
     - Set up automated backups
