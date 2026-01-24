@@ -55,7 +55,6 @@ except ImportError:
     print("Scheduler module not found. Automation disabled.")
 
 # New Data Source Imports
-import crunchbase_scraper
 import glassdoor_scraper
 import indeed_scraper
 import sec_edgar_scraper
@@ -64,7 +63,6 @@ import klas_scraper
 import appstore_scraper
 
 import himss_scraper
-import pitchbook_scraper
 
 # Database setup - SQLite for simplicity
 # Database setup
@@ -216,7 +214,49 @@ class KnowledgeBaseItemResponse(KnowledgeBaseItemBase):
 async def lifespan(app: FastAPI):
     # Startup
     print("Certify Intel Backend starting...")
-    
+    print("=" * 60)
+
+    # Configuration Validation
+    print("Validating configuration...")
+    missing_required = []
+
+    # Check required environment variables
+    if not os.getenv("SECRET_KEY"):
+        missing_required.append("SECRET_KEY")
+
+    if missing_required:
+        print(f"ERROR: Missing required environment variables: {', '.join(missing_required)}")
+        raise ValueError(f"Missing required env vars: {', '.join(missing_required)}")
+
+    # Warn about optional features
+    optional_features = {
+        "OPENAI_API_KEY": "AI Features (Executive Summaries, Discovery Agent, Web Extraction)",
+        "SMTP_HOST": "Email Alerts",
+        "SLACK_WEBHOOK_URL": "Slack Notifications"
+    }
+
+    disabled_scrapers = ["Crunchbase", "PitchBook", "LinkedIn (live scraping)"]
+
+    print("\nAvailable Scrapers:")
+    print("  ✅ Playwright Base Scraper - Website content extraction")
+    print("  ✅ SEC Edgar (yfinance) - Public company financials")
+    print("  ✅ News Monitor (Google News RSS) - Real-time news")
+    print("  ✅ Known Data Fallback - Pre-populated data for demo")
+    print("  ✅ [15+ other specialized scrapers with fallback data]")
+
+    print("\nDisabled Scrapers (Paid APIs - not available):")
+    for scraper in disabled_scrapers:
+        print(f"  ❌ {scraper}")
+
+    print("\nOptional Features:")
+    for env_var, feature in optional_features.items():
+        if os.getenv(env_var):
+            print(f"  ✅ {feature} - ENABLED")
+        else:
+            print(f"  ⚠️  {feature} - DISABLED (set {env_var} to enable)")
+
+    print("=" * 60)
+
     # Start Enterprise Scheduler
     if SCHEDULER_AVAILABLE:
         print("Initializing Enterprise Automation Engine...")
@@ -2611,15 +2651,6 @@ def list_webhook_events():
 
 # ============== New Data Source Endpoints ==============
 
-@app.get("/api/competitors/{competitor_id}/funding")
-def get_competitor_funding(competitor_id: int, db: Session = Depends(get_db)):
-    """Get funding and acquisition data from Crunchbase."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
-    
-    return crunchbase_scraper.get_crunchbase_data(competitor.name)
-
 @app.get("/api/competitors/{competitor_id}/employee-reviews")
 def get_competitor_employee_reviews(competitor_id: int, db: Session = Depends(get_db)):
     """Get employee reviews and ratings from Glassdoor."""
@@ -2694,15 +2725,6 @@ def get_competitor_market_presence(competitor_id: int, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Competitor not found")
     
     return himss_scraper.get_himss_data(competitor.name)
-
-@app.get("/api/competitors/{competitor_id}/market-intelligence")
-def get_competitor_market_intelligence(competitor_id: int, db: Session = Depends(get_db)):
-    """Get valuation and market intelligence from PitchBook/CB Insights."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
-    
-    return pitchbook_scraper.get_pitchbook_data(competitor.name)
 
 # ============== EXPORT ENDPOINTS ==============
 
@@ -2811,20 +2833,6 @@ def compare_innovation_metrics(competitor_ids: str, db: Session = Depends(get_db
             
     scraper = uspto_scraper.USPTOScraper()
     return scraper.compare_innovation(names)
-
-@app.get("/api/market/compare")
-def compare_market_metrics(competitor_ids: str, db: Session = Depends(get_db)):
-    """Compare market valuations and growth."""
-    ids = [int(id) for id in competitor_ids.split(",")]
-    names = []
-    
-    for c_id in ids:
-        comp = db.query(Competitor).filter(Competitor.id == c_id).first()
-        if comp:
-            names.append(comp.name)
-            
-    scraper = pitchbook_scraper.PitchBookScraper()
-    return scraper.compare_valuations(names)
 
 @app.get("/api/social/compare")
 def compare_social_metrics(competitor_ids: str, db: Session = Depends(get_db)):

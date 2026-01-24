@@ -161,12 +161,14 @@ class LinkedInTracker:
     def __init__(self, use_api: bool = False):
         """
         Initialize the LinkedIn tracker.
-        
+
         Args:
-            use_api: Whether to use LinkedIn API (requires credentials)
+            use_api: LinkedIn API is NOT SUPPORTED. Always uses known data fallback.
+                     This parameter is ignored.
         """
-        self.use_api = use_api
-        self.api_key = os.getenv("LINKEDIN_API_KEY")
+        # LinkedIn API live scraping is disabled - only known data available
+        self.use_api = False
+        self.api_key = None
     
     def get_company_data(self, company_name: str) -> LinkedInData:
         """
@@ -235,8 +237,11 @@ class LinkedInTracker:
         )
     
     def _fetch_from_api(self, company_name: str) -> LinkedInData:
-        """Fetch data from LinkedIn API."""
-        raise NotImplementedError("LinkedIn API integration not yet implemented")
+        """Fetch data from LinkedIn API - NOT SUPPORTED.
+
+        LinkedIn API live scraping is disabled. Use known data fallback only.
+        """
+        raise NotImplementedError("LinkedIn API live scraping is not supported. Using known data only.")
     
     def analyze_hiring_trends(self, company_name: str) -> Dict[str, Any]:
         """
