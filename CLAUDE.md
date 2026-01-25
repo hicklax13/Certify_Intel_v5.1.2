@@ -1,124 +1,228 @@
 # Certify Intel - Development Documentation
 
-## Session Summary - 2026-01-25 ✅ RELEASE READY
+## Session Summary - 2026-01-25 🔴 BLOCKED - Desktop App Installation Issue
 
 **Date**: January 25, 2026
 **Version**: 2.0.1
-**Status**: 🟢 **RELEASE READY**
-**Session Type**: Desktop App Release & Documentation Update
+**Status**: 🔴 **BLOCKED** - Desktop installer builds but app fails to start after installation
+**Session Type**: Desktop App Build & Troubleshooting
 
-### What Was Accomplished This Session
+---
 
-✅ **Desktop App Release Configuration (v2.0.1)**
-- Configured app name as "Certify Intel"
-- Set version to 2.0.1
-- Configured installer naming: `20260125_Certify_Intel_v2.0.1_Setup.exe` (Windows)
-- Configured macOS naming: `20260125_Certify_Intel_v2.0.1_x64.dmg` / `_arm64.dmg`
-- Updated GitHub Actions workflow for automated release builds
-- Enhanced auto-updater with progress bars and critical update support
+## CRITICAL ISSUE: Desktop App Backend Startup Failure
 
-✅ **Comprehensive Documentation Update**
-- Rewrote README.md with 790 lines of detailed documentation
-- Updated DESKTOP_APP_BUILD_PLAN.md with new version and naming
-- Documented all features, architecture, API endpoints
-- Added installation guides for Windows and macOS
-- Added troubleshooting section
-- Added development and contribution guidelines
+### Problem Summary
+The desktop app installer (`20260125_Certify_Intel_v2.0.1_Setup.exe`) builds successfully, but after installation, the app fails with **"Failed to start the backend server"** error.
 
-✅ **Files Modified This Session**
-- `desktop-app/package.json` - Updated version, app name, artifact naming
-- `.github/workflows/build-release.yml` - Updated release naming and descriptions
-- `docs/DESKTOP_APP_BUILD_PLAN.md` - Updated with v2.0.1 naming conventions
-- `README.md` - Complete rewrite with comprehensive documentation
-- `CLAUDE.md` - Updated with current progress and next tasks
+### Root Cause Analysis
+The issue is related to how the backend executable (`certify_backend.exe`) loads configuration files (`.env` and `certify_intel.db`) when running as an installed application vs. running from the build directory.
 
-### Current Project Status
+**Key Discovery**: PyInstaller extracts bundled files to a temporary directory (`C:\Users\...\AppData\Local\Temp\_MEI######`), but the `.env` file needs to be in the **executable's directory**, not the temp extraction folder.
 
-**Overall Status**: 🟢 **RELEASE READY**
-- ✅ Desktop app build infrastructure complete
-- ✅ GitHub Actions CI/CD configured
-- ✅ Auto-update system implemented
-- ✅ All documentation comprehensive
-- ✅ Ready to trigger first release
+### What Works
+- ✅ Backend runs correctly when executed directly from `backend-bundle/` folder
+- ✅ `.env` file loads correctly when running from `backend-bundle/`
+- ✅ SECRET_KEY, OPENAI_API_KEY, and other environment variables are detected
+- ✅ Server starts and shows `Uvicorn running on http://127.0.0.1:8000`
+- ✅ Installer builds successfully with electron-builder
 
-**Version**: 2.0.1
-**App Name**: Certify Intel
-**Platforms**: Windows (x64), macOS (Intel + Apple Silicon)
+### What Fails
+- ❌ Installed app cannot start the backend server
+- ❌ After installation, the backend cannot find the `.env` file
+- ❌ Error: "Failed to start the backend server. Please try again."
 
-**Completed Tasks from Previous Sessions**:
-- ✅ Task 1: Desktop build infrastructure (Phases 1-8)
-- ✅ Task 3: Phase 3A Automated Tests (8/10 pass)
-- ✅ Task 4: Core Endpoints Validated
-- ✅ Task 5: Export Validation Complete
-- ✅ Task 6: Data Quality Testing Complete
-- ✅ Task 7: Performance Testing (3-12ms response times)
-- ✅ Task 8: Security Audit Passed
-- ✅ Task 9: Backup/Recovery Tested
+### Technical Details
 
-### Next 5 Critical Tasks
+**Successful Manual Test Output:**
+```
+Loading .env from: C:\Users\conno\Downloads\Project_Intel_v4\desktop-app\backend-bundle\.env
+Using database from: C:\Users\conno\Downloads\Project_Intel_v4\desktop-app\backend-bundle\certify_intel.db
+Certify Intel Backend Starting...
+Bundle directory: C:\Users\conno\AppData\Local\Temp\_MEI367242
+Executable directory: C:\Users\conno\Downloads\Project_Intel_v4\desktop-app\backend-bundle
+SECRET_KEY loaded: Yes
+OPENAI_API_KEY loaded: Yes
+✅ AI Features (Executive Summaries, Discovery Agent, Web Extraction) - ENABLED
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
 
-1. **🚀 TRIGGER FIRST RELEASE (v2.0.1)**
-   - Create git tag: `git tag -a v2.0.1 -m "Certify Intel v2.0.1"`
-   - Push tag: `git push origin v2.0.1`
-   - GitHub Actions will automatically build Windows and macOS installers
-   - Verify installers appear in GitHub Releases
-   - Download and test on both platforms
-   - **Expected time**: 30 minutes (15-20 min build + testing)
+**The Problem**: When the app is INSTALLED (not run from build folder), the paths change:
+- Build folder: `C:\Users\conno\Downloads\Project_Intel_v4\desktop-app\backend-bundle\`
+- Installed location: `C:\Users\conno\AppData\Local\Programs\certify-intel\` (or similar)
 
-2. **Deploy to Production Environment**
-   - Migrate from sandbox to standard server environment
-   - Verify all dependencies install cleanly
-   - Configure production environment variables
-   - **Expected time**: 30 minutes
+The `.env` file is in `backend-bundle/` during build, but after installation, the backend exe may be looking in a different location within the installed app structure.
 
-3. **Distribute to Teammates (4 users)**
-   - Share GitHub Releases URL: https://github.com/hicklax13/Project_Intel_v4/releases
-   - Provide installation instructions (in README)
-   - Document SmartScreen/Gatekeeper bypass steps
-   - Confirm all 4 teammates can install and run
-   - **Expected time**: 1 hour
+---
 
-4. **User Acceptance Testing (UAT)**
-   - Dashboard: 30+ competitors visible
-   - Search: Filtering works correctly
-   - Export: All formats generate correctly
-   - Analytics: Reports display accurate data
-   - Test on actual user machines (not just dev)
-   - **Expected time**: 2 hours
+## Complete Error History This Session
 
-5. **Production Monitoring Setup**
-   - Configure error logging and alerting
-   - Set up health check endpoint monitoring
-   - Enable automated database backups
-   - Document incident response procedures
-   - **Expected time**: 2 hours
+### Error 1: "fatal: not a git repository"
+**Cause**: User downloaded repo as ZIP instead of cloning
+**Fix**: Used GitHub web UI to create release instead
 
-### Release Checklist
+### Error 2: GitHub Actions billing/spending limit
+**Cause**: GitHub Actions requires payment for private repos or has usage limits
+**Fix**: Built locally instead of using GitHub Actions
 
-**Before Triggering Release:**
-- [x] Version set to 2.0.1 in `desktop-app/package.json`
-- [x] Installer naming configured correctly
-- [x] GitHub Actions workflow updated
-- [x] Auto-updater configured
-- [x] Documentation updated
-- [x] All changes committed and pushed
+### Error 3: "bash: pyinstaller: command not found"
+**Cause**: PyInstaller not in PATH
+**Fix**: Used `python -m PyInstaller` instead
 
-**After Triggering Release:**
-- [ ] GitHub Actions workflow completes successfully
-- [ ] Windows installer (`20260125_Certify_Intel_v2.0.1_Setup.exe`) available
-- [ ] macOS Intel installer (`20260125_Certify_Intel_v2.0.1_x64.dmg`) available
-- [ ] macOS Apple Silicon installer (`20260125_Certify_Intel_v2.0.1_arm64.dmg`) available
-- [ ] `latest.yml` and `latest-mac.yml` update manifests present
-- [ ] Test installation on Windows
-- [ ] Test installation on macOS
-- [ ] Verify auto-update detection works
+### Error 4: "Error: spawn certify_backend.exe ENOENT"
+**Cause**: Backend executable not bundled with Electron app
+**Fix**: Built backend with PyInstaller and copied to `backend-bundle/`
+
+### Error 5: "No module named 'PIL'"
+**Cause**: PIL/Pillow not included in PyInstaller bundle
+**Fix**: Added PIL to `hiddenimports` in `certify_backend.spec`
+
+### Error 6: "SyntaxError: unmatched ']'"
+**Cause**: Manual edit of spec file introduced syntax error
+**Fix**: Provided complete clean spec file
+
+### Error 7: "Missing required environment variables: SECRET_KEY"
+**Cause**: `.env` file was in wrong location - backend was looking in temp extraction folder
+**Fix**: Modified `__main__.py` to load `.env` from executable directory instead of bundle directory
+
+### Error 8 (CURRENT): "Failed to start the backend server" (after installation)
+**Cause**: UNRESOLVED - The installed app structure differs from build folder structure
+**Status**: Needs investigation into how electron-builder packages backend-bundle
+
+---
+
+## Files Modified This Session
+
+### `backend/__main__.py` (CRITICAL FIX)
+Added `get_exe_dir()` function to distinguish between:
+- `bundle_dir`: Temp folder where PyInstaller extracts files (`sys._MEIPASS`)
+- `exe_dir`: Actual directory where the `.exe` is located (`os.path.dirname(sys.executable)`)
+
+Modified to load `.env` from `exe_dir` instead of `bundle_dir`.
+
+### `backend/certify_backend.spec`
+- Added PIL to `hiddenimports`: `'PIL'`, `'PIL._imaging'`, `'PIL.Image'`
+- Removed PIL from `excludes` list
+
+### Other files from earlier in session:
+- `desktop-app/package.json` - Version 2.0.1, artifact naming
+- `.github/workflows/build-release.yml` - Release configuration
+- `README.md` - Comprehensive documentation
+- `docs/DESKTOP_APP_BUILD_PLAN.md` - Version conventions
+
+---
+
+## User's Environment
+
+- **OS**: Windows 10/11
+- **Python**: 3.14.2
+- **Node.js**: v24.13.0
+- **Git**: 2.52.0
+- **PyInstaller**: Installed via pip
+- **electron-builder**: 24.13.3
+- **Electron**: 28.3.3
+
+---
+
+## User's API Keys (Configured)
+
+```
+SECRET_KEY=certify-intel-prod-secret-key-2026-xK9mN2pL
+AI_PROVIDER=hybrid
+OPENAI_API_KEY=sk-proj-XeJdkFBbWOjsK3F... (configured)
+GOOGLE_API_KEY=AIzaSyCmkjdGbkKjXcL... (configured)
+GOOGLE_CX=840c244744f8f47ab (configured)
+DATABASE_URL=sqlite:///./certify_intel.db
+```
+
+---
+
+## Next Steps to Resolve (For Future Session)
+
+### Investigation Needed
+1. **Examine installed app structure**
+   - Where does electron-builder put `backend-bundle/` after installation?
+   - Is it in `resources/app.asar.unpacked/`?
+   - Is the `.env` file included in the package?
+
+2. **Check Electron main.js**
+   - How does it spawn the backend process?
+   - What working directory does it use?
+   - Does it pass the correct path to backend exe?
+
+3. **Verify backend-bundle in package**
+   - Check `desktop-app/package.json` build configuration
+   - Ensure `backend-bundle` is in `extraResources` or `files`
+   - Verify `.env` file is not being excluded
+
+### Potential Fixes
+1. **Bundle .env into the PyInstaller exe**
+   - Add `.env` to `datas` in spec file
+   - Backend reads from bundled .env first, then exe_dir
+
+2. **Create .env at install time**
+   - Electron's first-run setup wizard creates `.env`
+   - Store in app data directory
+
+3. **Use app data directory**
+   - Store `.env` and database in `%APPDATA%/Certify Intel/`
+   - Works across updates and reinstalls
+
+4. **Environment variables in Electron**
+   - Pass config via environment variables when spawning backend
+   - Electron reads config and passes to child process
+
+---
+
+## Build Commands Reference
+
+### Build Backend Executable
+```bash
+cd /c/Users/conno/Downloads/Project_Intel_v4/backend
+python -m PyInstaller certify_backend.spec --clean --noconfirm
+```
+
+### Copy Files to backend-bundle
+```bash
+cp backend/dist/certify_backend.exe desktop-app/backend-bundle/
+cp backend/certify_intel.db desktop-app/backend-bundle/
+# Create .env in backend-bundle with required keys
+```
+
+### Build Electron Installer (Windows)
+```bash
+cd desktop-app
+npm run build:win
+```
+
+### Test Backend Manually
+```bash
+cd desktop-app/backend-bundle
+./certify_backend.exe
+# Should show: SECRET_KEY loaded: Yes
+```
+
+---
+
+## Previous Session Summary - 2026-01-25 (Earlier)
+
+### What Was Accomplished
+- ✅ Desktop App Release Configuration (v2.0.1)
+- ✅ Comprehensive Documentation Update
+- ✅ Fixed `.env` loading from executable directory
+- ✅ Fixed PIL missing module error
+- ✅ Backend works when run manually from backend-bundle
+- ✅ Installer builds successfully
+
+### What Remains Blocked
+- ❌ Installed app fails to start backend
+- ❌ Need to investigate Electron + installed backend path issues
 
 ---
 
 ## Previous Session Summary - 2026-01-24 ✅ COMPLETE
 
 **Date**: January 24, 2026
-**Status**: 🟢 **PRODUCTION READY**
+**Status**: 🟢 **PRODUCTION READY** (web version)
 **Session Type**: Complete Development & Testing Cycle
 
 ### What Was Accomplished
@@ -244,6 +348,8 @@
 Project_Intel_v4/
 ├── backend/                          # FastAPI Python backend (~8,651 lines)
 │   ├── main.py                      # App entry point (3,164 lines)
+│   ├── __main__.py                  # PyInstaller entry point (MODIFIED)
+│   ├── certify_backend.spec         # PyInstaller spec (MODIFIED)
 │   ├── database.py                  # SQLAlchemy ORM models (11 tables)
 │   ├── analytics.py                 # Data analysis engine (807 lines)
 │   ├── extended_features.py         # Auth, caching, advanced features
@@ -254,15 +360,6 @@ Project_Intel_v4/
 │   ├── extractor.py                 # GPT-4 data extraction
 │   ├── scraper.py                   # Base Playwright scraper class
 │   ├── [15+ Specialized Scrapers]   # Domain-specific collectors
-│   │   ├── crunchbase_scraper.py
-│   │   ├── glassdoor_scraper.py
-│   │   ├── sec_edgar_scraper.py
-│   │   ├── klas_scraper.py
-│   │   ├── appstore_scraper.py
-│   │   ├── pitchbook_scraper.py
-│   │   ├── himss_scraper.py
-│   │   └── ...more
-│   ├── seed_db.py                   # Initial data loading
 │   ├── certify_intel.db             # SQLite database (471KB)
 │   ├── requirements.txt             # Python dependencies
 │   ├── .env.example                 # Configuration template
@@ -273,166 +370,34 @@ Project_Intel_v4/
 │   ├── login.html                   # Authentication UI
 │   ├── app_v2.js                    # Core logic (4,084 lines)
 │   ├── styles.css                   # Styling (46,758 bytes)
-│   ├── mobile-responsive.css        # Mobile optimization
-│   ├── enhanced_analytics.js        # Advanced charting
-│   ├── visualizations.js            # Chart.js integration
-│   ├── service-worker.js            # PWA offline support
-│   ├── manifest.json                # PWA configuration
-│   └── static/                      # Assets
+│   └── ...
 │
 ├── desktop-app/                      # Electron wrapper
 │   ├── electron/
 │   │   ├── main.js                  # Electron main process
 │   │   ├── preload.js               # Security bridge
-│   │   ├── splash.html              # Loading screen
-│   │   └── setup-wizard.html        # First-run setup
-│   ├── package.json                 # Build config
-│   ├── resources/icons/             # App icons
-│   ├── build-windows.bat            # Windows build
-│   └── build-mac.sh                 # macOS build
+│   │   └── ...
+│   ├── backend-bundle/              # Contains backend exe, .env, db
+│   ├── package.json                 # Build config (v2.0.1)
+│   └── ...
 │
 └── client_docs/                      # Documentation & templates
-    └── Certify Health Material/
 ```
 
 ---
 
-## Database Schema (11 Core Tables)
+## Alternative: Run Web Version (Works Now)
 
-1. **competitors** - Main competitor records (30+ fields each)
-2. **change_log** - Change tracking and alerts
-3. **data_sources** - Source attribution per field
-4. **data_change_history** - Audit log with user attribution
-5. **users** - User accounts with roles
-6. **system_prompts** - Dynamic AI prompts
-7. **knowledge_base** - Internal documents for RAG
-8. **system_settings** - Global configuration
-9. **win_loss_deals** - Competitive deal outcomes
-10. **webhooks** - Outbound webhook configuration
-11. Additional tracking tables for historical data and analytics
+While the desktop app is blocked, the **web version works perfectly**:
 
----
-
-## Key API Endpoints (40+)
-
-### Competitor Management
-- `GET/POST/PUT/DELETE /api/competitors` - CRUD operations
-- `POST /api/competitors/{id}/correct` - Manual corrections with audit trail
-
-### Analytics & Intelligence
-- `GET /api/analytics/summary` - Dashboard summary
-- `GET /api/analytics/executive-summary` - AI-generated briefing
-- `POST /api/analytics/chat` - Conversational AI
-- `GET /api/analytics/threats` - Threat analysis
-- `GET /api/analytics/market-share` - Market positioning
-
-### Data Quality
-- `GET /api/data-quality/scores` - Quality metrics
-- `GET /api/data-quality/stale` - Stale data detection
-- `POST /api/data-quality/verify/{id}` - Verification workflow
-
-### Discovery & Automation
-- `POST /api/discovery/run` - AI discovery agent
-- `POST /api/discovery/schedule` - Schedule scans
-- `GET /api/discovery/context` - Discovery context
-
-### Reporting & Export
-- `GET /api/export/excel` - Download Excel dashboard
-- `GET /api/export/json` - JSON for Power Query
-- `POST /api/alerts/send-digest` - Email alerts
-
-### Scraping
-- `POST /api/scrape/all` - Full refresh
-- `POST /api/scrape/{id}` - Single competitor scrape
-
----
-
-## Development Workflow
-
-### Getting Started
-
-1. **Backend Setup**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   cp .env.example .env
-   # Fill in OpenAI API key and other secrets in .env
-   python main.py  # Starts FastAPI on http://localhost:8000
-   ```
-
-2. **Frontend**
-   - Access via `http://localhost:8000` (frontend served by FastAPI)
-   - Or open `frontend/index.html` directly (requires backend running)
-
-3. **Desktop App** (optional)
-   ```bash
-   cd desktop-app
-   npm install
-   npm start  # Development
-   npm run build  # Build for distribution
-   ```
-
-### Configuration (backend/.env)
-- `OPENAI_API_KEY` - Required for AI features
-- `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` - Email alerts
-- `SLACK_WEBHOOK_URL` - Slack notifications (optional)
-- `TEAMS_WEBHOOK_URL` - Teams notifications (optional)
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` - SMS alerts (optional)
-- `DATABASE_URL` - SQLite or PostgreSQL
-- `SECRET_KEY` - JWT signing key
-- `DEBUG` - Debug mode (True/False)
-
----
-
-## Recent Development (Phase 2)
-
-The project is actively developed with recent commits focusing on:
-
-1. **UI Finalization** - Competitor card layout, modal fixes, news feed repair
-2. **Excel Export** - Data-validated export endpoint
-3. **Historical Data** - Seeding and trend analysis
-4. **Real SEC Data** - Live financial data fetching via yfinance
-5. **Automated Scheduling** - Daily backups and refresh jobs
-
----
-
-## Important Concepts & Patterns
-
-### Data Quality System
-- Every competitor field has a **quality score** and **freshness timestamp**
-- **Source attribution** tracks where each piece of data came from
-- **Stale data detection** identifies fields that need refresh
-- **Manual corrections** are logged with user, timestamp, and reason
-
-### Audit Trail
-- **data_change_history** table logs every modification
-- User attribution on all changes
-- Reason logging for manual corrections
-- Timestamp of verification for data quality
-
-### AI Integration
-- **GPT-4 Executive Summaries**: Auto-generated strategic briefings
-- **Discovery Agent**: AI-powered web scraping for emerging threats
-- **Conversational Analytics**: Chat interface for competitive analysis
-- **Dynamic Prompts**: System prompts stored in database for customization
-
-### Scraper Architecture
-- **Base Scraper Class**: `scraper.py` provides Playwright foundation
-- **Specialized Scrapers**: Domain-specific implementations for each source
-- **Data Extraction**: GPT-4 powered extraction for unstructured data
-- **Retry Logic**: Built-in resilience for web scraping
-
-### Role-Based Access Control (RBAC)
-- **Admin**: Full system access, user management, configuration
-- **Analyst**: Full data access, can create and modify intelligence
-- **Viewer**: Read-only access to dashboards and reports
-
-### Task Scheduling
-- **APScheduler**: Cron-based job scheduling
-- **Weekly Refresh**: Every Sunday 2 AM (full competitor scrape)
-- **Daily Check**: 6 AM (high-threat competitors only)
-- **Database Backups**: Daily automated backups
-- **Email Digests**: Automated summary reports
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your API keys
+python main.py
+# Open http://localhost:8000 in browser
+```
 
 ---
 
@@ -448,141 +413,19 @@ The project is actively developed with recent commits focusing on:
 
 ---
 
-## Common Tasks
-
-### Adding a New Scraper
-1. Create new file: `backend/[source]_scraper.py`
-2. Inherit from `Scraper` base class
-3. Implement scraping logic with Playwright
-4. Add GPT-4 extraction for unstructured data
-5. Register in `main.py` scraper routing
-6. Add to scheduler if needed
-
-### Adding a New API Endpoint
-1. Create route in `backend/main.py`
-2. Follow RESTful conventions
-3. Include authentication decorator (`@app.get`, `@require_auth`)
-4. Add data validation with Pydantic models
-5. Log changes to database for audit trail
-6. Return appropriate status codes
-
-### Generating Reports
-- **PDF**: Use `ReportLab` in `backend/reports.py`
-- **Excel**: Use `openpyxl` in `backend/reports.py`
-- **JSON**: Serialize models with `json` serialization
-
-### Managing Data Quality
-1. Check `data_quality/scores` endpoint
-2. Identify stale fields (freshness < threshold)
-3. Manually correct with `/competitors/{id}/correct`
-4. Verify data with `/data-quality/verify/{id}`
-5. Log reasons in `data_change_history`
-
----
-
-## Deployment Options
-
-### Browser-Based
-- Access via web browser (desktop, tablet, mobile)
-- Requires backend server running
-- Responsive design included
-
-### Desktop Application
-- Windows: Standalone `.exe` executable
-- macOS: `.dmg` installer
-- Backend bundled as child process
-- Auto-updates from GitHub Releases
-
-### Docker
-- Use included `Dockerfile` for containerization
-- Simplifies deployment across environments
-
-### White-Label (Version B)
-- Customizable branding template
-- Setup wizard for end-users
-- Separate build configuration
-
----
-
-## System Requirements
-
-**Development**
-- Python 3.9+
-- Node.js 18+ (for Electron desktop app)
-- OpenAI API key (GPT-4 required)
-- Git
-
-**Runtime**
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- Python runtime with FastAPI dependencies
-- SQLite (zero-config setup)
-
----
-
-## Troubleshooting & Tips
-
-### Common Issues
-
-**Backend won't start**
-- Verify `.env` file has `OPENAI_API_KEY`
-- Check Python version is 3.9+
-- Run `pip install -r requirements.txt` again
-- Check port 8000 isn't already in use
-
-**Scrapers failing**
-- Check internet connection
-- Verify OpenAI API key validity
-- Monitor API rate limits
-- Review logs in terminal
-
-**AI features not working**
-- Verify `OPENAI_API_KEY` in `.env`
-- Check OpenAI account has active API access
-- Monitor API usage and billing
-
-**Desktop app not launching**
-- Verify Node.js installed (`node --version`)
-- Run `npm install` in `desktop-app/`
-- Check backend is running before launching Electron
-
----
-
 ## Git Workflow
 
-**Current Branch**: `claude/add-claude-documentation-CzASg`
+**Current Branch**: `claude/review-and-plan-yxWoy`
 
 When pushing changes:
 ```bash
 git add .
 git commit -m "Clear, descriptive commit message"
-git push -u origin claude/add-claude-documentation-CzASg
+git push -u origin claude/review-and-plan-yxWoy
 ```
 
 ---
 
-## Next Steps & Contributing
-
-When working on new features:
-
-1. **Plan the task** - Understand requirements clearly
-2. **Read existing code** - Understand patterns and conventions
-3. **Write tests** - Especially for critical functionality
-4. **Follow patterns** - Match existing code style and architecture
-5. **Document changes** - Update this file if adding major features
-6. **Commit regularly** - Clear, descriptive commit messages
-
----
-
-## Questions?
-
-For questions about:
-- **Features**: Check `README.md` or client_docs
-- **Code patterns**: Review similar implementations in codebase
-- **Architecture**: See structure overview above
-- **Deployment**: Check docker/build configuration files
-
----
-
-*Last Updated: 2026-01-24*
-*Project Status: Phase 2 - Active Development*
-*Maturity Level: Production-Ready*
+*Last Updated: 2026-01-25*
+*Project Status: Desktop App BLOCKED, Web Version Production-Ready*
+*Maturity Level: Production-Ready (Web), In Development (Desktop)*
