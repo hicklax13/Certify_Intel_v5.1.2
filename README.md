@@ -2,9 +2,10 @@
 
 **Competitive Intelligence Platform for Healthcare Technology**
 
-![Version](https://img.shields.io/badge/version-2.0.1-blue)
+![Version](https://img.shields.io/badge/version-5.0.1-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Web-lightgrey)
 ![License](https://img.shields.io/badge/license-Proprietary-red)
+![Status](https://img.shields.io/badge/status-Production%20Ready-green)
 
 ---
 
@@ -186,26 +187,35 @@
 - Refresh prioritization
 - Quality alerts
 
-### 6. User Management & Security
+### 6. Multi-User System & Security
+
+**User Registration & Authentication**
+- Self-registration on login page
+- Admin can invite team members
+- JWT token-based authentication
+- Secure password hashing (SHA256 with salt)
 
 **Role-Based Access Control**
 | Role | Capabilities |
 |------|--------------|
-| **Admin** | Full system access, user management, configuration |
+| **Admin** | Full system access, user management, invite users |
 | **Analyst** | Full data access, create/modify intelligence, run scrapers |
 | **Viewer** | Read-only access to dashboards and reports |
 
-**Authentication**
-- JWT token-based authentication
-- Secure password hashing (SHA256 with salt)
-- Session management
-- API key support for integrations
+**Data Isolation**
+| Data Type | Scope |
+|-----------|-------|
+| Competitors | Shared - all users see same data |
+| Knowledge Base | Shared - updates visible to everyone |
+| AI Prompts | Personal - each user customizes their own |
+| Win/Loss Deals | Personal - each user tracks their own |
+| Settings | Personal - notification preferences per user |
 
-**Audit Logging**
-- Complete change history
-- User attribution on all modifications
-- Reason logging for manual corrections
-- Export audit logs for compliance
+**Activity Logging & Audit Trail**
+- All data changes logged with username and timestamp
+- "Refresh Data" button logs who triggered it
+- Activity logs shared across all users
+- Complete audit trail for compliance
 
 ### 7. Automated Scheduling
 
@@ -320,15 +330,31 @@
 
 ## Installation
 
-### Option 1: Desktop App (Recommended)
+### Option 1: Web Browser (Recommended)
 
-Download the latest installer from [GitHub Releases](https://github.com/hicklax13/Project_Intel_v4/releases):
+The web version is production-ready and recommended for most users.
+
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your configuration
+python main.py
+```
+
+Then open: http://localhost:8000
+
+### Option 2: Desktop App
+
+Download from [GitHub Releases](https://github.com/hicklax13/Project_Intel_v5.0.1/releases):
 
 | Platform | File | Requirements |
 |----------|------|--------------|
-| Windows | `20260125_Certify_Intel_v2.0.1_Setup.exe` | Windows 10/11 (64-bit) |
-| macOS (Intel) | `20260125_Certify_Intel_v2.0.1_x64.dmg` | macOS 11+ |
-| macOS (Apple Silicon) | `20260125_Certify_Intel_v2.0.1_arm64.dmg` | macOS 11+ (M1/M2/M3) |
+| Windows | `Certify_Intel_Setup.exe` | Windows 10/11 (64-bit) |
+| macOS (Intel) | `Certify_Intel_x64.dmg` | macOS 11+ |
+| macOS (Apple Silicon) | `Certify_Intel_arm64.dmg` | macOS 11+ (M1/M2/M3) |
+
+**Note**: Desktop app backend startup has a known issue. Use web version for now.
 
 **Windows Installation:**
 1. Download the `.exe` file
@@ -349,8 +375,8 @@ Access the dashboard directly at `http://localhost:8000` after starting the back
 
 ```bash
 # Clone the repository
-git clone https://github.com/hicklax13/Project_Intel_v4.git
-cd Project_Intel_v4
+git clone https://github.com/hicklax13/Project_Intel_v5.0.1.git
+cd Project_Intel_v5.0.1
 
 # Backend setup
 cd backend
@@ -607,11 +633,11 @@ Authorization: Bearer eyJ...
 
 2. **GitHub Actions** automatically builds Windows and macOS installers
 
-3. **Download from Releases**: https://github.com/hicklax13/Project_Intel_v4/releases
+3. **Download from Releases**: https://github.com/hicklax13/Project_Intel_v5.0.1/releases
 
 ### For Team Members
 
-1. Visit the [Releases page](https://github.com/hicklax13/Project_Intel_v4/releases)
+1. Visit the [Releases page](https://github.com/hicklax13/Project_Intel_v5.0.1/releases)
 2. Download the installer for your platform
 3. Install and run (bypass SmartScreen/Gatekeeper on first launch)
 4. App will auto-update when new versions are released
@@ -630,7 +656,7 @@ Authorization: Bearer eyJ...
 ### Project Structure
 
 ```
-Project_Intel_v4/
+Project_Intel_v5.0.1/
 ├── backend/                    # Python FastAPI backend (~8,651 lines)
 │   ├── main.py                # Application entry point (3,164 lines)
 │   ├── database.py            # SQLAlchemy models (11 tables)
@@ -781,9 +807,9 @@ Proprietary - Certify Health Internal Use Only
 
 - **Lead Developer**: Connor Hickey
 - **Organization**: Certify Health
-- **Repository**: [GitHub - Project_Intel_v4](https://github.com/hicklax13/Project_Intel_v4)
+- **Repository**: [GitHub - Project_Intel_v5.0.1](https://github.com/hicklax13/Project_Intel_v5.0.1)
 
 ---
 
 *Last Updated: January 25, 2026*
-*Version: 2.0.1*
+*Version: 5.0.1*

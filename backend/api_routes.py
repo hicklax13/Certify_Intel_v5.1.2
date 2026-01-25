@@ -61,12 +61,54 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     """Get current user info."""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     payload = auth_manager.verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     return {"email": payload.get("sub"), "role": payload.get("role")}
+
+
+# ============== User Registration ==============
+
+class UserRegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: Optional[str] = None
+
+@router.post("/api/auth/register")
+async def register_user(request: UserRegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user account."""
+    from database import User
+    import re
+
+    # Check if email already exists
+    existing = db.query(User).filter(User.email == request.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Validate email format
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", request.email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
+    # Validate password strength (minimum 8 characters)
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Create user with default "viewer" role
+    new_user = auth_manager.create_user(
+        db,
+        email=request.email,
+        password=request.password,
+        full_name=request.full_name or "",
+        role="viewer"
+    )
+
+    return {
+        "message": "Account created successfully. You can now log in.",
+        "email": new_user.email,
+        "role": new_user.role
+    }
 
 
 @router.get("/api/notifications")

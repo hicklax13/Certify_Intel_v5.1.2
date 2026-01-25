@@ -99,3 +99,25 @@ backend/build_log*.txt
 *.tmp
 *.temp
 *.bak
+
+# Additional security - sensitive files
+.env.*
+.env.local
+.env.production
+.env.development
+*.pem
+*.key
+credentials.json
+secrets.json
+config.local.json
+
+# Claude Code session files
+.claude/
+
+# Windows artifacts
+nul
+
+# Backup database files
+*.db-journal
+*.db-shm
+*.db-wal

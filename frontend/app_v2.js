@@ -73,6 +73,14 @@ async function setupUserMenu() {
             userNameEl.textContent = user.full_name || 'User';
             userEmailEl.textContent = user.email;
             userRoleEl.textContent = user.role || 'Analyst';
+
+            // Show invite link for admins
+            if (user.role === 'admin') {
+                const inviteLink = document.getElementById('inviteUserLink');
+                if (inviteLink) {
+                    inviteLink.style.display = 'flex';
+                }
+            }
         }
     } catch (e) {
         console.error('Error fetching user info:', e);
@@ -218,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
     loadCompetitors();
     setupUserMenu();
+    preloadPrompts(); // Preload AI prompts for instant access
 });
 
 function initNavigation() {
@@ -319,6 +328,32 @@ async function fetchAPI(endpoint, options = {}) {
 
 // ============== Dashboard ==============
 
+// Track last refresh time
+let lastDataRefresh = null;
+
+function updateRefreshTimestamp() {
+    lastDataRefresh = new Date();
+    const timeElement = document.getElementById('lastRefreshTime');
+    if (timeElement) {
+        // Format: "Sun, Jan 25, 2026, 03:08 PM EST"
+        const dateOptions = {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        };
+        const timeOptions = {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZoneName: 'short'
+        };
+        const datePart = lastDataRefresh.toLocaleDateString('en-US', dateOptions);
+        const timePart = lastDataRefresh.toLocaleTimeString('en-US', timeOptions);
+        timeElement.textContent = `${datePart}, ${timePart}`;
+    }
+}
+
 async function loadDashboard() {
     // Load stats
     stats = await fetchAPI('/api/dashboard/stats') || {};
@@ -338,6 +373,9 @@ async function loadDashboard() {
     // Render charts
     renderThreatChart();
     renderPricingChart();
+
+    // Update refresh timestamp
+    updateRefreshTimestamp();
 }
 
 
@@ -355,6 +393,26 @@ window.clearAISummary = function () {
     }
 
     if (metaDiv) metaDiv.innerHTML = '';
+};
+
+// Toggle AI Summary expand/collapse
+window.toggleAISummary = function() {
+    const summaryCard = document.getElementById('aiSummaryCard');
+    if (summaryCard) {
+        summaryCard.classList.toggle('collapsed');
+    }
+};
+
+// Toggle Sidebar collapse/expand
+window.toggleSidebarCollapse = function() {
+    const sidebar = document.getElementById('mainSidebar');
+    const mainContent = document.querySelector('.main-content');
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        if (mainContent) {
+            mainContent.classList.toggle('sidebar-collapsed');
+        }
+    }
 };
 
 // Make accessible to onclick
@@ -3874,6 +3932,81 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ============== AI Admin & Knowledge Base ==============
 
+// Default prompts embedded for instant loading
+const DEFAULT_PROMPTS = {
+    'dashboard_summary': `You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary using ONLY the LIVE data provided below.
+
+**CRITICAL - PROVE YOU ARE USING LIVE DATA:**
+- Start your summary with: "📊 **Live Intelligence Report** - Generated [TODAY'S DATE AND TIME]"
+- State the EXACT total number of competitors being tracked (e.g., "Currently monitoring **X competitors**")
+- Name at least 3-5 SPECIFIC competitor names from the data with their EXACT threat levels
+- Quote SPECIFIC numbers: funding amounts, employee counts, pricing figures directly from the data
+- Reference any recent changes or updates with their timestamps if available
+- If a competitor has specific data points (headquarters, founding year, etc.), cite them exactly
+
+**YOUR SUMMARY MUST INCLUDE:**
+
+1. **📈 Executive Overview**
+   - State exact competitor count and breakdown by threat level
+   - Name the top 3 high-threat competitors BY NAME
+
+2. **🎯 Threat Analysis**
+   - List HIGH threat competitors by name with why they're threats
+   - List MEDIUM threat competitors by name
+   - Provide specific threat justifications using their data
+
+3. **💰 Pricing Intelligence**
+   - Name competitors with known pricing and their EXACT pricing models
+   - Compare specific price points where available
+
+4. **📊 Market Trends**
+   - Reference specific data points that indicate trends
+   - Name competitors showing growth signals
+
+5. **✅ Strategic Recommendations**
+   - 3-5 specific, actionable recommendations
+   - Reference specific competitors in each recommendation
+
+6. **👁️ Watch List**
+   - Name the top 5 competitors requiring immediate attention
+   - State WHY each is on the watch list with specific data
+
+**IMPORTANT:** Every claim must reference actual data provided. Do NOT make up or assume any information. If data is missing, say "Data not available" rather than guessing.`,
+    'chat_persona': 'You are a competitive intelligence analyst for Certify Health. Always reference specific data points and competitor names when answering questions. Cite exact numbers and dates when available.'
+};
+
+// Prompt cache for instant loading - initialize from localStorage first, then defaults
+const PROMPT_STORAGE_KEY = 'certify_intel_prompts';
+
+// Load cached prompts from localStorage immediately (synchronous, instant)
+function loadPromptsFromStorage() {
+    try {
+        const stored = localStorage.getItem(PROMPT_STORAGE_KEY);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+    } catch (e) {
+        console.log('Could not load prompts from localStorage');
+    }
+    return {};
+}
+
+// Save prompts to localStorage for instant access
+function savePromptsToStorage(prompts) {
+    try {
+        localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(prompts));
+    } catch (e) {
+        console.log('Could not save prompts to localStorage');
+    }
+}
+
+// Initialize cache: localStorage first, then defaults as fallback
+const storedPrompts = loadPromptsFromStorage();
+const promptCache = {
+    ...DEFAULT_PROMPTS,  // Defaults as base
+    ...storedPrompts     // Override with any stored values
+};
+
 function openPromptEditor() {
     const modal = document.getElementById('promptModal');
     if (modal) modal.classList.add('active');
@@ -3889,21 +4022,43 @@ function closePromptModal() {
 async function loadPromptContent() {
     const key = document.getElementById('promptKeySelector').value;
     const editor = document.getElementById('promptContentEditor');
-    editor.value = "Loading...";
 
+    // INSTANT load from cache (localStorage + defaults) - no waiting
+    editor.value = promptCache[key] || DEFAULT_PROMPTS[key] || '';
+
+    // Fetch latest from server in background with timeout (max 2 seconds)
+    // This ensures we stay under 3 seconds even if server is slow
     try {
-        const response = await fetchAPI(`/api/admin/system-prompts/${key}`);
-        if (response) {
-            editor.value = response.content;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        const response = await fetchAPI(`/api/admin/system-prompts/${key}`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (response && response.content) {
+            // Only update display if different AND user hasn't started typing
+            if (response.content !== editor.value && document.activeElement !== editor) {
+                editor.value = response.content;
+            }
+            // Always update cache and localStorage
+            promptCache[key] = response.content;
+            savePromptsToStorage(promptCache);
         }
     } catch (e) {
-        editor.value = "Error loading prompt.";
+        // Timeout or error - just use cached value (already displayed)
+        console.log('Using cached prompt (server fetch skipped or timed out)');
     }
 }
 
 async function savePromptContent() {
     const key = document.getElementById('promptKeySelector').value;
     const content = document.getElementById('promptContentEditor').value;
+
+    // Update cache and localStorage IMMEDIATELY before server call
+    promptCache[key] = content;
+    savePromptsToStorage(promptCache);
 
     const result = await fetchAPI('/api/admin/system-prompts', {
         method: 'POST',
@@ -3916,6 +4071,30 @@ async function savePromptContent() {
         status.style.display = 'inline-block';
         setTimeout(() => status.style.display = 'none', 3000);
     }
+}
+
+// Preload prompts on page load to sync with server (background task)
+async function preloadPrompts() {
+    const keys = ['dashboard_summary', 'chat_persona'];
+    for (const key of keys) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+            const response = await fetchAPI(`/api/admin/system-prompts/${key}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (response && response.content) {
+                promptCache[key] = response.content;
+            }
+        } catch (e) {
+            console.log(`Could not preload prompt: ${key}`);
+        }
+    }
+    // Save any fetched prompts to localStorage for next time
+    savePromptsToStorage(promptCache);
 }
 
 function openKnowledgeBase() {

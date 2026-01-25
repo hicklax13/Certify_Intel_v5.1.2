@@ -67,25 +67,44 @@ import himss_scraper
 # Database setup - SQLite for simplicity
 # Database setup
 
-from database import engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource, DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem
+from database import engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource, DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem, UserSettings, ActivityLog
 
 # Auth imports for route protection
 from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    """Verify JWT token and return current user. Raises 401 if invalid/missing."""
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Verify JWT token and return current user with ID. Raises 401 if invalid/missing."""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     # Import here to avoid circular import
     from extended_features import auth_manager
-    
+
     payload = auth_manager.verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    return {"email": payload.get("sub"), "role": payload.get("role")}
+
+    # Get user ID from database
+    user = db.query(User).filter(User.email == payload.get("sub")).first()
+    user_id = user.id if user else None
+
+    return {"id": user_id, "email": payload.get("sub"), "role": payload.get("role")}
+
+
+def log_activity(db: Session, user_email: str, user_id: int, action_type: str, action_details: str = None):
+    """Log a user activity to the activity_logs table (shared across all users)."""
+    import json
+    activity = ActivityLog(
+        user_id=user_id,
+        user_email=user_email,
+        action_type=action_type,
+        action_details=action_details if isinstance(action_details, str) else json.dumps(action_details) if action_details else None
+    )
+    db.add(activity)
+    db.commit()
+    return activity
+
 
 # White fill for Excel cells
 WHITE_FILL = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
@@ -412,34 +431,92 @@ TOP HIGH-THREAT COMPETITORS: {', '.join(top_threats) if top_threats else 'None i
 PRICING MODEL DISTRIBUTION:
 {chr(10).join(f'- {model}: {count} competitors' for model, count in pricing_models.items())}
 
-DETAILED COMPETITOR DATA (ALL ACTIVE COMPETITORS):
+DETAILED COMPETITOR DATA (ALL {total} ACTIVE COMPETITORS):
 """
         # INCLUDED ALL COMPETITORS (No limit) for maximum context
-        for c in competitors: 
+        for i, c in enumerate(competitors, 1):
             data_summary += f"""
----
-COMPETITOR: {c.name}
-THREAT: {c.threat_level}
+--- COMPETITOR #{i} of {total} ---
+NAME: {c.name}
+THREAT LEVEL: {c.threat_level}
+STATUS: {c.status or 'Active'}
 WEBSITE: {c.website or 'N/A'}
-PRICING: {c.base_price or 'N/A'} ({c.pricing_model or 'Unknown Model'})
-OFFERING: {c.product_categories or 'N/A'}
-FEATURES: {c.key_features or 'N/A'}
-CUSTOMERS: {c.customer_count or 'N/A'}
-EMPLOYEES: {c.employee_count or 'N/A'}
-FOUNDED: {c.year_founded or 'N/A'}
-NOTES: {c.notes or ''}
----
+LAST UPDATED: {c.last_updated.strftime('%Y-%m-%d %H:%M') if c.last_updated else 'N/A'}
+DATA QUALITY SCORE: {c.data_quality_score or 'N/A'}/100
+
+PRICING INFO:
+- Model: {c.pricing_model or 'Unknown'}
+- Base Price: {c.base_price or 'N/A'}
+- Price Unit: {c.price_unit or 'N/A'}
+
+PRODUCT INFO:
+- Categories: {c.product_categories or 'N/A'}
+- Key Features: {c.key_features or 'N/A'}
+- Integrations: {c.integration_partners or 'N/A'}
+- Certifications: {c.certifications or 'N/A'}
+
+MARKET INFO:
+- Target Segments: {c.target_segments or 'N/A'}
+- Customer Size Focus: {c.customer_size_focus or 'N/A'}
+- Geographic Focus: {c.geographic_focus or 'N/A'}
+- Customer Count: {c.customer_count or 'N/A'}
+- Key Customers: {c.key_customers or 'N/A'}
+- G2 Rating: {c.g2_rating or 'N/A'}
+
+COMPANY INFO:
+- Headquarters: {c.headquarters or 'N/A'}
+- Founded: {c.year_founded or 'N/A'}
+- Employees: {c.employee_count or 'N/A'}
+- Employee Growth: {c.employee_growth_rate or 'N/A'}
+- Total Funding: {c.funding_total or 'N/A'}
+- Latest Round: {c.latest_round or 'N/A'}
+- Is Public: {'Yes' if c.is_public else 'No (Private)'}
+"""
+            # Add live stock data for public companies
+            if c.is_public and c.ticker_symbol:
+                stock_info = fetch_real_stock_data(c.ticker_symbol)
+                if stock_info and stock_info.get('price'):
+                    change_sign = '+' if stock_info.get('change', 0) >= 0 else ''
+                    data_summary += f"""
+STOCK DATA (LIVE):
+- Ticker: {c.ticker_symbol} ({c.stock_exchange or 'NYSE'})
+- Current Price: ${stock_info.get('price', 0):.2f}
+- Daily Change: {change_sign}{stock_info.get('change', 0):.2f} ({change_sign}{stock_info.get('change_percent', 0):.2f}%)
+- Market Cap: ${stock_info.get('market_cap', 0):,.0f}
+- 52-Week High: ${stock_info.get('high52', 'N/A')}
+- 52-Week Low: ${stock_info.get('low52', 'N/A')}
+"""
+                else:
+                    data_summary += f"""
+STOCK DATA:
+- Ticker: {c.ticker_symbol} ({c.stock_exchange or 'NYSE'})
+- Stock Price: Data unavailable
+"""
+
+            data_summary += f"""
+NOTES: {c.notes or 'None'}
+--- END {c.name} ---
 """
 
         # Try OpenAI first
         api_key = os.getenv("OPENAI_API_KEY")
-        model_used = "gpt-4-turbo"
+        model_used = "gpt-4.1"
         provider = "OpenAI"
         
         if api_key:
             try:
-                # Fetch dynamic system prompt
-                prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "dashboard_summary").first()
+                # Fetch dynamic system prompt (user-specific first, then global fallback)
+                user_id = current_user.get("id") if current_user else None
+                prompt_db = db.query(SystemPrompt).filter(
+                    SystemPrompt.key == "dashboard_summary",
+                    SystemPrompt.user_id == user_id
+                ).first()
+                if not prompt_db:
+                    # Fallback to global prompt (user_id=NULL)
+                    prompt_db = db.query(SystemPrompt).filter(
+                        SystemPrompt.key == "dashboard_summary",
+                        SystemPrompt.user_id == None
+                    ).first()
                 system_content = prompt_db.content if prompt_db else """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary. 
 
 Your summary MUST include:
@@ -529,7 +606,7 @@ Top competitors requiring immediate attention: {', '.join(top_threats) if top_th
 
 
 @app.post("/api/analytics/chat")
-def chat_with_summary(request: dict, db: Session = Depends(get_db)):
+def chat_with_summary(request: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Chat with AI about the competitive intelligence data."""
     try:
         import os
@@ -561,7 +638,8 @@ COMPETITORS:
 """
         # Include ALL competitors in chat context too
         for c in competitors:
-             context += f"""
+            # Build base competitor info
+            comp_info = f"""
 ---
 COMPETITOR: {c.name}
 THREAT: {c.threat_level}
@@ -569,18 +647,60 @@ WEBSITE: {c.website or 'N/A'}
 PRICING: {c.base_price or 'N/A'} ({c.pricing_model or 'Unknown Model'})
 OFFERING: {c.product_categories or 'N/A'}
 FEATURES: {c.key_features or 'N/A'}
-NOTES: {c.notes or ''}
----
+EMPLOYEES: {c.employee_count or 'N/A'}
+G2 RATING: {c.g2_rating or 'N/A'}
 """
+            # Add stock data for public companies
+            if c.is_public and c.ticker_symbol:
+                stock_data = fetch_real_stock_data(c.ticker_symbol)
+                if stock_data and stock_data.get('price'):
+                    change_sign = '+' if stock_data.get('change', 0) >= 0 else ''
+                    comp_info += f"""PUBLIC COMPANY: Yes
+STOCK TICKER: {c.ticker_symbol} ({c.stock_exchange or 'NYSE'})
+CURRENT STOCK PRICE: ${stock_data.get('price', 'N/A'):.2f}
+PRICE CHANGE: {change_sign}{stock_data.get('change', 0):.2f} ({change_sign}{stock_data.get('change_percent', 0):.2f}%)
+MARKET CAP: ${stock_data.get('market_cap', 0):,.0f}
+52-WEEK HIGH: ${stock_data.get('high52', 'N/A')}
+52-WEEK LOW: ${stock_data.get('low52', 'N/A')}
+"""
+                else:
+                    comp_info += f"""PUBLIC COMPANY: Yes
+STOCK TICKER: {c.ticker_symbol} ({c.stock_exchange or 'NYSE'})
+STOCK DATA: Unable to fetch live data
+"""
+            else:
+                comp_info += f"PUBLIC COMPANY: No (Private)\n"
+
+            comp_info += f"NOTES: {c.notes or ''}\n---\n"
+            context += comp_info
 
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
-            # Fetch Chat Persona
-            prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "chat_persona").first()
+            # Get user ID for personalized prompts
+            user_id = current_user.get("id") if current_user else None
+
+            # Fetch Chat Persona (user-specific first, then global fallback)
+            prompt_db = db.query(SystemPrompt).filter(
+                SystemPrompt.key == "chat_persona",
+                SystemPrompt.user_id == user_id
+            ).first()
+            if not prompt_db:
+                prompt_db = db.query(SystemPrompt).filter(
+                    SystemPrompt.key == "chat_persona",
+                    SystemPrompt.user_id == None
+                ).first()
             base_persona = prompt_db.content if prompt_db else "You are a competitive intelligence analyst for Certify Health."
-            
-            # Fetch Summary Prompt (Context alignment)
-            summary_prompt_db = db.query(SystemPrompt).filter(SystemPrompt.key == "dashboard_summary").first()
+
+            # Fetch Summary Prompt (user-specific first, then global fallback)
+            summary_prompt_db = db.query(SystemPrompt).filter(
+                SystemPrompt.key == "dashboard_summary",
+                SystemPrompt.user_id == user_id
+            ).first()
+            if not summary_prompt_db:
+                summary_prompt_db = db.query(SystemPrompt).filter(
+                    SystemPrompt.key == "dashboard_summary",
+                    SystemPrompt.user_id == None
+                ).first()
             summary_instructions = summary_prompt_db.content if summary_prompt_db else "Focus on strategic insights."
 
             # RAG: Inject Knowledge Base
@@ -599,11 +719,14 @@ The user has defined the following strategy for the Dashboard Summary. Use this 
 "{summary_instructions}"
 
 CRITICAL INSTRUCTION:
-You have access to a LIVE database of competitors below. 
+You have access to a LIVE database of competitors below with REAL-TIME STOCK DATA for public companies.
 - If the user asks for a website, LOOK at the 'WEBSITE' field for that competitor and provide it.
 - If the user asks for pricing details, LOOK at the 'PRICING' field.
-- Do NOT say "I cannot browse the web" if the answer is in the data below.
-- Do NOT say "I am working with hypothetical data". This IS the live data.
+- If the user asks about stock prices, market cap, or financial data for PUBLIC COMPANIES, LOOK at the 'STOCK' fields (CURRENT STOCK PRICE, MARKET CAP, PRICE CHANGE, etc.).
+- For public companies, you have LIVE stock data including: current price, daily change, market cap, 52-week high/low.
+- Do NOT say "I cannot browse the web" or "I don't have access to real-time stock data" if the answer is in the data below.
+- Do NOT say "I am working with hypothetical data". This IS the live, real-time data from the Certify Intel platform.
+- When asked about a public company's stock, provide the EXACT values from the data (e.g., "Phreesia (PHR) is currently trading at $15.84, up +0.3%").
 
 LIVE DATA CONTEXT:
 {context}
@@ -613,7 +736,7 @@ LIVE DATA CONTEXT:
 
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
-                model="gpt-4-turbo",
+                model="gpt-4.1",
                 messages=[
                     {"role": "system", "content": full_system_content},
                     {"role": "user", "content": user_message}
@@ -891,7 +1014,91 @@ def get_competitor_change_history(competitor_id: int, db: Session = Depends(get_
     changes = db.query(DataChangeHistory).filter(
         DataChangeHistory.competitor_id == competitor_id
     ).order_by(DataChangeHistory.changed_at.desc()).limit(100).all()
-    
+
+    return {
+        "competitor_id": competitor_id,
+        "total": len(changes),
+        "changes": [
+            {
+                "id": c.id,
+                "field": c.field_name,
+                "old_value": c.old_value,
+                "new_value": c.new_value,
+                "changed_by": c.changed_by,
+                "reason": c.change_reason,
+                "source_url": c.source_url,
+                "changed_at": c.changed_at.isoformat() if c.changed_at else None
+            }
+            for c in changes
+        ]
+    }
+
+
+# ============== ACTIVITY LOGS ENDPOINTS (Shared across all users) ==============
+
+@app.get("/api/activity-logs")
+def get_activity_logs(
+    action_type: str = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get activity logs showing who made changes and when (visible to all users)."""
+    query = db.query(ActivityLog)
+
+    if action_type:
+        query = query.filter(ActivityLog.action_type == action_type)
+
+    logs = query.order_by(ActivityLog.created_at.desc()).limit(limit).all()
+
+    return {
+        "total": len(logs),
+        "logs": [
+            {
+                "id": log.id,
+                "user_email": log.user_email,
+                "action_type": log.action_type,
+                "action_details": log.action_details,
+                "created_at": log.created_at.isoformat() if log.created_at else None
+            }
+            for log in logs
+        ]
+    }
+
+
+@app.get("/api/activity-logs/summary")
+def get_activity_summary(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get summary of recent activity by user and action type."""
+    from sqlalchemy import func
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    # Get activity counts by user
+    user_activity = db.query(
+        ActivityLog.user_email,
+        func.count(ActivityLog.id).label("action_count")
+    ).filter(
+        ActivityLog.created_at >= cutoff
+    ).group_by(ActivityLog.user_email).all()
+
+    # Get activity counts by type
+    type_activity = db.query(
+        ActivityLog.action_type,
+        func.count(ActivityLog.id).label("action_count")
+    ).filter(
+        ActivityLog.created_at >= cutoff
+    ).group_by(ActivityLog.action_type).all()
+
+    return {
+        "period_days": days,
+        "by_user": [{"user": u[0], "count": u[1]} for u in user_activity],
+        "by_type": [{"type": t[0], "count": t[1]} for t in type_activity]
+    }
+
 
 # ============== DISCOVERY ENGINE ENDPOINTS ==============
 
@@ -952,7 +1159,7 @@ def refine_discovery_context(request: dict, current_user: dict = Depends(get_cur
         Return ONLY the updated JSON. Do not return markdown formatting."""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Current Profile: {json.dumps(current_context)}\n\nUser Request: {user_input}\n\nUpdate the profile:"}
@@ -1234,7 +1441,7 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db), curr
 @app.post("/api/competitors", response_model=CompetitorResponse)
 async def create_competitor(competitor: CompetitorCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     db_competitor = Competitor(**competitor.model_dump())
-    
+
     # Auto-classify Public/Private
     comp_lower = db_competitor.name.lower()
     if comp_lower in KNOWN_TICKERS:
@@ -1242,10 +1449,19 @@ async def create_competitor(competitor: CompetitorCreate, db: Session = Depends(
         db_competitor.is_public = True
         db_competitor.ticker_symbol = info["symbol"]
         db_competitor.stock_exchange = info["exchange"]
-        
+
     db.add(db_competitor)
     db.commit()
     db.refresh(db_competitor)
+
+    # Log the competitor creation
+    user_email = current_user.get("email", "unknown")
+    log_activity(
+        db, user_email, current_user.get("id"),
+        "competitor_create",
+        {"competitor_id": db_competitor.id, "competitor_name": db_competitor.name}
+    )
+
     return db_competitor
 
 
@@ -1254,11 +1470,44 @@ async def update_competitor(competitor_id: int, competitor: CompetitorCreate, db
     db_competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not db_competitor:
         raise HTTPException(status_code=404, detail="Competitor not found")
-    
+
+    # Track all field changes for audit log
+    changes_made = []
+    user_email = current_user.get("email", "unknown")
+
     for key, value in competitor.model_dump().items():
+        old_value = getattr(db_competitor, key, None)
+        # Only log if value actually changed
+        if str(old_value) != str(value) and value is not None:
+            changes_made.append({
+                "field": key,
+                "old_value": str(old_value) if old_value else None,
+                "new_value": str(value)
+            })
+            # Log each change to DataChangeHistory
+            change_record = DataChangeHistory(
+                competitor_id=competitor_id,
+                competitor_name=db_competitor.name,
+                field_name=key,
+                old_value=str(old_value) if old_value else None,
+                new_value=str(value),
+                changed_by=user_email,
+                change_reason="Manual update via UI"
+            )
+            db.add(change_record)
+
         setattr(db_competitor, key, value)
+
     db_competitor.last_updated = datetime.utcnow()
-    
+
+    # Log activity if changes were made
+    if changes_made:
+        log_activity(
+            db, user_email, current_user.get("id"),
+            "competitor_update",
+            {"competitor_id": competitor_id, "competitor_name": db_competitor.name, "changes_count": len(changes_made)}
+        )
+
     db.commit()
     db.refresh(db_competitor)
     return db_competitor
@@ -1269,10 +1518,20 @@ async def delete_competitor(competitor_id: int, db: Session = Depends(get_db), c
     db_competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not db_competitor:
         raise HTTPException(status_code=404, detail="Competitor not found")
-    
+
+    competitor_name = db_competitor.name
     db_competitor.is_deleted = True
+
+    # Log the deletion
+    user_email = current_user.get("email", "unknown")
+    log_activity(
+        db, user_email, current_user.get("id"),
+        "competitor_delete",
+        {"competitor_id": competitor_id, "competitor_name": competitor_name}
+    )
+
     db.commit()
-    return {"message": "Competitor deleted"}
+    return {"message": "Competitor deleted", "deleted_by": user_email}
 
 
 @app.post("/api/competitors/{competitor_id}/correct")
@@ -1777,7 +2036,7 @@ async def get_swot_analysis(competitor_id: int, db: Session = Depends(get_db)):
         """
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": "You are a competitive strategy expert. Generate a strict JSON SWOT analysis with 3-4 bullet points per section."},
                 {"role": "user", "content": context}
@@ -2617,24 +2876,40 @@ def get_most_competitive(limit: int = 5):
 
 
 @app.get("/api/scrape/all")
-async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def trigger_scrape_all(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """Trigger a live refresh of all competitor data."""
     from refresh_orchestrator import refresh_orchestrator
-    
+
+    # Log the refresh action with user info
+    user_email = current_user.get("email", "unknown")
+    user_id = current_user.get("id")
+
     # Count competitors for immediate response
     count = db.query(Competitor).filter(Competitor.is_deleted == False).count()
-    
+
+    # Log this activity (shared across all users)
+    log_activity(
+        db, user_email, user_id,
+        "data_refresh",
+        {"action": "full_refresh", "competitor_count": count, "triggered_by": user_email}
+    )
+
     # Run full refresh in background
     async def run_refresh():
         result = await refresh_orchestrator.refresh_all(priority_order=False)
         print(f"Refresh complete: {result}")
-    
+
     background_tasks.add_task(asyncio.create_task, run_refresh())
-    
+
     return {
-        "success": True, 
-        "message": f"Live refresh started for {count} competitors",
+        "success": True,
+        "message": f"Live refresh started for {count} competitors by {user_email}",
         "count": count,
+        "triggered_by": user_email,
         "note": "Check /api/refresh/history for results"
     }
 
@@ -2881,28 +3156,23 @@ def get_users(db: Session = Depends(get_db)):
 @app.post("/api/users/invite")
 def invite_user(invite: UserInviteRequest, db: Session = Depends(get_db)):
     """Invite a new user (creates account with default password)."""
+    from extended_features import auth_manager
+
     existing = db.query(User).filter(User.email == invite.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
-    
-    # In a real app, generate a token and email it. 
-    # Here, we create with a default password for the demo.
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-    hashed_password = pwd_context.hash("Welcome123!")
-    
-    new_user = User(
+
+    # Create user with default password using auth_manager for consistent hashing
+    default_password = "Welcome123!"
+    new_user = auth_manager.create_user(
+        db,
         email=invite.email,
-        full_name=invite.full_name,
-        role=invite.role,
-        hashed_password=hashed_password,
-        is_active=True
+        password=default_password,
+        full_name=invite.full_name or "",
+        role=invite.role
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    return {"message": f"User {invite.email} invited successfully. Default password: Welcome123!"}
+
+    return {"message": f"User {invite.email} invited successfully. Default password: {default_password}"}
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
@@ -3186,41 +3456,90 @@ app.include_router(analytics_router)
 # ============== Admin & AI Control Endpoints ==============
 
 @app.get("/api/admin/system-prompts/{key}", response_model=SystemPromptResponse)
-def get_system_prompt(key: str, db: Session = Depends(get_db)):
-    """Get a system prompt by key."""
-    prompt = db.query(SystemPrompt).filter(SystemPrompt.key == key).first()
+def get_system_prompt(key: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Get a system prompt by key (user-specific first, then global fallback)."""
+    user_id = current_user.get("id") if current_user else None
+
+    # Try user-specific prompt first
+    prompt = db.query(SystemPrompt).filter(
+        SystemPrompt.key == key,
+        SystemPrompt.user_id == user_id
+    ).first()
+
+    # Fallback to global prompt if no user-specific one
+    if not prompt:
+        prompt = db.query(SystemPrompt).filter(
+            SystemPrompt.key == key,
+            SystemPrompt.user_id == None
+        ).first()
+
     if not prompt:
         # Return default if not found
         default_content = ""
         if key == "dashboard_summary":
-            default_content = """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary. 
+            default_content = """You are Certify Health's competitive intelligence analyst. Generate a comprehensive, executive-level strategic summary using ONLY the LIVE data provided below.
 
-Your summary MUST include:
-1. **Executive Overview** - High-level market position assessment
-2. **Threat Analysis** - Breakdown of competitive landscape by threat level
-3. **Pricing Intelligence** - Analysis of competitor pricing strategies
-4. **Market Trends** - Emerging patterns and shifts
-5. **Strategic Recommendations** - 3-5 specific, actionable recommendations
-6. **Watch List** - Key competitors requiring immediate attention
+**CRITICAL - PROVE YOU ARE USING LIVE DATA:**
+- Start your summary with: "📊 **Live Intelligence Report** - Generated [TODAY'S DATE AND TIME]"
+- State the EXACT total number of competitors being tracked (e.g., "Currently monitoring **X competitors**")
+- Name at least 3-5 SPECIFIC competitor names from the data with their EXACT threat levels
+- Quote SPECIFIC numbers: funding amounts, employee counts, pricing figures directly from the data
+- Reference any recent changes or updates with their timestamps if available
+- If a competitor has specific data points (headquarters, founding year, etc.), cite them exactly
 
-Use data-driven insights. Be specific with numbers and competitor names. Format with markdown headers and bullet points."""
+**YOUR SUMMARY MUST INCLUDE:**
+
+1. **📈 Executive Overview**
+   - State exact competitor count and breakdown by threat level
+   - Name the top 3 high-threat competitors BY NAME
+
+2. **🎯 Threat Analysis**
+   - List HIGH threat competitors by name with why they're threats
+   - List MEDIUM threat competitors by name
+   - Provide specific threat justifications using their data
+
+3. **💰 Pricing Intelligence**
+   - Name competitors with known pricing and their EXACT pricing models
+   - Compare specific price points where available
+
+4. **📊 Market Trends**
+   - Reference specific data points that indicate trends
+   - Name competitors showing growth signals
+
+5. **✅ Strategic Recommendations**
+   - 3-5 specific, actionable recommendations
+   - Reference specific competitors in each recommendation
+
+6. **👁️ Watch List**
+   - Name the top 5 competitors requiring immediate attention
+   - State WHY each is on the watch list with specific data
+
+**IMPORTANT:** Every claim must reference actual data provided. Do NOT make up or assume any information. If data is missing, say "Data not available" rather than guessing."""
         elif key == "chat_persona":
-            default_content = "You are a competitive intelligence analyst for Certify Health."
-            
+            default_content = "You are a competitive intelligence analyst for Certify Health. Always reference specific data points and competitor names when answering questions. Cite exact numbers and dates when available."
+
         return SystemPromptResponse(key=key, content=default_content)
     return prompt
 
 @app.post("/api/admin/system-prompts", response_model=SystemPromptResponse)
-def update_system_prompt(prompt_data: SystemPromptCreate, db: Session = Depends(get_db)):
-    """Update or create a system prompt."""
-    prompt = db.query(SystemPrompt).filter(SystemPrompt.key == prompt_data.key).first()
+def update_system_prompt(prompt_data: SystemPromptCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Update or create a user-specific system prompt."""
+    user_id = current_user.get("id") if current_user else None
+
+    # Check for existing user-specific prompt
+    prompt = db.query(SystemPrompt).filter(
+        SystemPrompt.key == prompt_data.key,
+        SystemPrompt.user_id == user_id
+    ).first()
+
     if prompt:
         prompt.content = prompt_data.content
         prompt.updated_at = datetime.utcnow()
     else:
-        prompt = SystemPrompt(key=prompt_data.key, content=prompt_data.content)
+        # Create new user-specific prompt
+        prompt = SystemPrompt(key=prompt_data.key, content=prompt_data.content, user_id=user_id)
         db.add(prompt)
-    
+
     db.commit()
     db.refresh(prompt)
     return prompt
@@ -3258,35 +3577,81 @@ def delete_knowledge_base_item(item_id: int, db: Session = Depends(get_db)):
 
 
 
-# ============== Settings API Endpoints ==============
+# ============== Settings API Endpoints (User-Specific) ==============
 
-# In-memory settings store (would use DB in production)
-user_settings = {
-    "schedule": {},
-    "notifications": {}
-}
+import json
+
+def get_user_setting(db: Session, user_id: int, setting_key: str):
+    """Get a user-specific setting from the database."""
+    setting = db.query(UserSettings).filter(
+        UserSettings.user_id == user_id,
+        UserSettings.setting_key == setting_key
+    ).first()
+    if setting:
+        try:
+            return json.loads(setting.setting_value)
+        except:
+            return setting.setting_value
+    return {}
+
+def save_user_setting(db: Session, user_id: int, setting_key: str, setting_value):
+    """Save a user-specific setting to the database."""
+    setting = db.query(UserSettings).filter(
+        UserSettings.user_id == user_id,
+        UserSettings.setting_key == setting_key
+    ).first()
+
+    value_str = json.dumps(setting_value) if not isinstance(setting_value, str) else setting_value
+
+    if setting:
+        setting.setting_value = value_str
+        setting.updated_at = datetime.utcnow()
+    else:
+        setting = UserSettings(
+            user_id=user_id,
+            setting_key=setting_key,
+            setting_value=value_str
+        )
+        db.add(setting)
+    db.commit()
+    return setting
+
 
 @app.post("/api/settings/schedule")
-async def save_schedule_settings(settings: dict):
-    """Save user refresh schedule preferences."""
-    user_settings["schedule"] = settings
+async def save_schedule_settings(
+    settings: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Save user refresh schedule preferences (personal to each user)."""
+    save_user_setting(db, current_user["id"], "schedule", settings)
     return {"success": True, "message": "Schedule settings saved"}
 
 @app.get("/api/settings/schedule")
-async def get_schedule_settings():
-    """Get saved schedule settings."""
-    return user_settings.get("schedule", {})
+async def get_schedule_settings(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get saved schedule settings (personal to each user)."""
+    return get_user_setting(db, current_user["id"], "schedule")
 
 @app.post("/api/settings/notifications")
-async def save_notification_settings(settings: dict):
-    """Save user notification preferences."""
-    user_settings["notifications"] = settings
+async def save_notification_settings(
+    settings: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Save user notification preferences (personal to each user)."""
+    save_user_setting(db, current_user["id"], "notifications", settings)
     return {"success": True, "message": "Notification settings saved"}
 
 @app.get("/api/settings/notifications")
-async def get_notification_settings():
-    """Get saved notification settings."""
-    return user_settings.get("notifications", {})
+async def get_notification_settings(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get saved notification settings (personal to each user)."""
+    return get_user_setting(db, current_user["id"], "notifications")
 
 
 # ============== WebSocket for Real-time Refresh Progress ==============
@@ -3357,3 +3722,13 @@ if os.path.exists(frontend_dir):
     print(f"Serving frontend from: {frontend_dir}")
 else:
     print(f"Warning: Frontend directory not found at {frontend_dir}")
+
+
+# ============== Start Server ==============
+if __name__ == "__main__":
+    import uvicorn
+    print("\n" + "="*50)
+    print("  Certify Intel Backend Starting...")
+    print("  Open http://localhost:8000 in your browser")
+    print("="*50 + "\n")
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)

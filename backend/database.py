@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -181,11 +181,12 @@ class User(Base):
 
 
 class SystemPrompt(Base):
-    """Dynamic system prompts for AI generation."""
+    """Dynamic system prompts for AI generation. user_id=NULL means global prompt."""
     __tablename__ = "system_prompts"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)  # e.g., "dashboard_summary", "chat_persona"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # NULL = global prompt
+    key = Column(String, index=True)  # e.g., "dashboard_summary", "chat_persona"
     content = Column(Text, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -211,10 +212,11 @@ class SystemSetting(Base):
 
 
 class WinLossDeal(Base):
-    """Record of a competitive deal (win or loss)."""
+    """Record of a competitive deal (win or loss). Each user tracks their own deals."""
     __tablename__ = "win_loss_deals"
-    
+
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner of this deal record
     competitor_id = Column(Integer, index=True)
     competitor_name = Column(String)
     outcome = Column(String)  # "win" or "loss"
@@ -231,13 +233,37 @@ class WinLossDeal(Base):
 class WebhookConfig(Base):
     """Configuration for outbound webhooks."""
     __tablename__ = "webhooks"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     url = Column(String)
     event_types = Column(String)  # JSON-encoded list of events or comma-separated
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserSettings(Base):
+    """Personal settings for each user (notification preferences, schedules, etc.)."""
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    setting_key = Column(String, index=True)  # e.g., "notifications", "schedule", "display_preferences"
+    setting_value = Column(Text, nullable=False)  # JSON-encoded value
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ActivityLog(Base):
+    """Logs all user activities including data refreshes, logins, etc. Shared across all users."""
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_email = Column(String, index=True)  # Store email for easy display
+    action_type = Column(String, index=True)  # "data_refresh", "login", "competitor_update", etc.
+    action_details = Column(Text, nullable=True)  # JSON-encoded details
+    ip_address = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 # Create tables
