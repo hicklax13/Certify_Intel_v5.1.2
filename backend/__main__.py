@@ -13,7 +13,7 @@ import sys
 import os
 
 def get_bundle_dir():
-    """Get the directory where the bundled application is running from."""
+    """Get the directory where PyInstaller extracts bundled files."""
     if getattr(sys, 'frozen', False):
         # Running as a PyInstaller bundle
         # sys._MEIPASS is the temp folder where PyInstaller extracts files
@@ -22,15 +22,53 @@ def get_bundle_dir():
         # Running as a normal Python script
         return os.path.dirname(os.path.abspath(__file__))
 
+def get_exe_dir():
+    """Get the directory where the actual .exe file is located."""
+    if getattr(sys, 'frozen', False):
+        # Running as a PyInstaller bundle - get the directory containing the .exe
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as a normal Python script
+        return os.path.dirname(os.path.abspath(__file__))
+
 def setup_environment():
     """Set up the environment for the backend to run correctly."""
     bundle_dir = get_bundle_dir()
+    exe_dir = get_exe_dir()
 
     # Add bundle directory to Python path
     if bundle_dir not in sys.path:
         sys.path.insert(0, bundle_dir)
 
-    # Set working directory to bundle dir for relative file access
+    # IMPORTANT: Load .env from the exe directory (where user places config files)
+    # NOT from the temp extraction directory
+    if getattr(sys, 'frozen', False):
+        env_file = os.path.join(exe_dir, '.env')
+        if os.path.exists(env_file):
+            print(f"Loading .env from: {env_file}")
+            # Manually load .env file
+            try:
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            os.environ[key.strip()] = value.strip()
+            except Exception as e:
+                print(f"Warning: Could not load .env file: {e}")
+        else:
+            print(f"Warning: No .env file found at {env_file}")
+
+        # Also check for database in exe directory
+        db_file = os.path.join(exe_dir, 'certify_intel.db')
+        if os.path.exists(db_file):
+            print(f"Using database from: {db_file}")
+            os.environ['DATABASE_URL'] = f'sqlite:///{db_file}'
+
+        # Store exe_dir for later use
+        os.environ['CERTIFY_EXE_DIR'] = exe_dir
+
+    # Set working directory to bundle dir for relative file access (internal resources)
     os.chdir(bundle_dir)
 
     # Set environment variable to indicate we're running bundled
@@ -42,11 +80,18 @@ def setup_environment():
 def main():
     """Main entry point for the Certify Intel backend."""
     bundle_dir = setup_environment()
+    exe_dir = get_exe_dir()
 
     print(f"Certify Intel Backend Starting...")
     print(f"Bundle directory: {bundle_dir}")
+    print(f"Executable directory: {exe_dir}")
     print(f"Python version: {sys.version}")
     print(f"Frozen: {getattr(sys, 'frozen', False)}")
+
+    # Debug: Show loaded environment variables (without secrets)
+    print(f"SECRET_KEY loaded: {'Yes' if os.getenv('SECRET_KEY') else 'No'}")
+    print(f"OPENAI_API_KEY loaded: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+    print(f"DATABASE_URL: {os.getenv('DATABASE_URL', 'Not set')}")
 
     # Import uvicorn and the FastAPI app
     try:
