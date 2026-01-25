@@ -129,9 +129,14 @@ Modified to load `.env` from `exe_dir` instead of `bundle_dir`.
 SECRET_KEY=certify-intel-prod-secret-key-2026-xK9mN2pL
 AI_PROVIDER=hybrid
 OPENAI_API_KEY=sk-proj-XeJdkFBbWOjsK3F... (configured)
+OPENAI_MODEL=gpt-4o
 GOOGLE_API_KEY=AIzaSyCmkjdGbkKjXcL... (configured)
 GOOGLE_CX=840c244744f8f47ab (configured)
 DATABASE_URL=sqlite:///./certify_intel.db
+
+# Desktop Mode - Bypass login and auto-authenticate
+DESKTOP_MODE=true
+ADMIN_EMAIL=admin@certifyhealth.com
 ```
 
 ---
