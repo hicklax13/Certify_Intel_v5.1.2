@@ -122,6 +122,11 @@ hiddenimports = [
     'email.mime.multipart',
     'smtplib',
 
+    # PIL/Pillow (needed by some dependencies)
+    'PIL',
+    'PIL._imaging',
+    'PIL.Image',
+
     # Our custom modules
     'database',
     'analytics',
@@ -162,7 +167,6 @@ a = Analysis(
         # Exclude unnecessary packages to reduce size
         'tkinter',
         'matplotlib',
-        'PIL',
         'scipy',
         'cv2',
         'torch',
