@@ -4783,6 +4783,111 @@ async function runDiscovery() {
     }
 }
 
+// ============== Scout AI Instructions Modal ==============
+
+const DEFAULT_SCOUT_PROMPT = `You are Certify Scout, an autonomous competitive intelligence agent for Certify Health.
+
+YOUR MISSION:
+Find and qualify companies that directly compete with Certify Health in the healthcare IT market.
+
+WHAT CERTIFY HEALTH DOES:
+- Patient Experience Platform (PXP): Digital check-in, self-scheduling, patient intake
+- Practice Management: Appointment scheduling, workflow automation
+- Revenue Cycle Management: Eligibility verification, patient payments, claims
+- Biometric Authentication: Patient identification, facial recognition
+- EHR Integrations: FHIR/HL7 interoperability, Epic/Cerner/athenahealth
+
+TARGET COMPETITOR PROFILE:
+- Healthcare IT companies (NOT pharma, biotech, or medical devices)
+- Focus on patient engagement, intake, or revenue cycle
+- US-based or significant US operations
+- B2B SaaS model serving medical practices or health systems
+- Company size: 50-5000 employees (growth stage or established)
+
+MARKETS TO SEARCH:
+- Ambulatory care / outpatient clinics
+- Urgent care centers
+- Multi-specialty practices
+- Behavioral health / mental health
+- Dental (DSOs)
+- ASCs (Ambulatory Surgery Centers)
+- Health systems and hospitals
+
+QUALIFICATION SCORING (0-100):
+- 80-100: Direct competitor with overlapping products
+- 60-79: Partial overlap, adjacent market
+- 40-59: Related healthcare IT, low overlap
+- Below 40: Not a competitor (reject)
+
+EXCLUSIONS (Score 0):
+- Pure EHR vendors without patient engagement focus
+- Pharmaceutical companies
+- Medical device manufacturers
+- Insurance companies
+- International-only companies
+- Consulting firms
+- Review/comparison websites`;
+
+let scoutPrompt = localStorage.getItem('scoutPrompt') || DEFAULT_SCOUT_PROMPT;
+
+function openScoutInstructionsModal() {
+    const modal = document.getElementById('scoutInstructionsModal');
+    const textarea = document.getElementById('scoutPromptInput');
+
+    if (modal && textarea) {
+        textarea.value = scoutPrompt;
+        modal.style.display = 'block';
+    }
+}
+
+function closeScoutInstructionsModal() {
+    const modal = document.getElementById('scoutInstructionsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function loadDefaultScoutPrompt() {
+    const textarea = document.getElementById('scoutPromptInput');
+    if (textarea) {
+        textarea.value = DEFAULT_SCOUT_PROMPT;
+        showToast('Default Scout instructions loaded', 'success');
+    }
+}
+
+async function saveScoutPrompt() {
+    const textarea = document.getElementById('scoutPromptInput');
+    if (!textarea) return;
+
+    const newPrompt = textarea.value.trim();
+    if (!newPrompt) {
+        showToast('Prompt cannot be empty', 'error');
+        return;
+    }
+
+    // Save to localStorage
+    localStorage.setItem('scoutPrompt', newPrompt);
+    scoutPrompt = newPrompt;
+
+    // Also update the certify_context.json with the prompt
+    try {
+        const context = await fetchAPI('/api/discovery/context');
+        context.scout_system_prompt = newPrompt;
+
+        await fetchAPI('/api/discovery/context', {
+            method: 'POST',
+            body: JSON.stringify(context)
+        });
+
+        showToast('Scout AI instructions saved successfully!', 'success');
+        closeScoutInstructionsModal();
+    } catch (e) {
+        // Still save locally even if API fails
+        showToast('Instructions saved locally (API update failed)', 'warning');
+        closeScoutInstructionsModal();
+    }
+}
+
 async function loadDiscoveredCandidates() {
     const grid = document.getElementById('discoveredGrid');
     if (!grid) return;

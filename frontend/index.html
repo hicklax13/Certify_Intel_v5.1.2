@@ -408,6 +408,7 @@
                 <div class="page-header">
                     <h2>🔮 Discovered Competitors</h2>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="openScoutInstructionsModal()">✏️ Edit AI Instructions</button>
                         <button class="btn btn-secondary" onclick="toggleConfigPanel()">⚙️ Configure & Schedule</button>
                         <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
                     </div>
@@ -477,6 +478,64 @@
                     <p class="empty-state">No discovered competitors yet. Click "Run Discovery" to start scanning.</p>
                 </div>
             </section>
+
+            <!-- Scout AI Instructions Modal -->
+            <div id="scoutInstructionsModal" class="company-list-modal" style="display: none;">
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;"
+                    onclick="closeScoutInstructionsModal()">
+                    <div style="background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;"
+                        onclick="event.stopPropagation()">
+                        <div style="background: #1B2B65; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; color: white !important;">🔮 Certify Scout - AI Instructions</h3>
+                            <button onclick="closeScoutInstructionsModal()"
+                                style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 20px; overflow-y: auto;">
+                            <!-- Scout Goal Description -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+                                <h4 style="margin: 0 0 8px 0; color: #0369a1;">About Certify Scout</h4>
+                                <p style="margin: 0; font-size: 14px; color: #475569;">
+                                    The Certify Scout Discovery Agent autonomously searches for new competitors in the healthcare IT space.
+                                    It uses DuckDuckGo search, web scraping, and AI qualification to identify companies that may compete with Certify Health.
+                                </p>
+                            </div>
+
+                            <!-- Scout System Prompt -->
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Scout AI System Prompt</label>
+                                <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                                    This prompt tells the AI what to look for when qualifying potential competitors.
+                                    The Scout uses this to score websites (0-100) on how relevant they are.
+                                </p>
+                                <textarea id="scoutPromptInput"
+                                    style="width: 100%; height: 300px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical; line-height: 1.5;"></textarea>
+                            </div>
+
+                            <!-- Quick Tips -->
+                            <div style="margin-top: 16px; padding: 15px; background: #fefce8; border-radius: 8px; border: 1px solid #fde047;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">💡 Tips for Effective Discovery</label>
+                                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #713f12;">
+                                    <li>Be specific about target markets (e.g., "ambulatory care", "urgent care")</li>
+                                    <li>List key product categories (e.g., "patient intake", "eligibility verification")</li>
+                                    <li>Include exclusions (e.g., "NOT pharmaceutical companies")</li>
+                                    <li>Mention company characteristics (e.g., "US-based", "50-500 employees")</li>
+                                </ul>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                <button class="btn btn-secondary" onclick="loadDefaultScoutPrompt()" style="padding: 10px 16px;">
+                                    🔄 Load Default
+                                </button>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn btn-secondary" onclick="closeScoutInstructionsModal()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="saveScoutPrompt()">Save Instructions</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Comparison Page -->
             <section id="comparisonPage" class="page">
