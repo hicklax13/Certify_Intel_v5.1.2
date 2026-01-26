@@ -2,6 +2,24 @@
 
 ---
 
+## 🚨 CRITICAL: Authentication Bug Must Be Fixed First
+
+> **READ THIS BEFORE DOING ANYTHING ELSE**
+
+The application has a **critical authentication bug** that makes it completely unusable. After successful login, the frontend does NOT send the Authorization header with API requests, causing all protected endpoints to return 401 Unauthorized.
+
+**See**: `TODO_LIST.md` → "CRITICAL BUG: Authentication Failure After Login" section for full details and fix plan.
+
+**Quick Summary**:
+- Login succeeds (POST /token → 200 OK)
+- Dashboard briefly flashes, then redirects back to login
+- Cause: Authorization header not being sent with fetch() calls
+- Fix plan: 3 phases with 8 tasks documented in TODO_LIST.md
+
+**Do NOT work on any other tasks until this bug is fixed.**
+
+---
+
 ## AGENT START-OF-SESSION CHECKLIST
 
 > **IMPORTANT**: Before starting any work, ALL agents MUST complete this checklist:
@@ -73,6 +91,7 @@ db.close()
 ### Pending/Blocked Features
 | Module | Status | Reason |
 |--------|--------|--------|
+| **Authentication Bug** | 🔴 **CRITICAL** | Frontend not sending Authorization header - app unusable |
 | Desktop App (v5.0.3) | 🔴 BLOCKED | PyInstaller .env path issue |
 | Vertex AI Integration (v5.3.0) | ⏳ PROPOSED | Pending approval - 30 tasks, 6-8 weeks |
 
@@ -94,11 +113,11 @@ db.close()
 
 | # | Task ID | Description | Priority | Blocker |
 |---|---------|-------------|----------|---------|
-| 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Technical - path resolution |
-| 2 | 5.0.3-002 | Test installed desktop app end-to-end | HIGH | Depends on 5.0.3-001 |
-| 3 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
-| 4 | VERTEX-1.2 | Create vertex_ai_provider.py | HIGH | Depends on VERTEX-1.1 |
-| 5 | - | Production deployment | MEDIUM | None |
+| 1 | **AUTH-1.1** | **Fix authentication bug - Phase 1 debugging** | **CRITICAL** | None - Start here |
+| 2 | **AUTH-2.1** | **Fix authentication bug - Phase 2 storage fix** | **CRITICAL** | Depends on AUTH-1 |
+| 3 | **AUTH-3.1** | **Fix authentication bug - Phase 3 cache bust** | **CRITICAL** | Depends on AUTH-2 |
+| 4 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Auth bug must be fixed first |
+| 5 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
 
 ---
 
@@ -713,3 +732,107 @@ Dimension Metadata → DimensionAnalyzer → SalesMarketingModule
 | `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md` | Vertex AI integration plan (PROPOSED) |
 | `backend/.env.example` | Configuration template |
 | `backend/requirements.txt` | Python dependencies |
+
+---
+
+## Session Log: January 26, 2026 (Session 10 - Authentication Bug Investigation)
+
+**Session**: Critical Authentication Bug Investigation and Documentation
+**Duration**: ~1 hour
+**Status**: Investigation complete, fix plan documented, awaiting next session to implement
+
+### Problem Identified
+
+User attempted to launch Certify Intel from a fresh GitHub ZIP download. After successful login:
+- Dashboard briefly appears (< 1 second)
+- Immediately redirects back to login page
+- All API calls to protected endpoints fail with 401 Unauthorized
+
+### Investigation Steps Performed
+
+1. **Verified server was running correctly**
+   - Killed process on port 8000 that was blocking startup
+   - Server started successfully on port 8000
+
+2. **Fixed API_BASE hardcoding issue**
+   - Changed `const API_BASE = 'http://localhost:8000'` to `const API_BASE = window.location.origin` in app_v2.js
+   - This fixed the issue when running on different ports
+
+3. **Added debug logging to trace token flow**
+   - Added `[LOGIN DEBUG]` logging to login.html after token storage
+   - Added `[AUTH DEBUG]` logging to checkAuth() and getAuthHeaders() in app_v2.js
+   - Added `[AUTH DEBUG]` logging to /api/auth/me endpoint in backend
+
+4. **Analyzed server logs**
+   - Confirmed POST /token returns 200 OK (login succeeds)
+   - Confirmed GET /api/auth/me returns 401 (no Authorization header received)
+   - Server logs show: `[AUTH DEBUG] Authorization header: NONE...`
+
+5. **Identified root cause**
+   - Frontend is NOT sending Authorization header with API requests
+   - Token may not be persisting in localStorage between page navigation
+   - Possible race condition: first 401 triggers `localStorage.removeItem('access_token')` before other calls complete
+
+### Files Modified During Investigation
+
+| File | Changes |
+|------|---------|
+| `frontend/app_v2.js` | Changed API_BASE to window.location.origin, added debug logging |
+| `frontend/login.html` | Added debug logging after token storage |
+| `backend/extended_features.py` | Added debug logging to verify_token() |
+| `backend/api_routes.py` | Added debug logging to /api/auth/me |
+
+### Backend .env Configuration
+
+Created/verified `backend/.env`:
+```
+SECRET_KEY=certify-intel-secret-key-2024
+ADMIN_EMAIL=admin@certifyhealth.com
+ADMIN_PASSWORD=certifyintel2024
+HOST=0.0.0.0
+PORT=8000
+```
+
+### Fix Plan Created
+
+Documented 3-phase fix plan with 8 tasks in TODO_LIST.md:
+1. **Phase 1**: Add visible debugging to confirm token storage
+2. **Phase 2**: Fix storage mechanism (localStorage + sessionStorage backup)
+3. **Phase 3**: Cache busting to ensure fresh JS files loaded
+
+### What Next Agent Should Do
+
+1. **Start server**: `cd backend && python main.py`
+2. **Open browser devtools** (F12 → Console tab)
+3. **Attempt login** with `admin@certifyhealth.com` / `certifyintel2024`
+4. **Check console for debug messages**:
+   - `[LOGIN DEBUG]` messages should show token being stored
+   - `[AUTH DEBUG]` messages should show token in checkAuth/getAuthHeaders
+5. **If token shows NULL**, the issue is localStorage persistence
+6. **If token shows valid but still 401**, the issue is fetch() not including headers
+7. **Implement fix based on findings** following the plan in TODO_LIST.md
+
+### Terminal Commands Used
+
+```bash
+# Navigate to backend
+cd backend
+
+# Activate virtual environment
+venv\Scripts\activate
+
+# Kill process on port 8000 (if needed)
+netstat -ano | findstr :8000
+taskkill /PID <number> /F
+
+# Start server
+python main.py
+
+# Delete database to reset (if needed)
+del certify_intel.db
+```
+
+---
+
+**Last Updated**: January 26, 2026
+**Updated By**: Claude Opus 4.5 (Authentication Bug Investigation Session)
