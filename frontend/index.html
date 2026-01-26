@@ -202,29 +202,60 @@
                 <!-- Prompt Editor Modal -->
                 <div id="promptEditorModal" class="company-list-modal" style="display: none;">
                     <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;"
-                        onclick="this.style.display='none'">
-                        <div style="background: white; border-radius: 12px; max-width: 800px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;"
+                        onclick="closePromptEditorModal()">
+                        <div style="background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;"
                             onclick="event.stopPropagation()">
                             <div
                                 style="background: #1B2B65; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
                                 <h3 style="margin: 0; color: white !important;">Edit AI Instructions</h3>
-                                <button onclick="document.getElementById('promptEditorModal').style.display='none'"
+                                <button onclick="closePromptEditorModal()"
                                     style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">×</button>
                             </div>
                             <div style="padding: 20px; overflow-y: auto;">
+                                <!-- Saved Prompts Section -->
+                                <div class="saved-prompts-section" style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <label style="font-weight: 600; font-size: 14px;">📁 My Saved Prompts</label>
+                                        <button class="btn btn-sm btn-secondary" onclick="refreshSavedPrompts()" style="padding: 4px 10px; font-size: 12px;">🔄 Refresh</button>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <select id="savedPromptsSelect" style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                                            <option value="">-- Select a saved prompt --</option>
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" onclick="loadSelectedPrompt()" style="padding: 8px 12px;">Load</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="deleteSelectedPrompt()" style="padding: 8px 12px; color: #dc3545;">🗑️</button>
+                                    </div>
+                                </div>
+
+                                <!-- Prompt Editor -->
                                 <div class="form-group">
                                     <label style="display: block; margin-bottom: 8px; font-weight: 600;">Executive
                                         Summary Prompt</label>
                                     <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Instructions for the
                                         AI on how to format and focus the Weekly Executive Briefing.</p>
                                     <textarea id="summaryPromptInput"
-                                        style="width: 100%; height: 200px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 14px; resize: vertical;"></textarea>
+                                        style="width: 100%; height: 250px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 14px; resize: vertical;"></textarea>
                                 </div>
-                                <div style="text-align: right; margin-top: 16px;">
-                                    <button class="btn btn-secondary"
-                                        onclick="document.getElementById('promptEditorModal').style.display='none'">Cancel</button>
-                                    <button class="btn btn-primary" onclick="saveSystemPrompt('dashboard_summary')">Save
-                                        Changes</button>
+
+                                <!-- Save As New Section -->
+                                <div class="save-new-section" style="margin-top: 16px; padding: 15px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">💾 Save As New Prompt</label>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <input type="text" id="newPromptName" placeholder="Enter prompt name (e.g., 'Weekly Brief v2')"
+                                            style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                                        <button class="btn btn-primary btn-sm" onclick="saveAsNewPrompt()" style="padding: 8px 16px; white-space: nowrap;">Save As New</button>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                    <button class="btn btn-secondary" onclick="loadDefaultPrompt()" style="padding: 10px 16px;">
+                                        🔄 Load Default
+                                    </button>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn btn-secondary" onclick="closePromptEditorModal()">Cancel</button>
+                                        <button class="btn btn-primary" onclick="saveSystemPrompt('dashboard_summary')">Save Changes</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1002,6 +1033,44 @@
                     </div>
                     <div class="progress-completed-list" id="progressCompletedList">
                         <!-- Completed competitors will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Summary Progress Modal -->
+        <div id="aiSummaryProgressModal" class="modal-overlay" style="display: none;">
+            <div class="modal progress-modal" style="max-width: 450px;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 12px 12px 0 0;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a2 2 0 0 1 0 4h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a2 2 0 0 1 0-4h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+                            </svg>
+                        </div>
+                        <h3 style="margin: 0; color: white;">Generating AI Summary</h3>
+                    </div>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="progress-current" style="margin-bottom: 16px;">
+                        <span id="aiProgressStepText" style="font-size: 14px; color: #475569;">Initializing...</span>
+                    </div>
+                    <div class="progress-bar-container" style="height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                        <div id="aiSummaryProgressBar" class="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10B981, #059669); transition: width 0.3s ease;"></div>
+                    </div>
+                    <div class="progress-stats" style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 13px; color: #64748b;">
+                        <span id="aiProgressPercent">0%</span>
+                        <span id="aiProgressElapsed">Elapsed: 0s</span>
+                    </div>
+                    <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 12px; color: #64748b;">
+                        <strong>Steps:</strong>
+                        <ol id="aiProgressSteps" style="margin: 8px 0 0 16px; padding: 0;">
+                            <li id="step1" style="margin: 4px 0;">Loading competitor data</li>
+                            <li id="step2" style="margin: 4px 0;">Loading AI configuration</li>
+                            <li id="step3" style="margin: 4px 0;">Gathering knowledge base</li>
+                            <li id="step4" style="margin: 4px 0;">Preparing analysis data</li>
+                            <li id="step5" style="margin: 4px 0;">Generating summary with AI</li>
+                        </ol>
                     </div>
                 </div>
             </div>

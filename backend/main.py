@@ -67,7 +67,20 @@ import himss_scraper
 # Database setup - SQLite for simplicity
 # Database setup
 
-from database import engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource, DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem, UserSettings, ActivityLog
+from database import (
+    engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource,
+    DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem, UserSettings, ActivityLog,
+    CompetitorProduct, ProductPricingTier, ProductFeatureMatrix, CustomerCountEstimate
+)
+from confidence_scoring import (
+    calculate_confidence_score, get_source_defaults, calculate_data_staleness,
+    determine_confidence_level_from_score, triangulate_data_points,
+    get_reliability_description, get_credibility_description, get_source_type_description,
+    SOURCE_TYPE_DEFAULTS, RELIABILITY_DESCRIPTIONS, CREDIBILITY_DESCRIPTIONS
+)
+from data_triangulator import (
+    DataTriangulator, triangulate_competitor, triangulation_result_to_dict
+)
 
 # Auth imports for route protection
 from fastapi.security import OAuth2PasswordBearer
@@ -1334,6 +1347,523 @@ def set_field_source(
     return {"success": True, "message": f"Source set for {field_name}"}
 
 
+# ============== ENHANCED DATA SOURCES WITH CONFIDENCE SCORING ==============
+
+@app.get("/api/competitors/{competitor_id}/data-sources")
+def get_competitor_data_sources_enhanced(competitor_id: int, db: Session = Depends(get_db)):
+    """Get all data sources and confidence scores for a competitor with enhanced metadata."""
+    sources = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id
+    ).order_by(DataSource.field_name).all()
+
+    return [{
+        "field": s.field_name,
+        "value": s.current_value,
+        "previous_value": s.previous_value,
+        "source_type": s.source_type,
+        "source_name": s.source_name,
+        "source_url": s.source_url,
+        "extraction_method": s.extraction_method,
+        "confidence": {
+            "score": s.confidence_score or 0,
+            "level": s.confidence_level or "low",
+            "reliability": s.source_reliability,
+            "credibility": s.information_credibility,
+            "corroborating_sources": s.corroborating_sources or 0,
+            "reliability_description": get_reliability_description(s.source_reliability) if s.source_reliability else None,
+            "credibility_description": get_credibility_description(s.information_credibility) if s.information_credibility else None
+        },
+        "verification": {
+            "is_verified": s.is_verified,
+            "verified_by": s.verified_by,
+            "verification_date": s.verification_date.isoformat() if s.verification_date else None
+        },
+        "temporal": {
+            "extracted_at": s.extracted_at.isoformat() if s.extracted_at else None,
+            "data_as_of_date": s.data_as_of_date.isoformat() if s.data_as_of_date else None,
+            "staleness_days": s.staleness_days or 0
+        }
+    } for s in sources]
+
+
+@app.get("/api/data-quality/low-confidence")
+def get_low_confidence_data(threshold: int = 40, db: Session = Depends(get_db)):
+    """Get all data points below confidence threshold for review."""
+    sources = db.query(DataSource).filter(
+        DataSource.confidence_score < threshold
+    ).order_by(DataSource.confidence_score).all()
+
+    # Group by competitor
+    by_competitor = {}
+    for s in sources:
+        comp_id = s.competitor_id
+        if comp_id not in by_competitor:
+            competitor = db.query(Competitor).filter(Competitor.id == comp_id).first()
+            by_competitor[comp_id] = {
+                "competitor_id": comp_id,
+                "competitor_name": competitor.name if competitor else "Unknown",
+                "fields": []
+            }
+        by_competitor[comp_id]["fields"].append({
+            "field": s.field_name,
+            "value": s.current_value,
+            "confidence_score": s.confidence_score or 0,
+            "confidence_level": s.confidence_level or "low",
+            "source_type": s.source_type,
+            "reason": f"Low confidence ({s.confidence_score or 0}/100) from {s.source_type or 'unknown source'}"
+        })
+
+    return {
+        "threshold": threshold,
+        "total_low_confidence": len(sources),
+        "competitors_affected": len(by_competitor),
+        "data": list(by_competitor.values())
+    }
+
+
+@app.get("/api/data-quality/confidence-distribution")
+def get_confidence_distribution(db: Session = Depends(get_db)):
+    """Get distribution of confidence levels across all data."""
+    sources = db.query(DataSource).all()
+
+    high = len([s for s in sources if (s.confidence_score or 0) >= 70])
+    moderate = len([s for s in sources if 40 <= (s.confidence_score or 0) < 70])
+    low = len([s for s in sources if (s.confidence_score or 0) < 40])
+    unscored = len([s for s in sources if s.confidence_score is None])
+
+    return {
+        "total_data_points": len(sources),
+        "distribution": {
+            "high": {"count": high, "percentage": round(high / len(sources) * 100, 1) if sources else 0},
+            "moderate": {"count": moderate, "percentage": round(moderate / len(sources) * 100, 1) if sources else 0},
+            "low": {"count": low, "percentage": round(low / len(sources) * 100, 1) if sources else 0},
+            "unscored": {"count": unscored, "percentage": round(unscored / len(sources) * 100, 1) if sources else 0}
+        },
+        "by_source_type": _get_confidence_by_source_type(sources)
+    }
+
+
+def _get_confidence_by_source_type(sources: list) -> dict:
+    """Helper to group confidence scores by source type."""
+    by_type = {}
+    for s in sources:
+        source_type = s.source_type or "unknown"
+        if source_type not in by_type:
+            by_type[source_type] = {"count": 0, "total_score": 0, "scores": []}
+        by_type[source_type]["count"] += 1
+        if s.confidence_score is not None:
+            by_type[source_type]["total_score"] += s.confidence_score
+            by_type[source_type]["scores"].append(s.confidence_score)
+
+    # Calculate averages
+    result = {}
+    for source_type, data in by_type.items():
+        avg = round(data["total_score"] / len(data["scores"]), 1) if data["scores"] else 0
+        result[source_type] = {
+            "count": data["count"],
+            "average_confidence": avg,
+            "description": get_source_type_description(source_type)
+        }
+    return result
+
+
+@app.post("/api/sources/set-with-confidence")
+def set_field_source_with_confidence(
+    competitor_id: int,
+    field_name: str,
+    current_value: str,
+    source_type: str,
+    source_url: Optional[str] = None,
+    source_name: Optional[str] = None,
+    extraction_method: Optional[str] = None,
+    source_reliability: Optional[str] = None,
+    information_credibility: Optional[int] = None,
+    corroborating_sources: int = 0,
+    data_as_of_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Set or update a data source with confidence scoring."""
+    # Calculate confidence score
+    defaults = get_source_defaults(source_type)
+    reliability = source_reliability or defaults["reliability"]
+    credibility = information_credibility or defaults["credibility"]
+
+    confidence_result = calculate_confidence_score(
+        source_type=source_type,
+        source_reliability=reliability,
+        information_credibility=credibility,
+        corroborating_sources=corroborating_sources,
+        data_age_days=0
+    )
+
+    # Check if source already exists
+    existing = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == field_name
+    ).first()
+
+    if existing:
+        # Store previous value
+        existing.previous_value = existing.current_value
+        existing.current_value = current_value
+        existing.source_type = source_type
+        existing.source_url = source_url
+        existing.source_name = source_name
+        existing.extraction_method = extraction_method
+        existing.source_reliability = reliability
+        existing.information_credibility = credibility
+        existing.confidence_score = confidence_result.score
+        existing.confidence_level = confidence_result.level
+        existing.corroborating_sources = corroborating_sources
+        existing.extracted_at = datetime.utcnow()
+        if data_as_of_date:
+            existing.data_as_of_date = datetime.fromisoformat(data_as_of_date)
+        existing.updated_at = datetime.utcnow()
+    else:
+        new_source = DataSource(
+            competitor_id=competitor_id,
+            field_name=field_name,
+            current_value=current_value,
+            source_type=source_type,
+            source_url=source_url,
+            source_name=source_name,
+            extraction_method=extraction_method,
+            source_reliability=reliability,
+            information_credibility=credibility,
+            confidence_score=confidence_result.score,
+            confidence_level=confidence_result.level,
+            corroborating_sources=corroborating_sources,
+            data_as_of_date=datetime.fromisoformat(data_as_of_date) if data_as_of_date else None
+        )
+        db.add(new_source)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Source set for {field_name}",
+        "confidence": {
+            "score": confidence_result.score,
+            "level": confidence_result.level,
+            "explanation": confidence_result.explanation,
+            "breakdown": confidence_result.breakdown
+        }
+    }
+
+
+@app.post("/api/sources/verify/{competitor_id}/{field_name}")
+def verify_data_source(
+    competitor_id: int,
+    field_name: str,
+    verification_method: str,
+    corroborating_sources: int = 0,
+    db: Session = Depends(get_db)
+):
+    """Mark a data source as verified and recalculate confidence."""
+    source = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == field_name
+    ).first()
+
+    if not source:
+        raise HTTPException(status_code=404, detail=f"No source found for {field_name}")
+
+    # Update verification status
+    source.is_verified = True
+    source.verified_by = verification_method
+    source.verification_date = datetime.utcnow()
+    source.corroborating_sources = corroborating_sources
+
+    # Recalculate confidence with verification bonus
+    staleness = calculate_data_staleness(source.extracted_at, source.data_as_of_date)
+    confidence_result = calculate_confidence_score(
+        source_type=source.source_type or "unknown",
+        source_reliability=source.source_reliability,
+        information_credibility=source.information_credibility,
+        corroborating_sources=corroborating_sources,
+        data_age_days=staleness
+    )
+
+    source.confidence_score = confidence_result.score
+    source.confidence_level = confidence_result.level
+    source.staleness_days = staleness
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Field {field_name} verified via {verification_method}",
+        "new_confidence": {
+            "score": confidence_result.score,
+            "level": confidence_result.level
+        }
+    }
+
+
+@app.get("/api/source-types")
+def get_source_types():
+    """Get all available source types with their default reliability ratings."""
+    return {
+        "source_types": [
+            {
+                "type": source_type,
+                "reliability": info["reliability"],
+                "credibility": info["credibility"],
+                "description": info["description"],
+                "reliability_description": get_reliability_description(info["reliability"]),
+                "credibility_description": get_credibility_description(info["credibility"])
+            }
+            for source_type, info in SOURCE_TYPE_DEFAULTS.items()
+        ],
+        "reliability_scale": RELIABILITY_DESCRIPTIONS,
+        "credibility_scale": CREDIBILITY_DESCRIPTIONS
+    }
+
+
+@app.post("/api/data-quality/recalculate-confidence")
+def recalculate_all_confidence_scores(db: Session = Depends(get_db)):
+    """Recalculate confidence scores for all data sources."""
+    sources = db.query(DataSource).all()
+    updated_count = 0
+
+    for source in sources:
+        if source.source_type:
+            staleness = calculate_data_staleness(
+                source.extracted_at or datetime.utcnow(),
+                source.data_as_of_date
+            )
+            confidence_result = calculate_confidence_score(
+                source_type=source.source_type,
+                source_reliability=source.source_reliability,
+                information_credibility=source.information_credibility,
+                corroborating_sources=source.corroborating_sources or 0,
+                data_age_days=staleness
+            )
+            source.confidence_score = confidence_result.score
+            source.confidence_level = confidence_result.level
+            source.staleness_days = staleness
+            updated_count += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Recalculated confidence for {updated_count} data sources",
+        "updated_count": updated_count
+    }
+
+
+# ============== DATA TRIANGULATION ENDPOINTS ==============
+
+@app.post("/api/triangulate/{competitor_id}")
+async def triangulate_competitor_data(competitor_id: int, db: Session = Depends(get_db)):
+    """
+    Triangulate all key data fields for a competitor using multiple sources.
+
+    This cross-references data from:
+    - Website scrapes
+    - SEC filings (if public company)
+    - News articles
+    - Manual entries
+
+    Returns verified values with confidence scores.
+    """
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    triangulator = DataTriangulator(db)
+
+    results = await triangulator.triangulate_all_key_fields(
+        competitor_id=competitor_id,
+        competitor_name=competitor.name,
+        website=competitor.website,
+        is_public=competitor.is_public,
+        ticker_symbol=competitor.ticker_symbol
+    )
+
+    # Update DataSource records with triangulated confidence
+    for field_name, result in results.items():
+        if result.confidence_score > 0:
+            existing = db.query(DataSource).filter(
+                DataSource.competitor_id == competitor_id,
+                DataSource.field_name == field_name
+            ).first()
+
+            if existing:
+                existing.confidence_score = result.confidence_score
+                existing.confidence_level = result.confidence_level
+                existing.corroborating_sources = result.sources_agreeing
+                existing.is_verified = result.confidence_level == "high"
+                existing.verified_by = "triangulation" if result.sources_agreeing > 1 else None
+                existing.verification_date = datetime.utcnow() if result.sources_agreeing > 1 else None
+                existing.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "competitor_id": competitor_id,
+        "competitor_name": competitor.name,
+        "triangulation_results": {
+            field: triangulation_result_to_dict(result)
+            for field, result in results.items()
+        },
+        "triangulated_at": datetime.utcnow().isoformat()
+    }
+
+
+@app.post("/api/triangulate/{competitor_id}/{field_name}")
+async def triangulate_single_field(
+    competitor_id: int,
+    field_name: str,
+    db: Session = Depends(get_db)
+):
+    """Triangulate a specific field for a competitor."""
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    triangulator = DataTriangulator(db)
+
+    # Run appropriate triangulation based on field
+    if field_name == "customer_count":
+        result = await triangulator.triangulate_customer_count(
+            competitor_id, competitor.name, competitor.website,
+            competitor.is_public, competitor.ticker_symbol
+        )
+    elif field_name == "employee_count":
+        result = await triangulator.triangulate_employee_count(
+            competitor_id, competitor.name,
+            competitor.is_public, competitor.ticker_symbol
+        )
+    elif field_name in ["base_price", "pricing"]:
+        result = await triangulator.triangulate_pricing(
+            competitor_id, competitor.name, competitor.website
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Triangulation not supported for field: {field_name}. Supported: customer_count, employee_count, base_price"
+        )
+
+    # Update DataSource with triangulated confidence
+    existing = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == field_name
+    ).first()
+
+    if existing and result.confidence_score > 0:
+        existing.confidence_score = result.confidence_score
+        existing.confidence_level = result.confidence_level
+        existing.corroborating_sources = result.sources_agreeing
+        existing.is_verified = result.sources_agreeing > 1
+        existing.verified_by = "triangulation" if result.sources_agreeing > 1 else None
+        existing.verification_date = datetime.utcnow() if result.sources_agreeing > 1 else None
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+
+    return triangulation_result_to_dict(result)
+
+
+@app.post("/api/triangulate/all")
+async def triangulate_all_competitors(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Trigger triangulation for all active competitors (background job)."""
+    competitors = db.query(Competitor).filter(
+        Competitor.is_deleted == False
+    ).all()
+
+    # Add background task for each competitor
+    for comp in competitors:
+        background_tasks.add_task(
+            run_triangulation_job,
+            comp.id,
+            comp.name,
+            comp.website,
+            comp.is_public,
+            comp.ticker_symbol
+        )
+
+    return {
+        "success": True,
+        "message": f"Triangulation started for {len(competitors)} competitors",
+        "competitors_queued": len(competitors)
+    }
+
+
+async def run_triangulation_job(
+    competitor_id: int,
+    competitor_name: str,
+    website: str,
+    is_public: bool,
+    ticker_symbol: str
+):
+    """Background job to triangulate data for a competitor."""
+    db = SessionLocal()
+    try:
+        triangulator = DataTriangulator(db)
+        results = await triangulator.triangulate_all_key_fields(
+            competitor_id, competitor_name, website, is_public, ticker_symbol
+        )
+
+        # Update DataSource records
+        for field_name, result in results.items():
+            if result.confidence_score > 0:
+                existing = db.query(DataSource).filter(
+                    DataSource.competitor_id == competitor_id,
+                    DataSource.field_name == field_name
+                ).first()
+
+                if existing:
+                    existing.confidence_score = result.confidence_score
+                    existing.confidence_level = result.confidence_level
+                    existing.corroborating_sources = result.sources_agreeing
+                    existing.is_verified = result.confidence_level == "high"
+                    existing.verified_by = "triangulation" if result.sources_agreeing > 1 else None
+                    existing.verification_date = datetime.utcnow() if result.sources_agreeing > 1 else None
+
+        db.commit()
+        print(f"Triangulation complete for {competitor_name}")
+
+    except Exception as e:
+        print(f"Triangulation failed for {competitor_name}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@app.get("/api/triangulation/status")
+def get_triangulation_status(db: Session = Depends(get_db)):
+    """Get overview of triangulation status across all competitors."""
+    sources = db.query(DataSource).all()
+
+    verified_count = len([s for s in sources if s.is_verified])
+    triangulated_count = len([s for s in sources if s.verified_by == "triangulation"])
+    pending_count = len([s for s in sources if not s.is_verified and s.current_value])
+
+    # Group by confidence level
+    high = len([s for s in sources if s.confidence_level == "high"])
+    moderate = len([s for s in sources if s.confidence_level == "moderate"])
+    low = len([s for s in sources if s.confidence_level == "low" or s.confidence_level is None])
+
+    return {
+        "total_data_points": len(sources),
+        "verification_status": {
+            "verified": verified_count,
+            "triangulated": triangulated_count,
+            "pending_verification": pending_count
+        },
+        "confidence_distribution": {
+            "high": high,
+            "moderate": moderate,
+            "low": low
+        },
+        "verification_rate": round(verified_count / len(sources) * 100, 1) if sources else 0
+    }
+
+
 # ============== BULK UPDATE ENDPOINT ==============
 
 @app.post("/api/competitors/bulk-update")
@@ -1948,8 +2478,79 @@ async def run_scrape_job(competitor_id: int):
         db.close()
 
 
+def _update_data_source_with_confidence(
+    db: Session,
+    competitor_id: int,
+    field_name: str,
+    current_value: str,
+    previous_value: str = None,
+    source_url: str = None,
+    source_name: str = None,
+    gpt_confidence: int = 50
+):
+    """
+    Helper to create or update DataSource record with confidence scoring.
+
+    Maps GPT extraction confidence to our Admiralty Code-based scoring system.
+    Website scrapes are inherently lower confidence (source_type = "website_scrape").
+    """
+    # Calculate confidence using our algorithm
+    confidence_result = calculate_confidence_score(
+        source_type="website_scrape",
+        source_reliability="D",  # Website = Not usually reliable
+        information_credibility=4,  # Doubtfully true until verified
+        corroborating_sources=0,
+        data_age_days=0
+    )
+
+    # Adjust score slightly based on GPT's own confidence assessment
+    adjusted_score = min(100, max(0, confidence_result.score + (gpt_confidence - 50) // 5))
+    adjusted_level = determine_confidence_level_from_score(adjusted_score)
+
+    # Check if source already exists
+    existing = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == field_name
+    ).first()
+
+    if existing:
+        # Update existing record
+        existing.previous_value = existing.current_value
+        existing.current_value = current_value
+        existing.source_type = "website_scrape"
+        existing.source_url = source_url
+        existing.source_name = source_name
+        existing.extraction_method = "gpt_extraction"
+        existing.extracted_at = datetime.utcnow()
+        existing.source_reliability = "D"
+        existing.information_credibility = 4
+        existing.confidence_score = adjusted_score
+        existing.confidence_level = adjusted_level
+        existing.staleness_days = 0
+        existing.updated_at = datetime.utcnow()
+    else:
+        # Create new record
+        new_source = DataSource(
+            competitor_id=competitor_id,
+            field_name=field_name,
+            current_value=current_value,
+            previous_value=previous_value,
+            source_type="website_scrape",
+            source_url=source_url,
+            source_name=source_name,
+            extraction_method="gpt_extraction",
+            source_reliability="D",
+            information_credibility=4,
+            confidence_score=adjusted_score,
+            confidence_level=adjusted_level,
+            corroborating_sources=0,
+            staleness_days=0
+        )
+        db.add(new_source)
+
+
 async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str):
-    """Background job to scrape a competitor with progress tracking and unified change logging."""
+    """Background job to scrape a competitor with progress tracking, unified change logging, and confidence scoring."""
     global scrape_progress
 
     # Update current competitor being processed
@@ -1977,18 +2578,26 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
 
             # Scrape the website
             content = await scraper.scrape(comp.website)
+            source_url = comp.website if not comp.website.startswith("http") else comp.website
 
             if content:
                 # Extract data using GPT
                 from dataclasses import asdict
 
-                extracted_obj = extractor.extract_from_content(comp.name, content)
+                extracted_obj = extractor.extract_from_content(comp.name, content.get("content", ""))
                 extracted = asdict(extracted_obj)
+
+                # Get extraction confidence from GPT (if available)
+                gpt_confidence = extracted.get("confidence_score") or 50
 
                 if extracted:
                     # Update competitor with extracted data
                     for key, value in extracted.items():
                         if hasattr(comp, key) and value:
+                            # Skip metadata fields
+                            if key in ["confidence_score", "extraction_notes"]:
+                                continue
+
                             # Check if this field is locked (manual correction)
                             is_locked = db.query(DataSource).filter(
                                 DataSource.competitor_id == comp.id,
@@ -2024,9 +2633,49 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
                                 else:
                                     changes_count += 1
 
+                            # Create or update DataSource with confidence scoring
+                            _update_data_source_with_confidence(
+                                db=db,
+                                competitor_id=comp.id,
+                                field_name=key,
+                                current_value=new_str,
+                                previous_value=old_str,
+                                source_url=source_url,
+                                source_name=f"{comp.name} Website",
+                                gpt_confidence=gpt_confidence
+                            )
+
                     comp.last_updated = datetime.utcnow()
                     db.commit()
                     print(f"Scrape completed for {comp.name} - {changes_count} changes, {new_values_count} new values")
+
+                    # Trigger triangulation for key fields to verify scraped data
+                    try:
+                        triangulator = DataTriangulator(db)
+                        triangulation_results = await triangulator.triangulate_all_key_fields(
+                            competitor_id=comp.id,
+                            competitor_name=comp.name,
+                            website=comp.website,
+                            is_public=comp.is_public,
+                            ticker_symbol=comp.ticker_symbol
+                        )
+
+                        # Update confidence scores based on triangulation
+                        for field_name, result in triangulation_results.items():
+                            if result.confidence_score > 0:
+                                existing = db.query(DataSource).filter(
+                                    DataSource.competitor_id == comp.id,
+                                    DataSource.field_name == field_name
+                                ).first()
+                                if existing:
+                                    existing.confidence_score = result.confidence_score
+                                    existing.confidence_level = result.confidence_level
+                                    existing.corroborating_sources = result.sources_agreeing
+
+                        db.commit()
+                        print(f"Triangulation completed for {comp.name}")
+                    except Exception as tri_err:
+                        print(f"Triangulation error for {comp.name}: {tri_err}")
 
         except ImportError as e:
             print(f"Scraper not available: {e}")
@@ -3493,36 +4142,8 @@ def get_market_trends(db: Session = Depends(get_db)):
 
 
 # =========================================================================
-# MISSING DASHBOARD ENDPOINTS (Added for Frontend Compatibility)
+# NOTE: Duplicate endpoints removed - see lines 1774, 1426, 1797 for originals
 # =========================================================================
-
-@app.get("/api/dashboard/stats")
-def get_dashboard_stats(db: Session = Depends(get_db)):
-    """Get aggregated stats for the dashboard."""
-    total = db.query(Competitor).filter(Competitor.is_deleted == False).count()
-    high = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "High").count()
-    medium = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "Medium").count()
-    low = db.query(Competitor).filter(Competitor.is_deleted == False, Competitor.threat_level == "Low").count()
-    
-    return {
-        "total_competitors": total,
-        "high_threat": high,
-        "medium_threat": medium,
-        "low_threat": low
-    }
-
-@app.get("/api/competitors")
-def get_all_competitors(db: Session = Depends(get_db)):
-    """Get all active competitors."""
-    return db.query(Competitor).filter(Competitor.is_deleted == False).order_by(Competitor.updated_at.desc()).all()
-
-# Note: /api/changes endpoint defined earlier using DataChangeHistory table
-
-@app.get("/api/scrape/all")
-async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Trigger update for all competitors."""
-    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
-    return {"status": "queued", "count": len(competitors)}
 
 # Import and mount the new analytics router
 from analytics_routes import router as analytics_router
@@ -3648,10 +4269,211 @@ def delete_knowledge_base_item(item_id: int, db: Session = Depends(get_db)):
     item = db.query(KnowledgeBaseItem).filter(KnowledgeBaseItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    
+
     item.is_active = False
     db.commit()
     return {"message": "Item deleted"}
+
+
+# =========================================================================
+# USER SAVED PROMPTS - Per-user prompt management
+# =========================================================================
+
+from database import UserSavedPrompt
+
+class UserSavedPromptCreate(BaseModel):
+    name: str
+    prompt_type: str = "executive_summary"
+    content: str
+
+class UserSavedPromptUpdate(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class UserSavedPromptResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    prompt_type: str
+    content: str
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@app.get("/api/user/prompts", response_model=List[UserSavedPromptResponse])
+def get_user_prompts(
+    prompt_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all saved prompts for the current user."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    query = db.query(UserSavedPrompt).filter(UserSavedPrompt.user_id == user_id)
+    if prompt_type:
+        query = query.filter(UserSavedPrompt.prompt_type == prompt_type)
+
+    return query.order_by(UserSavedPrompt.updated_at.desc()).all()
+
+
+@app.post("/api/user/prompts", response_model=UserSavedPromptResponse)
+def create_user_prompt(
+    prompt_data: UserSavedPromptCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new saved prompt for the current user."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    new_prompt = UserSavedPrompt(
+        user_id=user_id,
+        name=prompt_data.name,
+        prompt_type=prompt_data.prompt_type,
+        content=prompt_data.content,
+        is_default=False
+    )
+    db.add(new_prompt)
+    db.commit()
+    db.refresh(new_prompt)
+
+    # Log activity
+    log_activity(db, current_user.get("email", "unknown"), user_id, "prompt_created", f"Created prompt: {prompt_data.name}")
+
+    return new_prompt
+
+
+@app.get("/api/user/prompts/{prompt_id}", response_model=UserSavedPromptResponse)
+def get_user_prompt(
+    prompt_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific saved prompt by ID."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prompt = db.query(UserSavedPrompt).filter(
+        UserSavedPrompt.id == prompt_id,
+        UserSavedPrompt.user_id == user_id
+    ).first()
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    return prompt
+
+
+@app.put("/api/user/prompts/{prompt_id}", response_model=UserSavedPromptResponse)
+def update_user_prompt(
+    prompt_id: int,
+    prompt_data: UserSavedPromptUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an existing saved prompt."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prompt = db.query(UserSavedPrompt).filter(
+        UserSavedPrompt.id == prompt_id,
+        UserSavedPrompt.user_id == user_id
+    ).first()
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if prompt_data.name is not None:
+        prompt.name = prompt_data.name
+    if prompt_data.content is not None:
+        prompt.content = prompt_data.content
+    if prompt_data.is_default is not None:
+        # If setting as default, unset any other defaults for this type
+        if prompt_data.is_default:
+            db.query(UserSavedPrompt).filter(
+                UserSavedPrompt.user_id == user_id,
+                UserSavedPrompt.prompt_type == prompt.prompt_type,
+                UserSavedPrompt.id != prompt_id
+            ).update({"is_default": False})
+        prompt.is_default = prompt_data.is_default
+
+    prompt.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(prompt)
+
+    return prompt
+
+
+@app.delete("/api/user/prompts/{prompt_id}")
+def delete_user_prompt(
+    prompt_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a saved prompt."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prompt = db.query(UserSavedPrompt).filter(
+        UserSavedPrompt.id == prompt_id,
+        UserSavedPrompt.user_id == user_id
+    ).first()
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    prompt_name = prompt.name
+    db.delete(prompt)
+    db.commit()
+
+    # Log activity
+    log_activity(db, current_user.get("email", "unknown"), user_id, "prompt_deleted", f"Deleted prompt: {prompt_name}")
+
+    return {"message": "Prompt deleted successfully"}
+
+
+@app.post("/api/user/prompts/{prompt_id}/set-default")
+def set_prompt_as_default(
+    prompt_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Set a prompt as the default for its type."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prompt = db.query(UserSavedPrompt).filter(
+        UserSavedPrompt.id == prompt_id,
+        UserSavedPrompt.user_id == user_id
+    ).first()
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    # Unset any existing defaults for this prompt type
+    db.query(UserSavedPrompt).filter(
+        UserSavedPrompt.user_id == user_id,
+        UserSavedPrompt.prompt_type == prompt.prompt_type
+    ).update({"is_default": False})
+
+    # Set this one as default
+    prompt.is_default = True
+    prompt.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": f"Prompt '{prompt.name}' set as default"}
 
 
 

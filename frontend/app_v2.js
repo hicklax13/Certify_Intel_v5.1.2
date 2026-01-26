@@ -423,12 +423,99 @@ window.toggleSidebarCollapse = function() {
 // Make accessible to onclick
 window.startAISummary = startAISummary;
 
+// AI Summary progress tracking
+let aiProgressInterval = null;
+let aiProgressStartTime = null;
+
+function showAISummaryProgressModal() {
+    const modal = document.getElementById('aiSummaryProgressModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        aiProgressStartTime = Date.now();
+        // Reset progress display
+        document.getElementById('aiSummaryProgressBar').style.width = '0%';
+        document.getElementById('aiProgressPercent').textContent = '0%';
+        document.getElementById('aiProgressStepText').textContent = 'Initializing...';
+        document.getElementById('aiProgressElapsed').textContent = 'Elapsed: 0s';
+        // Reset step indicators
+        for (let i = 1; i <= 5; i++) {
+            const step = document.getElementById(`step${i}`);
+            if (step) {
+                step.style.color = '#64748b';
+                step.style.fontWeight = 'normal';
+            }
+        }
+    }
+}
+
+function hideAISummaryProgressModal() {
+    const modal = document.getElementById('aiSummaryProgressModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    if (aiProgressInterval) {
+        clearInterval(aiProgressInterval);
+        aiProgressInterval = null;
+    }
+}
+
+function updateAISummaryProgress(progress) {
+    const progressBar = document.getElementById('aiSummaryProgressBar');
+    const percentText = document.getElementById('aiProgressPercent');
+    const stepText = document.getElementById('aiProgressStepText');
+    const elapsedText = document.getElementById('aiProgressElapsed');
+
+    if (progressBar) progressBar.style.width = `${progress.progress}%`;
+    if (percentText) percentText.textContent = `${progress.progress}%`;
+    if (stepText) stepText.textContent = progress.step_description || 'Processing...';
+
+    // Update elapsed time
+    if (elapsedText && aiProgressStartTime) {
+        const elapsed = Math.floor((Date.now() - aiProgressStartTime) / 1000);
+        elapsedText.textContent = `Elapsed: ${elapsed}s`;
+    }
+
+    // Highlight current step
+    const currentStep = progress.step || 0;
+    for (let i = 1; i <= 5; i++) {
+        const stepEl = document.getElementById(`step${i}`);
+        if (stepEl) {
+            if (i < currentStep) {
+                stepEl.style.color = '#10B981';
+                stepEl.style.fontWeight = '500';
+            } else if (i === currentStep) {
+                stepEl.style.color = '#059669';
+                stepEl.style.fontWeight = '600';
+            } else {
+                stepEl.style.color = '#94a3b8';
+                stepEl.style.fontWeight = 'normal';
+            }
+        }
+    }
+}
+
+async function pollAISummaryProgress() {
+    try {
+        const progress = await fetchAPI('/api/analytics/summary/progress');
+        if (progress) {
+            updateAISummaryProgress(progress);
+            if (!progress.active && progress.progress >= 100) {
+                // Complete - stop polling
+                if (aiProgressInterval) {
+                    clearInterval(aiProgressInterval);
+                    aiProgressInterval = null;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error polling AI progress:', e);
+    }
+}
+
 async function startAISummary() {
     const summaryCard = document.getElementById('aiSummaryCard');
     const contentDiv = document.getElementById('aiSummaryContent');
     const modelBadge = document.getElementById('aiModelBadge');
-
-    // modelBadge removal caused error in previous refactor, ignoring for now as it was removed from HTML
     const providerLogo = document.getElementById('aiProviderLogo');
     const metaDiv = document.getElementById('aiSummaryMeta');
 
@@ -437,7 +524,14 @@ async function startAISummary() {
     summaryCard.style.display = 'block';
     contentDiv.innerHTML = '<div class="ai-loading"><span class="ai-spinner">⏳</span> Generating comprehensive strategic insights...</div>';
 
+    // Show progress modal and start polling
+    showAISummaryProgressModal();
+    aiProgressInterval = setInterval(pollAISummaryProgress, 500);
+
     const data = await fetchAPI('/api/analytics/summary');
+
+    // Hide progress modal
+    hideAISummaryProgressModal();
 
     if (data) {
         let html = data.summary || data;
@@ -478,7 +572,7 @@ async function startAISummary() {
 
         // Update meta info
         if (metaDiv && data.data_points_analyzed) {
-            metaDiv.innerHTML = `<span>📊 Analyzed ${data.data_points_analyzed} competitors</span> | 
+            metaDiv.innerHTML = `<span>📊 Analyzed ${data.data_points_analyzed} competitors</span> |
                 <span>🕐 Generated: ${new Date(data.generated_at).toLocaleTimeString()}</span> |
                 <span>🤖 Model: ${data.provider} ${data.model || 'Automated'}</span>`;
         }
@@ -494,6 +588,10 @@ async function startAISummary() {
             badge.style.background = '#e0e7ff';
             badge.style.color = '#3730a3';
         }
+
+        showToast('AI Summary generated successfully!', 'success');
+    } else {
+        contentDiv.innerHTML = '<div class="ai-empty-state">Failed to generate summary. Please try again.</div>';
     }
 }
 
@@ -694,10 +792,23 @@ async function pollRefreshProgress(total) {
 }
 
 function updateStatsCards() {
-    document.getElementById('totalCompetitors').textContent = stats.total_competitors || 0;
-    document.getElementById('highThreat').textContent = stats.high_threat || 0;
-    document.getElementById('mediumThreat').textContent = stats.medium_threat || 0;
-    document.getElementById('lowThreat').textContent = stats.low_threat || 0;
+    // Ensure stats object exists before accessing properties
+    if (!stats || typeof stats !== 'object') {
+        console.warn('Stats object is empty or invalid:', stats);
+        stats = {};
+    }
+
+    const totalEl = document.getElementById('totalCompetitors');
+    const highEl = document.getElementById('highThreat');
+    const mediumEl = document.getElementById('mediumThreat');
+    const lowEl = document.getElementById('lowThreat');
+
+    if (totalEl) totalEl.textContent = stats.total_competitors ?? 0;
+    if (highEl) highEl.textContent = stats.high_threat ?? 0;
+    if (mediumEl) mediumEl.textContent = stats.medium_threat ?? 0;
+    if (lowEl) lowEl.textContent = stats.low_threat ?? 0;
+
+    console.log('Dashboard stats updated:', stats);
 }
 
 function showCompanyList(threatLevel) {

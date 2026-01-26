@@ -662,7 +662,7 @@ h6 {
     font-size: 0.8rem;
     color: #64748b;
     margin: 0;
-    max-width: 400px;
+    white-space: nowrap;
 }
 
 /* Stats Grid */
@@ -2959,12 +2959,12 @@ h4::after,
     border-bottom: none;
 }
 
-.stat-label {
+.complete-stats .stat-label {
     color: var(--text-secondary);
     font-size: 14px;
 }
 
-.stat-value {
+.complete-stats .stat-value {
     color: var(--text-white);
     font-weight: 600;
     font-size: 14px;

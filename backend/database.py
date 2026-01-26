@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 
 # Database setup - SQLite for simplicity
@@ -133,18 +133,187 @@ class ChangeLog(Base):
 
 
 class DataSource(Base):
-    """Tracks the source of each data point for every competitor field."""
+    """Enhanced source tracking for every data point with confidence scoring."""
     __tablename__ = "data_sources"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, index=True)
-    field_name = Column(String, index=True)  # e.g., "pricing_model", "funding_total"
-    source_type = Column(String)  # "external", "manual", "calculated"
-    source_url = Column(String, nullable=True)  # URL for external sources
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    field_name = Column(String, index=True)  # e.g., "customer_count", "base_price"
+
+    # Value tracking
+    current_value = Column(String, nullable=True)
+    previous_value = Column(String, nullable=True)
+
+    # Source attribution
+    source_type = Column(String)  # "website_scrape", "sec_filing", "manual", "api", "news"
+    source_url = Column(String, nullable=True)
+    source_name = Column(String, nullable=True)  # "Company Website", "SEC 10-K 2025", "KLAS Report"
+    extraction_method = Column(String, nullable=True)  # "gpt_extraction", "structured_api", "manual_entry"
+    extracted_at = Column(DateTime, default=datetime.utcnow)
+
+    # Confidence scoring (Admiralty Code)
+    source_reliability = Column(String, nullable=True)  # A-F scale (A=completely reliable, F=unknown)
+    information_credibility = Column(Integer, nullable=True)  # 1-6 scale (1=confirmed, 6=cannot be judged)
+    confidence_score = Column(Integer, nullable=True)  # 0-100 composite score
+    confidence_level = Column(String, nullable=True)  # "high", "moderate", "low"
+
+    # Verification tracking
+    is_verified = Column(Boolean, default=False)
+    verified_by = Column(String, nullable=True)  # "triangulation", "manual", "sec_filing"
+    verification_date = Column(DateTime, nullable=True)
+    corroborating_sources = Column(Integer, default=0)  # Number of sources that agree
+
+    # Temporal relevance
+    data_as_of_date = Column(DateTime, nullable=True)  # When the data was true (not when extracted)
+    staleness_days = Column(Integer, default=0)
+
+    # Legacy fields for backwards compatibility
     entered_by = Column(String, nullable=True)  # Username for manual entries
     formula = Column(Text, nullable=True)  # Formula string for calculated values
-    source_name = Column(String, nullable=True)  # e.g., "Crunchbase", "Company Website"
     verified_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CompetitorProduct(Base):
+    """Individual product/solution offered by a competitor."""
+    __tablename__ = "competitor_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+
+    # Product identification
+    product_name = Column(String)  # e.g., "Phreesia Intake", "Athena Collector"
+    product_category = Column(String)  # e.g., "Patient Intake", "RCM", "EHR"
+    product_subcategory = Column(String, nullable=True)  # e.g., "Self-Service Kiosk"
+
+    # Product details
+    description = Column(Text, nullable=True)
+    key_features = Column(Text, nullable=True)  # JSON array
+    target_segment = Column(String, nullable=True)  # "SMB", "Mid-Market", "Enterprise"
+
+    # Competitive positioning
+    is_primary_product = Column(Boolean, default=False)  # Main revenue driver
+    market_position = Column(String, nullable=True)  # "Leader", "Challenger", "Niche"
+
+    # Metadata
+    launched_date = Column(DateTime, nullable=True)
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    data_source_id = Column(Integer, ForeignKey("data_sources.id"), nullable=True)
+
+    # Relationships
+    pricing_tiers = relationship("ProductPricingTier", back_populates="product")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ProductPricingTier(Base):
+    """Pricing tier for a specific product."""
+    __tablename__ = "product_pricing_tiers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("competitor_products.id"), index=True)
+
+    # Tier identification
+    tier_name = Column(String)  # e.g., "Basic", "Professional", "Enterprise"
+    tier_position = Column(Integer, nullable=True)  # 1, 2, 3... for ordering
+
+    # Pricing structure (based on healthcare SaaS models)
+    pricing_model = Column(String)  # "per_visit", "per_provider", "per_location", "subscription", "percentage_collections", "custom"
+
+    # Price details
+    base_price = Column(Float, nullable=True)  # Numeric value
+    price_currency = Column(String, default="USD")
+    price_unit = Column(String, nullable=True)  # "visit", "provider/month", "location/month"
+    price_display = Column(String, nullable=True)  # Original display: "$3.00/visit", "Contact Sales"
+
+    # For percentage-based pricing (RCM)
+    percentage_rate = Column(Float, nullable=True)  # e.g., 4.5 for 4.5%
+    percentage_basis = Column(String, nullable=True)  # "collections", "charges", "net_revenue"
+
+    # Tier limitations
+    min_volume = Column(String, nullable=True)  # "100 visits/month"
+    max_volume = Column(String, nullable=True)  # "Unlimited"
+    included_features = Column(Text, nullable=True)  # JSON array
+    excluded_features = Column(Text, nullable=True)  # JSON array
+
+    # Contract terms
+    contract_length = Column(String, nullable=True)  # "Monthly", "Annual", "3-year"
+    setup_fee = Column(Float, nullable=True)
+    implementation_cost = Column(String, nullable=True)  # "Included", "$5,000", "Custom"
+
+    # Data quality
+    price_verified = Column(Boolean, default=False)
+    price_source = Column(String, nullable=True)  # "website", "sales_quote", "customer_intel"
+    confidence_score = Column(Integer, nullable=True)
+    last_verified = Column(DateTime, nullable=True)
+
+    # Relationships
+    product = relationship("CompetitorProduct", back_populates="pricing_tiers")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProductFeatureMatrix(Base):
+    """Feature comparison matrix across products."""
+    __tablename__ = "product_feature_matrix"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("competitor_products.id"), index=True)
+
+    feature_category = Column(String)  # "Patient Intake", "Payments", "Integration"
+    feature_name = Column(String)  # "Digital Check-In", "Apple Pay Support"
+    feature_status = Column(String)  # "included", "add_on", "not_available", "coming_soon"
+    feature_tier = Column(String, nullable=True)  # Which tier includes this
+
+    notes = Column(Text, nullable=True)
+    source_url = Column(String, nullable=True)
+    last_verified = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CustomerCountEstimate(Base):
+    """Detailed customer count tracking with verification."""
+    __tablename__ = "customer_count_estimates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+
+    # The estimate
+    count_value = Column(Integer, nullable=True)  # Numeric: 3000
+    count_display = Column(String, nullable=True)  # Display: "3,000+" or "3,000-5,000"
+    count_type = Column(String, nullable=True)  # "exact", "minimum", "range", "estimate"
+
+    # What is being counted (CRITICAL CONTEXT)
+    count_unit = Column(String, nullable=True)  # "healthcare_organizations", "providers", "locations", "users", "lives_covered"
+    count_definition = Column(Text, nullable=True)  # "Number of distinct hospital/clinic customers"
+
+    # Segment breakdown (if available)
+    segment_breakdown = Column(Text, nullable=True)  # JSON: {"hospitals": 500, "ambulatory": 2500}
+
+    # Verification
+    is_verified = Column(Boolean, default=False)
+    verification_method = Column(String, nullable=True)  # "sec_filing", "triangulation", "sales_intel"
+    verification_date = Column(DateTime, nullable=True)
+
+    # Source tracking
+    primary_source = Column(String, nullable=True)  # "website", "sec_10k", "press_release"
+    primary_source_url = Column(String, nullable=True)
+    primary_source_date = Column(DateTime, nullable=True)
+
+    # Multi-source data
+    all_sources = Column(Text, nullable=True)  # JSON array of all source claims
+    source_agreement_score = Column(Float, nullable=True)  # 0-1, how much sources agree
+
+    # Confidence
+    confidence_score = Column(Integer, nullable=True)  # 0-100
+    confidence_level = Column(String, nullable=True)  # "high", "moderate", "low"
+    confidence_notes = Column(Text, nullable=True)
+
+    # Historical tracking
+    as_of_date = Column(DateTime, nullable=True)  # When this count was valid
+    previous_count = Column(Integer, nullable=True)
+    growth_rate = Column(Float, nullable=True)  # YoY growth %
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -264,6 +433,20 @@ class ActivityLog(Base):
     action_details = Column(Text, nullable=True)  # JSON-encoded details
     ip_address = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class UserSavedPrompt(Base):
+    """User-specific saved prompts for AI generation. Each user can save multiple named prompts."""
+    __tablename__ = "user_saved_prompts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)  # User-friendly name for the prompt
+    prompt_type = Column(String, default="executive_summary")  # "executive_summary", "chat_persona", etc.
+    content = Column(Text, nullable=False)  # The actual prompt content
+    is_default = Column(Boolean, default=False)  # If true, this is the user's default for this type
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # Create tables

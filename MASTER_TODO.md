@@ -11,7 +11,41 @@ Current Version: v5.0.1
 Next Version: v5.0.2 (Gemini Hybrid Integration)
 Active Tasks
 ID	Task	Status	Assigned	Priority
--	No active tasks	-	-	-
+5.0.1-023	Add inline progress HTML to Dashboard	pending	-	HIGH
+5.0.1-024	Add inline progress CSS styles	pending	-	HIGH
+5.0.1-025	Update JS for inline progress display	pending	-	HIGH
+5.0.1-026	Expand backend scrape_progress object	pending	-	HIGH
+5.0.1-027	Track field-level changes in scraper	pending	-	HIGH
+5.0.1-028	Add /api/scrape/session endpoint	pending	-	MEDIUM
+5.0.1-029	Add /api/scrape/generate-summary endpoint	pending	-	HIGH
+5.0.1-030	Update refresh complete modal with AI summary	pending	-	HIGH
+5.0.1-031	Add RefreshSession database model	pending	-	MEDIUM
+5.0.1-032	Test full refresh flow end-to-end	pending	-	HIGH
+
+v5.0.1 - Data Refresh Enhancement (IMPLEMENTATION_PLAN_DATA_REFRESH.md)
+Goal: Replace modal-based refresh progress with inline Dashboard display + AI-powered change summary
+
+Phase 1: Inline Progress Bar
+ID	Task	Status	Details
+5.0.1-023	Add inline progress HTML	pending	New component below "Last Data Refresh" indicator
+5.0.1-024	Add inline progress CSS	pending	Animated progress bar, live update styling
+5.0.1-025	Update JS for inline progress	pending	Replace modal functions with inline display
+
+Phase 2: Enhanced Backend Tracking
+ID	Task	Status	Details
+5.0.1-026	Expand scrape_progress object	pending	Add recent_changes, change_details, errors arrays
+5.0.1-027	Track field-level changes	pending	Record old/new values during scrape
+5.0.1-028	Add /api/scrape/session endpoint	pending	Return full session details with changes
+
+Phase 3: AI-Powered Summary
+ID	Task	Status	Details
+5.0.1-029	Add /api/scrape/generate-summary	pending	GPT-4 analysis of refresh changes
+5.0.1-030	Update complete modal with AI	pending	Show AI summary + change details accordion
+
+Phase 4: Refresh History
+ID	Task	Status	Details
+5.0.1-031	Add RefreshSession model	pending	New database table for session persistence
+5.0.1-032	Test full flow	pending	End-to-end testing of all components
 v5.0.2 - Gemini Hybrid AI Integration
 Goal: Add Google Gemini as a secondary AI provider alongside OpenAI for cost savings and new features.
 
@@ -84,6 +118,19 @@ ID	Task	Status	Details
 5.2.0-002	Role-based dashboards	pending	Custom views per role
 5.2.0-003	Shared annotations	pending	Team notes on competitors
 Completed Tasks
+v5.0.1 Session #5: CSS Fix & Data Refresh Planning (2026-01-25, 10:30 PM)
+ID	Task	Completed	Details
+5.0.1-033	Fix dashboard stats CSS visibility	2026-01-25	Scoped .stat-value white text to .complete-stats only
+5.0.1-034	Fix refresh description text wrapping	2026-01-25	Changed max-width to white-space:nowrap
+5.0.1-035	Create IMPLEMENTATION_PLAN_DATA_REFRESH.md	2026-01-25	4-phase plan for inline progress + AI summary
+
+v5.0.1 Session #4: C-Suite Meeting Prep (2026-01-25, 9:11 PM)
+ID	Task	Completed	Details
+5.0.1-019	Fix dashboard stats display	2026-01-25	Removed duplicate endpoints, added null-safety
+5.0.1-020	User-specific prompt management	2026-01-25	New UserSavedPrompt model, full CRUD API
+5.0.1-021	AI summary progress bar	2026-01-25	Real-time 5-step progress modal
+5.0.1-022	Code cleanup duplicate endpoints	2026-01-25	Removed redundant dashboard/stats, competitors
+
 v5.0.1 UI/UX Session (2026-01-25)
 ID	Task	Completed	Details
 5.0.1-009	Fix admin login password hash	2026-01-25	Reset password to match SECRET_KEY
@@ -134,6 +181,27 @@ critical - Must be done immediately
 high - Should be done this session
 medium - Should be done soon
 low - Nice to have
-Last Updated: 2026-01-25
+Last Updated: 2026-01-25 (10:45 PM EST)
 Version: v5.0.1
-Updated By: Claude Opus 4.5 (session: UI/UX improvements + prompt caching)
+Updated By: Claude Opus 4.5 (session: CSS Fix & Data Refresh Planning)
+
+---
+
+## Session End Summary (January 25, 2026, 10:45 PM)
+
+### Changes Made This Session:
+1. **CSS Fix** - Dashboard stat card numbers now visible (was white-on-white)
+2. **CSS Fix** - Refresh description text stays on one line
+3. **Planning** - Created comprehensive 4-phase Data Refresh Enhancement plan
+
+### Files Modified:
+- `frontend/styles.css` - Lines 661-666, 2962-2971
+- `IMPLEMENTATION_PLAN_DATA_REFRESH.md` - New file
+- `CLAUDE.md` - Session documentation
+- `MASTER_TODO.md` - Task updates
+
+### Next Session Should:
+1. Start with Task 5.0.1-023 (inline progress HTML)
+2. Follow IMPLEMENTATION_PLAN_DATA_REFRESH.md phases
+3. Test each component before moving to next
+4. Total estimated time: ~3.5 hours
