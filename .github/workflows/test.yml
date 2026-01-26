@@ -1,0 +1,46 @@
+# =============================================================================
+# Certify Intel - Quick Test Workflow
+# =============================================================================
+# Lightweight workflow for PR validation
+# =============================================================================
+
+name: Tests
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'requirements.txt'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run tests
+        run: |
+          cd backend
+          python -m pytest tests/ -v
+        env:
+          SECRET_KEY: test-secret-key
+          DATABASE_URL: sqlite:///./test.db

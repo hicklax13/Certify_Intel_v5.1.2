@@ -113,23 +113,23 @@
 
 ---
 
-### v5.1.0 - Cloud Deployment (PENDING)
+### v5.1.0 - Cloud Deployment (COMPLETED - January 26, 2026)
 
 | ID | Task | Status | Priority | Details |
 |----|------|--------|----------|---------|
-| 5.1.0-001 | Docker production config | PENDING | MEDIUM | Production-ready Docker setup |
-| 5.1.0-002 | Cloud deployment guide | PENDING | MEDIUM | AWS/GCP/Azure instructions |
-| 5.1.0-003 | CI/CD pipeline | PENDING | LOW | Automated testing & deployment |
+| 5.1.0-001 | Docker production config | ✅ COMPLETED | MEDIUM | Created docker-compose.prod.yml, Dockerfile.prod, nginx.conf |
+| 5.1.0-002 | Cloud deployment guide | ✅ COMPLETED | MEDIUM | docs/CLOUD_DEPLOYMENT_GUIDE.md - AWS/GCP/Azure instructions |
+| 5.1.0-003 | CI/CD pipeline | ✅ COMPLETED | LOW | .github/workflows/ci-cd.yml, .gitlab-ci.yml |
 
 ---
 
-### v5.2.0 - Team Features (PENDING)
+### v5.2.0 - Team Features (COMPLETED - January 26, 2026)
 
 | ID | Task | Status | Priority | Details |
 |----|------|--------|----------|---------|
-| 5.2.0-001 | Multi-user improvements | PENDING | LOW | Better team collaboration |
-| 5.2.0-002 | Role-based dashboards | PENDING | LOW | Custom views per role |
-| 5.2.0-003 | Shared annotations | PENDING | LOW | Team notes on competitors |
+| 5.2.0-001 | Multi-user improvements | ✅ COMPLETED | LOW | Team, TeamMembership models; team CRUD endpoints |
+| 5.2.0-002 | Role-based dashboards | ✅ COMPLETED | LOW | DashboardConfiguration model; per-role permissions |
+| 5.2.0-003 | Shared annotations | ✅ COMPLETED | LOW | CompetitorAnnotation, AnnotationReply models; full API
 
 ---
 
@@ -359,24 +359,24 @@
 | v5.0.2 Gemini Integration | 21 | 0 | 0 | 21 | 0 |
 | v5.0.3 Desktop App | 3 | 2 | 0 | 0 | 1 |
 | v5.0.7 Sales & Marketing | 26 | 0 | 0 | 26 | 0 |
-| v5.1.0 Cloud Deployment | 3 | 3 | 0 | 0 | 0 |
-| v5.2.0 Team Features | 3 | 3 | 0 | 0 | 0 |
+| v5.1.0 Cloud Deployment | 3 | 0 | 0 | 3 | 0 |
+| v5.2.0 Team Features | 3 | 0 | 0 | 3 | 0 |
 | Live News Feed | 17 | 0 | 0 | 17 | 0 |
-| **TOTAL** | **83** | **8** | **0** | **74** | **1** |
+| **TOTAL** | **83** | **2** | **0** | **80** | **1** |
 
 ---
 
 ## Recommended Next Steps
 
 1. **✅ COMPLETED**: Sales & Marketing Module (v5.0.7) - All 26 tasks complete
-2. **NEXT**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
-3. **NEXT**: Cloud Deployment (v5.1.0) - Docker, AWS/GCP/Azure guides
-4. **FUTURE**: Team Features (v5.2.0) - Multi-user improvements, role-based dashboards
+2. **✅ COMPLETED**: Cloud Deployment (v5.1.0) - Docker, nginx, AWS/GCP/Azure guides
+3. **✅ COMPLETED**: Team Features (v5.2.0) - Teams, annotations, role-based dashboards
+4. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
 
 ---
 
-**Last Updated**: January 26, 2026, 8:00 AM EST
-**Updated By**: Claude Opus 4.5 (v5.0.7 Phase 4-5 Implementation Complete)
+**Last Updated**: January 26, 2026, 1:05 PM EST
+**Updated By**: Claude Opus 4.5 (v5.1.0 + v5.2.0 Implementation Complete)
 
 ---
 

@@ -4612,12 +4612,13 @@ async def bulk_update_competitors(
 
 
 # Import routers
-from routers import reports, discovery, sales_marketing
+from routers import reports, discovery, sales_marketing, teams
 import api_routes
 
 # Include routers
 app.include_router(discovery.router)
 app.include_router(api_routes.router)  # Covers analytics, winloss, external, etc.
+app.include_router(teams.router)  # Team Features (v5.2.0)
 app.include_router(reports.router)
 app.include_router(sales_marketing.router)  # Sales & Marketing Module (v5.0.7)
 

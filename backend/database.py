@@ -595,6 +595,124 @@ class DimensionNewsTag(Base):
     is_validated = Column(Boolean, default=False)  # User validated the tag
 
 
+# ===========================================
+# TEAM FEATURES (v5.2.0)
+# ===========================================
+
+class Team(Base):
+    """Team model for grouping users and enabling team collaboration."""
+    __tablename__ = "teams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Team settings
+    default_dashboard_layout = Column(String, default="standard")  # standard, compact, detailed
+    notification_settings = Column(Text, nullable=True)  # JSON-encoded team notification preferences
+
+
+class TeamMembership(Base):
+    """Association table linking users to teams with roles."""
+    __tablename__ = "team_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    role = Column(String, default="member")  # owner, admin, member
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class CompetitorAnnotation(Base):
+    """Shared annotations/notes on competitors visible to team members."""
+    __tablename__ = "competitor_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)  # NULL = personal note
+
+    # Annotation content
+    title = Column(String, nullable=True)
+    content = Column(Text, nullable=False)
+    annotation_type = Column(String, default="note")  # note, insight, warning, opportunity, action_item
+    priority = Column(String, default="normal")  # low, normal, high, critical
+
+    # Visibility
+    is_public = Column(Boolean, default=True)  # Visible to all team members
+    is_pinned = Column(Boolean, default=False)  # Pinned to top of annotations
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Context (optional - link to specific field or dimension)
+    field_name = Column(String, nullable=True)  # e.g., "pricing", "customer_count"
+    dimension_id = Column(String, nullable=True)  # e.g., "product_packaging"
+
+
+class AnnotationReply(Base):
+    """Replies to annotations for threaded discussions."""
+    __tablename__ = "annotation_replies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    annotation_id = Column(Integer, ForeignKey("competitor_annotations.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DashboardConfiguration(Base):
+    """Role-based dashboard configurations and user customizations."""
+    __tablename__ = "dashboard_configurations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_type = Column(String, index=True)  # "role", "user", "team"
+    config_key = Column(String, index=True)  # role name, user_id, or team_id
+
+    # Layout settings
+    layout = Column(String, default="standard")  # standard, compact, detailed, custom
+    widgets = Column(Text, nullable=True)  # JSON: enabled widgets and their positions
+
+    # Display preferences
+    default_threat_filter = Column(String, nullable=True)  # "all", "high", "medium", "low"
+    default_sort = Column(String, default="threat_level")
+    items_per_page = Column(Integer, default=10)
+
+    # Feature visibility (role-based permissions)
+    can_view_analytics = Column(Boolean, default=True)
+    can_view_financials = Column(Boolean, default=True)
+    can_edit_competitors = Column(Boolean, default=False)
+    can_manage_users = Column(Boolean, default=False)
+    can_export_data = Column(Boolean, default=True)
+    can_trigger_refresh = Column(Boolean, default=False)
+
+    # Quick access
+    pinned_competitors = Column(Text, nullable=True)  # JSON array of competitor IDs
+    favorite_reports = Column(Text, nullable=True)  # JSON array of report configurations
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TeamActivity(Base):
+    """Track team-level activities for collaboration awareness."""
+    __tablename__ = "team_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_email = Column(String)
+    activity_type = Column(String, index=True)  # "annotation", "update", "export", "insight"
+    activity_details = Column(Text, nullable=True)  # JSON details
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
