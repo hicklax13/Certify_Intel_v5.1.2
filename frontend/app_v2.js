@@ -320,6 +320,11 @@ async function fetchAPI(endpoint, options = {}) {
         }
         return await response.json();
     } catch (error) {
+        // Don't show toast for intentional aborts (timeouts)
+        if (error.name === 'AbortError') {
+            console.log(`Request aborted (timeout): ${endpoint}`);
+            return null;
+        }
         console.error(`API Error: ${endpoint}`, error);
         showToast(`Error loading data: ${error.message}`, 'error');
         return null;
@@ -534,7 +539,7 @@ async function sendAIChat() {
     }
 }
 
-// Enhanced triggerScrapeAll with loading state and summary refresh
+// Enhanced triggerScrapeAll with progress modal and live progress tracking
 async function triggerScrapeAll() {
     const btn = document.querySelector('.btn-primary[onclick*="triggerScrapeAll"]') ||
         document.querySelector('button:contains("Refresh")') ||
@@ -545,30 +550,147 @@ async function triggerScrapeAll() {
         btn.disabled = true;
     }
 
-    showToast('Refreshing all competitor data...', 'info');
+    // Show progress modal
+    showRefreshProgressModal();
 
     try {
         const result = await fetchAPI('/api/scrape/all');
 
-        if (result) {
-            showToast('Data refresh complete! Regenerating summary...', 'success');
-
-            // Reload dashboard data
-            await loadDashboard();
-
-            // Regenerate AI summary with new data
-            await fetchDashboardSummary();
-
-            showToast('Dashboard fully updated with latest data', 'success');
+        if (result && result.total) {
+            // Start polling for progress
+            pollRefreshProgress(result.total);
+        } else {
+            hideRefreshProgressModal();
+            showToast('Error starting refresh', 'error');
+            if (btn) {
+                btn.classList.remove('btn-loading');
+                btn.disabled = false;
+            }
         }
     } catch (e) {
+        hideRefreshProgressModal();
         showToast('Error refreshing data: ' + e.message, 'error');
-    } finally {
         if (btn) {
             btn.classList.remove('btn-loading');
             btn.disabled = false;
         }
     }
+}
+
+// Progress modal functions
+function showRefreshProgressModal() {
+    const modal = document.getElementById('refreshProgressModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('progressCurrentText').textContent = 'Starting refresh...';
+        document.getElementById('refreshProgressBar').style.width = '0%';
+        document.getElementById('progressPercent').textContent = '0%';
+        document.getElementById('progressCount').textContent = '0 of 0 competitors';
+        document.getElementById('progressCompletedList').innerHTML = '';
+    }
+}
+
+function hideRefreshProgressModal() {
+    const modal = document.getElementById('refreshProgressModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function updateRefreshProgress(progress) {
+    const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+
+    document.getElementById('refreshProgressBar').style.width = `${percent}%`;
+    document.getElementById('progressPercent').textContent = `${percent}%`;
+    document.getElementById('progressCount').textContent = `${progress.completed} of ${progress.total} competitors`;
+
+    if (progress.current_competitor) {
+        document.getElementById('progressCurrentText').textContent = `Scraping: ${progress.current_competitor}`;
+    }
+
+    // Update completed list
+    const listEl = document.getElementById('progressCompletedList');
+    let html = '';
+
+    // Show last 5 completed items
+    const recentDone = progress.competitors_done.slice(-5);
+    recentDone.forEach(name => {
+        html += `<div class="progress-completed-item"><span class="check-icon">&#10003;</span> ${name}</div>`;
+    });
+
+    // Show current item if active
+    if (progress.current_competitor && progress.active) {
+        html += `<div class="progress-completed-item current"><span class="check-icon">&#8594;</span> ${progress.current_competitor}</div>`;
+    }
+
+    listEl.innerHTML = html;
+}
+
+function showRefreshCompleteModal(progress) {
+    const modal = document.getElementById('refreshCompleteModal');
+    if (modal) {
+        document.getElementById('completeTotal').textContent = progress.total;
+        document.getElementById('completeChanges').textContent = progress.changes_detected;
+        document.getElementById('completeNewValues').textContent = progress.new_values_added;
+        modal.style.display = 'flex';
+    }
+}
+
+function closeRefreshCompleteModal() {
+    const modal = document.getElementById('refreshCompleteModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function pollRefreshProgress(total) {
+    const btn = document.querySelector('.btn-primary[onclick*="triggerScrapeAll"]');
+    let pollInterval = null;
+
+    pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`${API_BASE}/api/scrape/progress`);
+            const progress = await response.json();
+
+            updateRefreshProgress(progress);
+
+            // Check if complete
+            if (!progress.active && progress.completed >= progress.total && progress.total > 0) {
+                clearInterval(pollInterval);
+                hideRefreshProgressModal();
+
+                // Show completion modal
+                showRefreshCompleteModal(progress);
+
+                // Re-enable button
+                if (btn) {
+                    btn.classList.remove('btn-loading');
+                    btn.disabled = false;
+                }
+
+                // Reload dashboard data
+                await loadDashboard();
+
+                // Regenerate AI summary with new data
+                await fetchDashboardSummary();
+            }
+        } catch (e) {
+            console.error('Error polling progress:', e);
+        }
+    }, 500);
+
+    // Safety timeout after 10 minutes
+    setTimeout(() => {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            hideRefreshProgressModal();
+            if (btn) {
+                btn.classList.remove('btn-loading');
+                btn.disabled = false;
+            }
+            showToast('Refresh timed out - check Change Log for any completed updates', 'warning');
+        }
+    }, 600000);
 }
 
 function updateStatsCards() {
@@ -1845,21 +1967,7 @@ async function triggerScrape(id) {
     }
 }
 
-async function triggerScrapeAll() {
-    try {
-        const response = await fetch(`${API_BASE}/api/scrape/all`, { method: 'POST' });
-        if (response.ok) {
-            const result = await response.json();
-            showToast(`Refreshing ${result.competitor_ids?.length || 'all'} competitors...`, 'success');
-            // Reload dashboard after a short delay
-            setTimeout(() => loadDashboard(), 3000);
-        } else {
-            showToast('Failed to start refresh', 'error');
-        }
-    } catch (error) {
-        showToast(`Error: ${error.message}`, 'error');
-    }
-}
+// Note: triggerScrapeAll is defined earlier in this file with progress tracking
 
 async function triggerDiscovery() {
     showToast('Starting autonomous discovery agent...', 'info');
@@ -4023,32 +4131,25 @@ async function loadPromptContent() {
     const key = document.getElementById('promptKeySelector').value;
     const editor = document.getElementById('promptContentEditor');
 
-    // INSTANT load from cache (localStorage + defaults) - no waiting
-    editor.value = promptCache[key] || DEFAULT_PROMPTS[key] || '';
+    // Show loading state initially
+    editor.value = promptCache[key] || DEFAULT_PROMPTS[key] || 'Loading...';
 
-    // Fetch latest from server in background with timeout (max 2 seconds)
-    // This ensures we stay under 3 seconds even if server is slow
+    // Fetch from server (no timeout - let it complete)
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-        const response = await fetchAPI(`/api/admin/system-prompts/${key}`, {
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
+        const response = await fetchAPI(`/api/admin/system-prompts/${key}`);
 
         if (response && response.content) {
-            // Only update display if different AND user hasn't started typing
-            if (response.content !== editor.value && document.activeElement !== editor) {
-                editor.value = response.content;
-            }
-            // Always update cache and localStorage
+            editor.value = response.content;
             promptCache[key] = response.content;
             savePromptsToStorage(promptCache);
+        } else if (!editor.value || editor.value === 'Loading...') {
+            // Fallback to default if no server response
+            editor.value = DEFAULT_PROMPTS[key] || '';
         }
     } catch (e) {
-        // Timeout or error - just use cached value (already displayed)
-        console.log('Using cached prompt (server fetch skipped or timed out)');
+        // Error - use cached or default value
+        console.log('Using cached prompt due to error');
+        editor.value = promptCache[key] || DEFAULT_PROMPTS[key] || '';
     }
 }
 
@@ -4078,14 +4179,7 @@ async function preloadPrompts() {
     const keys = ['dashboard_summary', 'chat_persona'];
     for (const key of keys) {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-            const response = await fetchAPI(`/api/admin/system-prompts/${key}`, {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
+            const response = await fetchAPI(`/api/admin/system-prompts/${key}`);
             if (response && response.content) {
                 promptCache[key] = response.content;
             }

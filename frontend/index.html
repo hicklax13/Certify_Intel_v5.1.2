@@ -982,6 +982,61 @@
                 </form>
             </div>
         </div>
+
+        <!-- Data Refresh Progress Modal -->
+        <div id="refreshProgressModal" class="modal-overlay" style="display: none;">
+            <div class="modal progress-modal">
+                <div class="modal-header">
+                    <h3>Refreshing Data...</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="progress-current">
+                        <span id="progressCurrentText">Starting refresh...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="refreshProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="progressPercent">0%</span>
+                        <span id="progressCount">0 of 0 competitors</span>
+                    </div>
+                    <div class="progress-completed-list" id="progressCompletedList">
+                        <!-- Completed competitors will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Refresh Complete Modal -->
+        <div id="refreshCompleteModal" class="modal-overlay" style="display: none;">
+            <div class="modal complete-modal">
+                <div class="modal-header success-header">
+                    <span class="success-icon">&#10003;</span>
+                    <h3>Data Refresh Complete!</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="complete-stats">
+                        <div class="stat-row">
+                            <span class="stat-label">Competitors Refreshed</span>
+                            <span class="stat-value" id="completeTotal">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Data Values Changed</span>
+                            <span class="stat-value" id="completeChanges">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">New Values Added</span>
+                            <span class="stat-value" id="completeNewValues">0</span>
+                        </div>
+                    </div>
+                    <p class="complete-hint">View details in the Change Log page</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeRefreshCompleteModal()">OK</button>
+                    <button class="btn btn-primary" onclick="closeRefreshCompleteModal(); navigateTo('changes');">View Changes</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

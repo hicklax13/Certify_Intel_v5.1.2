@@ -106,6 +106,18 @@ def log_activity(db: Session, user_email: str, user_id: int, action_type: str, a
     return activity
 
 
+# Global progress tracker for scrape operations
+scrape_progress = {
+    "active": False,
+    "total": 0,
+    "completed": 0,
+    "current_competitor": None,
+    "competitors_done": [],
+    "changes_detected": 0,
+    "new_values_added": 0
+}
+
+
 # White fill for Excel cells
 WHITE_FILL = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
@@ -258,22 +270,22 @@ async def lifespan(app: FastAPI):
     disabled_scrapers = ["Crunchbase", "PitchBook", "LinkedIn (live scraping)"]
 
     print("\nAvailable Scrapers:")
-    print("  ✅ Playwright Base Scraper - Website content extraction")
-    print("  ✅ SEC Edgar (yfinance) - Public company financials")
-    print("  ✅ News Monitor (Google News RSS) - Real-time news")
-    print("  ✅ Known Data Fallback - Pre-populated data for demo")
-    print("  ✅ [15+ other specialized scrapers with fallback data]")
+    print("  [OK] Playwright Base Scraper - Website content extraction")
+    print("  [OK] SEC Edgar (yfinance) - Public company financials")
+    print("  [OK] News Monitor (Google News RSS) - Real-time news")
+    print("  [OK] Known Data Fallback - Pre-populated data for demo")
+    print("  [OK] [15+ other specialized scrapers with fallback data]")
 
     print("\nDisabled Scrapers (Paid APIs - not available):")
     for scraper in disabled_scrapers:
-        print(f"  ❌ {scraper}")
+        print(f"  [X] {scraper}")
 
     print("\nOptional Features:")
     for env_var, feature in optional_features.items():
         if os.getenv(env_var):
-            print(f"  ✅ {feature} - ENABLED")
+            print(f"  [OK] {feature} - ENABLED")
         else:
-            print(f"  ⚠️  {feature} - DISABLED (set {env_var} to enable)")
+            print(f"  [!] {feature} - DISABLED (set {env_var} to enable)")
 
     print("=" * 60)
 
@@ -996,12 +1008,14 @@ def get_changes(competitor_id: Optional[int] = None, days: int = 30, db: Session
             {
                 "id": c.id,
                 "competitor_id": c.competitor_id,
-                "change_type": c.field_name.replace("_", " ").title(), # Map field_name to readable type
+                "competitor_name": c.competitor_name,
+                "change_type": c.field_name.replace("_", " ").title(),
                 "previous_value": c.old_value,
                 "new_value": c.new_value,
-                "severity": "Medium", # Default severity as DB model doesn't have it yet, or map from field
+                "severity": "Medium",
                 "detected_at": c.changed_at.isoformat(),
-                "source": c.source_url or "manual"
+                "source": c.changed_by or "manual",
+                "changed_by": c.changed_by
             }
             for c in changes
         ]
@@ -1775,67 +1789,49 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
 
 # --- Change Log ---
-
-@app.get("/api/changes")
-def get_change_log(
-    severity: Optional[str] = None,
-    days: int = 7,
-    competitor_id: Optional[int] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get recent changes from the change log."""
-    from datetime import timedelta
-    
-    cutoff = datetime.utcnow() - timedelta(days=days)
-    
-    query = db.query(ChangeLog).filter(ChangeLog.detected_at >= cutoff)
-    if severity:
-        query = query.filter(ChangeLog.severity == severity)
-    if competitor_id:
-        query = query.filter(ChangeLog.competitor_id == competitor_id)
-    
-    changes = query.order_by(ChangeLog.detected_at.desc()).offset(skip).limit(limit).all()
-    
-    return {
-        "changes": [
-            {
-                "id": c.id,
-                "competitor_id": c.competitor_id,
-                "competitor_name": c.competitor_name,
-                "change_type": c.change_type,
-                "previous_value": c.previous_value,
-                "new_value": c.new_value,
-                "source": c.source,
-                "severity": c.severity,
-                "detected_at": c.detected_at.isoformat()
-            }
-            for c in changes
-        ],
-        "count": len(changes)
-    }
+# Note: Primary /api/changes endpoint is defined earlier using DataChangeHistory table
 
 
 # --- Scraping Endpoints ---
 
 @app.post("/api/scrape/all")
 async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Trigger scrape for all active competitors."""
+    """Trigger scrape for all active competitors with progress tracking."""
+    global scrape_progress
+
     competitors = db.query(Competitor).filter(
         Competitor.is_deleted == False,
         Competitor.status == "Active"
     ).all()
     competitor_ids = [c.id for c in competitors]
-    
-    # Add to background tasks
+    competitor_names = {c.id: c.name for c in competitors}
+
+    # Reset progress tracker
+    scrape_progress = {
+        "active": True,
+        "total": len(competitor_ids),
+        "completed": 0,
+        "current_competitor": None,
+        "competitors_done": [],
+        "changes_detected": 0,
+        "new_values_added": 0
+    }
+
+    # Add to background tasks with progress tracking
     for cid in competitor_ids:
-        background_tasks.add_task(run_scrape_job, cid)
-    
+        background_tasks.add_task(run_scrape_job_with_progress, cid, competitor_names.get(cid, "Unknown"))
+
     return {
         "message": f"Scrape jobs queued for {len(competitor_ids)} competitors",
-        "competitor_ids": competitor_ids
+        "competitor_ids": competitor_ids,
+        "total": len(competitor_ids)
     }
+
+
+@app.get("/api/scrape/progress")
+async def get_scrape_progress():
+    """Get the current progress of a scrape operation."""
+    return scrape_progress
 
 
 @app.post("/api/scrape/{competitor_id}")
@@ -1944,12 +1940,122 @@ async def run_scrape_job(competitor_id: int):
         comp.last_updated = datetime.utcnow()
         db.commit()
         print(f"Refresh completed for {comp.name} (timestamp updated)")
-        
+
     except Exception as e:
         print(f"Scrape job failed for competitor {competitor_id}: {e}")
         db.rollback()
     finally:
         db.close()
+
+
+async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str):
+    """Background job to scrape a competitor with progress tracking and unified change logging."""
+    global scrape_progress
+
+    # Update current competitor being processed
+    scrape_progress["current_competitor"] = competitor_name
+
+    db = SessionLocal()
+    changes_count = 0
+    new_values_count = 0
+
+    try:
+        comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+        if not comp:
+            print(f"Competitor {competitor_id} not found")
+            return
+
+        print(f"Starting scrape for {comp.name}...")
+
+        # Try to use the full scraper if available
+        try:
+            from scraper import CompetitorScraper
+            from extractor import GPTExtractor
+
+            scraper = CompetitorScraper()
+            extractor = GPTExtractor()
+
+            # Scrape the website
+            content = await scraper.scrape(comp.website)
+
+            if content:
+                # Extract data using GPT
+                from dataclasses import asdict
+
+                extracted_obj = extractor.extract_from_content(comp.name, content)
+                extracted = asdict(extracted_obj)
+
+                if extracted:
+                    # Update competitor with extracted data
+                    for key, value in extracted.items():
+                        if hasattr(comp, key) and value:
+                            # Check if this field is locked (manual correction)
+                            is_locked = db.query(DataSource).filter(
+                                DataSource.competitor_id == comp.id,
+                                DataSource.field_name == key,
+                                DataSource.source_type == "manual"
+                            ).first()
+
+                            if is_locked:
+                                print(f"Skipping update for {comp.name}.{key} (locked by manual correction)")
+                                continue
+
+                            old_value = getattr(comp, key)
+                            old_str = str(old_value) if old_value else None
+                            new_str = str(value)
+
+                            # Check if this is a new value or a change
+                            if old_str != new_str:
+                                # Log to DataChangeHistory (unified change log)
+                                change_record = DataChangeHistory(
+                                    competitor_id=comp.id,
+                                    competitor_name=comp.name,
+                                    field_name=key,
+                                    old_value=old_str,
+                                    new_value=new_str,
+                                    changed_by="System (Auto-Refresh)",
+                                    change_reason="Automated data refresh"
+                                )
+                                db.add(change_record)
+                                setattr(comp, key, value)
+
+                                if old_value is None or old_str == "" or old_str == "None":
+                                    new_values_count += 1
+                                else:
+                                    changes_count += 1
+
+                    comp.last_updated = datetime.utcnow()
+                    db.commit()
+                    print(f"Scrape completed for {comp.name} - {changes_count} changes, {new_values_count} new values")
+
+        except ImportError as e:
+            print(f"Scraper not available: {e}")
+        except Exception as e:
+            print(f"Scrape error for {comp.name}: {e}")
+
+        # Fallback: Just update the timestamp to show we tried
+        if not changes_count and not new_values_count:
+            comp.last_updated = datetime.utcnow()
+            db.commit()
+            print(f"Refresh completed for {comp.name} (timestamp updated)")
+
+    except Exception as e:
+        print(f"Scrape job failed for competitor {competitor_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+        # Update progress tracker
+        scrape_progress["completed"] += 1
+        scrape_progress["competitors_done"].append(competitor_name)
+        scrape_progress["changes_detected"] += changes_count
+        scrape_progress["new_values_added"] += new_values_count
+
+        # Check if all scrapes are done
+        if scrape_progress["completed"] >= scrape_progress["total"]:
+            scrape_progress["active"] = False
+            scrape_progress["current_competitor"] = None
+            print(f"All scrapes complete! {scrape_progress['changes_detected']} changes, {scrape_progress['new_values_added']} new values")
 
 
 # --- News Feed Endpoint ---
@@ -3410,34 +3516,7 @@ def get_all_competitors(db: Session = Depends(get_db)):
     """Get all active competitors."""
     return db.query(Competitor).filter(Competitor.is_deleted == False).order_by(Competitor.updated_at.desc()).all()
 
-@app.get("/api/changes")
-def get_feed_changes(days: int = 7, db: Session = Depends(get_db)):
-    """Get recent changes feed."""
-    from database import CompetitorHistory
-    from datetime import datetime, timedelta
-    
-    since = datetime.utcnow() - timedelta(days=days)
-    changes = db.query(CompetitorHistory)\
-        .join(Competitor)\
-        .filter(CompetitorHistory.detected_at >= since)\
-        .order_by(CompetitorHistory.detected_at.desc())\
-        .limit(20)\
-        .all()
-        
-    # Format for frontend
-    feed = []
-    for change in changes:
-        feed.append({
-            "id": change.id,
-            "competitor_name": change.competitor.name if change.competitor else "Unknown",
-            "change_type": change.field_changed,
-            "previous_value": change.old_value,
-            "new_value": change.new_value,
-            "severity": "Medium", # Default, could be refined logic
-            "detected_at": change.detected_at.isoformat()
-        })
-        
-    return {"changes": feed}
+# Note: /api/changes endpoint defined earlier using DataChangeHistory table
 
 @app.get("/api/scrape/all")
 async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
