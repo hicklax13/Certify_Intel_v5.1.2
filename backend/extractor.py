@@ -225,9 +225,9 @@ CONTENT TO ANALYZE:
         """Merge multiple extractions (from different pages) into one."""
         if not extractions:
             return ExtractedData()
-        
+
         merged = ExtractedData()
-        
+
         # For each field, take the first non-None value
         for extraction in extractions:
             for field in ExtractedData.__dataclass_fields__:
@@ -235,8 +235,167 @@ CONTENT TO ANALYZE:
                     value = getattr(extraction, field)
                     if value is not None:
                         setattr(merged, field, value)
-        
+
         return merged
+
+    def extract_products_and_pricing(self, competitor_name: str, content: str) -> Dict[str, Any]:
+        """
+        Extract product-level pricing from content.
+        Returns structured data about multiple products and their pricing tiers.
+
+        This is for Phase 3 of Data Quality Enhancement.
+        """
+        if not self.client:
+            return {
+                "products": [],
+                "error": "OpenAI client not available. Set OPENAI_API_KEY environment variable."
+            }
+
+        # Truncate content if too long
+        max_content_length = 12000
+        if len(content) > max_content_length:
+            content = content[:max_content_length] + "..."
+
+        prompt = f"""Analyze this content from {competitor_name} and extract ALL products/solutions and their pricing.
+
+Healthcare SaaS pricing models to look for:
+- per_visit: Charge per patient encounter (e.g., "$3.00/visit")
+- per_provider: Monthly fee per provider (e.g., "$400/provider/month")
+- per_location: Fee per practice location (e.g., "$1,500/location/month")
+- subscription_flat: Fixed monthly fee (e.g., "$299/month")
+- subscription_tiered: Tiered by features (e.g., "Basic $99, Pro $299, Enterprise $499")
+- percentage_collections: % of collected revenue (e.g., "4-8% of collections")
+- custom_enterprise: Negotiated pricing ("Contact Sales")
+
+Return JSON with this EXACT structure:
+{{
+    "products": [
+        {{
+            "product_name": "Name of the product/solution",
+            "product_category": "One of: Patient Intake, Patient Payments, RCM, Practice Management, EHR, Telehealth, Patient Engagement, Scheduling, Analytics",
+            "target_segment": "SMB, Mid-Market, or Enterprise",
+            "is_primary_product": true/false,
+            "pricing_tiers": [
+                {{
+                    "tier_name": "Basic/Professional/Enterprise or similar",
+                    "tier_position": 1,
+                    "pricing_model": "per_visit|per_provider|per_location|subscription_flat|subscription_tiered|percentage_collections|custom_enterprise",
+                    "base_price": 3.00,
+                    "price_currency": "USD",
+                    "price_unit": "visit|provider/month|location/month|month",
+                    "price_display": "$3.00/visit",
+                    "percentage_rate": null,
+                    "setup_fee": null,
+                    "contract_length": "Monthly|Annual|Multi-year",
+                    "included_features": ["Feature 1", "Feature 2"]
+                }}
+            ],
+            "key_features": ["Feature 1", "Feature 2"]
+        }}
+    ],
+    "extraction_confidence": 1-100,
+    "extraction_notes": "Notes about the extraction quality or missing data"
+}}
+
+IMPORTANT:
+- If a product has multiple tiers (Basic, Pro, Enterprise), list each as a separate pricing_tier
+- If pricing says "Contact Sales" or "Custom", use pricing_model: "custom_enterprise" and base_price: null
+- If you see "Starting at $X", use that as the base price for the first tier
+- Extract actual numbers, not ranges (use the lowest number in a range)
+- If no specific products are identifiable, create a single product named "{competitor_name} Platform"
+
+CONTENT TO ANALYZE:
+{content}"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": """You are a healthcare IT pricing analyst.
+Extract product and pricing information with precision.
+Focus on identifying:
+1. Individual products/solutions (not just company-level info)
+2. Specific pricing tiers and models
+3. Healthcare-specific pricing patterns (per visit, per provider, etc.)
+Always respond with valid JSON matching the requested schema."""},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            return result
+
+        except Exception as e:
+            return {
+                "products": [],
+                "error": f"Extraction failed: {str(e)}"
+            }
+
+    def extract_feature_matrix(self, competitor_name: str, product_name: str, content: str) -> Dict[str, Any]:
+        """
+        Extract feature matrix for a specific product.
+        Returns features organized by category with availability status.
+        """
+        if not self.client:
+            return {
+                "features": [],
+                "error": "OpenAI client not available."
+            }
+
+        max_content_length = 10000
+        if len(content) > max_content_length:
+            content = content[:max_content_length] + "..."
+
+        prompt = f"""Analyze this content for {competitor_name}'s {product_name} product.
+Extract ALL features mentioned and categorize them.
+
+Feature categories for healthcare IT:
+- Patient Intake: Check-in, forms, consent
+- Payments: Processing, collections, billing
+- Integration: EHR/PM connectivity
+- Security: HIPAA, certifications
+- Scheduling: Appointments, reminders
+- Communication: Patient messaging, portals
+- Analytics: Reporting, dashboards
+
+Return JSON:
+{{
+    "features": [
+        {{
+            "feature_category": "Patient Intake",
+            "feature_name": "Digital Check-In",
+            "feature_status": "included|add_on|not_available|coming_soon",
+            "feature_tier": "Basic|Professional|Enterprise|All",
+            "notes": "Any specific notes"
+        }}
+    ],
+    "extraction_confidence": 1-100
+}}
+
+CONTENT:
+{content}"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a healthcare IT feature analyst. Extract detailed feature information."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            return result
+
+        except Exception as e:
+            return {
+                "features": [],
+                "error": f"Extraction failed: {str(e)}"
+            }
 
 
 # Convenience function

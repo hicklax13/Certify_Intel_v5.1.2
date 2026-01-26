@@ -1864,6 +1864,849 @@ def get_triangulation_status(db: Session = Depends(get_db)):
     }
 
 
+# ============== PHASE 3: PRODUCT & PRICING MANAGEMENT ==============
+
+# Pydantic models for Product & Pricing
+class ProductCreate(BaseModel):
+    """Create a new competitor product."""
+    competitor_id: int
+    product_name: str
+    product_category: str  # "Patient Intake", "RCM", "EHR", "Payments", etc.
+    product_subcategory: Optional[str] = None
+    description: Optional[str] = None
+    key_features: Optional[str] = None  # JSON array as string
+    target_segment: Optional[str] = None  # "SMB", "Mid-Market", "Enterprise"
+    is_primary_product: bool = False
+    market_position: Optional[str] = None  # "Leader", "Challenger", "Niche"
+
+class ProductResponse(BaseModel):
+    id: int
+    competitor_id: int
+    product_name: str
+    product_category: str
+    product_subcategory: Optional[str]
+    description: Optional[str]
+    key_features: Optional[str]
+    target_segment: Optional[str]
+    is_primary_product: bool
+    market_position: Optional[str]
+    launched_date: Optional[datetime]
+    last_updated: Optional[datetime]
+    pricing_tiers: List[dict] = []
+
+    class Config:
+        from_attributes = True
+
+class PricingTierCreate(BaseModel):
+    """Create a pricing tier for a product."""
+    product_id: int
+    tier_name: str  # "Basic", "Professional", "Enterprise"
+    tier_position: Optional[int] = None
+    pricing_model: str  # "per_visit", "per_provider", "per_location", "subscription", "percentage_collections", "custom"
+    base_price: Optional[float] = None
+    price_currency: str = "USD"
+    price_unit: Optional[str] = None  # "visit", "provider/month", "location/month"
+    price_display: Optional[str] = None  # Original display: "$3.00/visit"
+    percentage_rate: Optional[float] = None  # For RCM: 4.5 for 4.5%
+    percentage_basis: Optional[str] = None  # "collections", "charges"
+    min_volume: Optional[str] = None
+    max_volume: Optional[str] = None
+    included_features: Optional[str] = None  # JSON array
+    excluded_features: Optional[str] = None
+    contract_length: Optional[str] = None  # "Monthly", "Annual"
+    setup_fee: Optional[float] = None
+    implementation_cost: Optional[str] = None
+    price_source: Optional[str] = None  # "website", "sales_quote", "customer_intel"
+
+class PricingTierResponse(BaseModel):
+    id: int
+    product_id: int
+    tier_name: str
+    tier_position: Optional[int]
+    pricing_model: str
+    base_price: Optional[float]
+    price_currency: str
+    price_unit: Optional[str]
+    price_display: Optional[str]
+    percentage_rate: Optional[float]
+    percentage_basis: Optional[str]
+    min_volume: Optional[str]
+    max_volume: Optional[str]
+    contract_length: Optional[str]
+    setup_fee: Optional[float]
+    implementation_cost: Optional[str]
+    price_verified: bool
+    price_source: Optional[str]
+    confidence_score: Optional[int]
+    last_verified: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+class FeatureMatrixCreate(BaseModel):
+    """Create a feature entry for a product."""
+    product_id: int
+    feature_category: str  # "Patient Intake", "Payments", "Integration"
+    feature_name: str  # "Digital Check-In", "Apple Pay Support"
+    feature_status: str  # "included", "add_on", "not_available", "coming_soon"
+    feature_tier: Optional[str] = None  # Which tier includes this
+    notes: Optional[str] = None
+    source_url: Optional[str] = None
+
+
+# ============== PRODUCT CRUD ENDPOINTS ==============
+
+@app.get("/api/competitors/{competitor_id}/products", response_model=List[ProductResponse])
+async def get_competitor_products(competitor_id: int, db: Session = Depends(get_db)):
+    """Get all products and pricing for a competitor."""
+    # Verify competitor exists
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    products = db.query(CompetitorProduct).filter(
+        CompetitorProduct.competitor_id == competitor_id
+    ).all()
+
+    result = []
+    for p in products:
+        # Get pricing tiers for this product
+        tiers = db.query(ProductPricingTier).filter(
+            ProductPricingTier.product_id == p.id
+        ).order_by(ProductPricingTier.tier_position).all()
+
+        product_dict = {
+            "id": p.id,
+            "competitor_id": p.competitor_id,
+            "product_name": p.product_name,
+            "product_category": p.product_category,
+            "product_subcategory": p.product_subcategory,
+            "description": p.description,
+            "key_features": p.key_features,
+            "target_segment": p.target_segment,
+            "is_primary_product": p.is_primary_product,
+            "market_position": p.market_position,
+            "launched_date": p.launched_date,
+            "last_updated": p.last_updated,
+            "pricing_tiers": [{
+                "id": t.id,
+                "tier_name": t.tier_name,
+                "pricing_model": t.pricing_model,
+                "price_display": t.price_display,
+                "base_price": t.base_price,
+                "price_unit": t.price_unit,
+                "percentage_rate": t.percentage_rate,
+                "confidence_score": t.confidence_score,
+                "price_verified": t.price_verified
+            } for t in tiers]
+        }
+        result.append(product_dict)
+
+    return result
+
+
+@app.post("/api/products", response_model=ProductResponse)
+async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
+    """Create a new product for a competitor."""
+    # Verify competitor exists
+    competitor = db.query(Competitor).filter(Competitor.id == product.competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    # Check if product already exists
+    existing = db.query(CompetitorProduct).filter(
+        CompetitorProduct.competitor_id == product.competitor_id,
+        CompetitorProduct.product_name == product.product_name
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Product already exists for this competitor")
+
+    new_product = CompetitorProduct(
+        competitor_id=product.competitor_id,
+        product_name=product.product_name,
+        product_category=product.product_category,
+        product_subcategory=product.product_subcategory,
+        description=product.description,
+        key_features=product.key_features,
+        target_segment=product.target_segment,
+        is_primary_product=product.is_primary_product,
+        market_position=product.market_position,
+        last_updated=datetime.utcnow()
+    )
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+
+    return {
+        "id": new_product.id,
+        "competitor_id": new_product.competitor_id,
+        "product_name": new_product.product_name,
+        "product_category": new_product.product_category,
+        "product_subcategory": new_product.product_subcategory,
+        "description": new_product.description,
+        "key_features": new_product.key_features,
+        "target_segment": new_product.target_segment,
+        "is_primary_product": new_product.is_primary_product,
+        "market_position": new_product.market_position,
+        "launched_date": new_product.launched_date,
+        "last_updated": new_product.last_updated,
+        "pricing_tiers": []
+    }
+
+
+@app.put("/api/products/{product_id}", response_model=ProductResponse)
+async def update_product(product_id: int, product: ProductCreate, db: Session = Depends(get_db)):
+    """Update an existing product."""
+    existing = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    existing.product_name = product.product_name
+    existing.product_category = product.product_category
+    existing.product_subcategory = product.product_subcategory
+    existing.description = product.description
+    existing.key_features = product.key_features
+    existing.target_segment = product.target_segment
+    existing.is_primary_product = product.is_primary_product
+    existing.market_position = product.market_position
+    existing.last_updated = datetime.utcnow()
+
+    db.commit()
+    db.refresh(existing)
+
+    # Get pricing tiers
+    tiers = db.query(ProductPricingTier).filter(
+        ProductPricingTier.product_id == product_id
+    ).order_by(ProductPricingTier.tier_position).all()
+
+    return {
+        "id": existing.id,
+        "competitor_id": existing.competitor_id,
+        "product_name": existing.product_name,
+        "product_category": existing.product_category,
+        "product_subcategory": existing.product_subcategory,
+        "description": existing.description,
+        "key_features": existing.key_features,
+        "target_segment": existing.target_segment,
+        "is_primary_product": existing.is_primary_product,
+        "market_position": existing.market_position,
+        "launched_date": existing.launched_date,
+        "last_updated": existing.last_updated,
+        "pricing_tiers": [{
+            "id": t.id,
+            "tier_name": t.tier_name,
+            "pricing_model": t.pricing_model,
+            "price_display": t.price_display,
+            "base_price": t.base_price,
+            "price_unit": t.price_unit,
+            "confidence_score": t.confidence_score
+        } for t in tiers]
+    }
+
+
+@app.delete("/api/products/{product_id}")
+async def delete_product(product_id: int, db: Session = Depends(get_db)):
+    """Delete a product and its pricing tiers."""
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Delete associated pricing tiers first
+    db.query(ProductPricingTier).filter(ProductPricingTier.product_id == product_id).delete()
+    # Delete associated features
+    db.query(ProductFeatureMatrix).filter(ProductFeatureMatrix.product_id == product_id).delete()
+    # Delete the product
+    db.delete(product)
+    db.commit()
+
+    return {"message": "Product deleted successfully", "product_id": product_id}
+
+
+# ============== PRICING TIER ENDPOINTS ==============
+
+@app.get("/api/products/{product_id}/pricing-tiers", response_model=List[PricingTierResponse])
+async def get_pricing_tiers(product_id: int, db: Session = Depends(get_db)):
+    """Get all pricing tiers for a product."""
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    tiers = db.query(ProductPricingTier).filter(
+        ProductPricingTier.product_id == product_id
+    ).order_by(ProductPricingTier.tier_position).all()
+
+    return tiers
+
+
+@app.post("/api/pricing-tiers", response_model=PricingTierResponse)
+async def create_pricing_tier(tier: PricingTierCreate, db: Session = Depends(get_db)):
+    """Create a new pricing tier for a product."""
+    # Verify product exists
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == tier.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Calculate confidence score based on source
+    source_type = "website_scrape" if tier.price_source == "website" else "manual_verified"
+    if tier.price_source == "sales_quote":
+        source_type = "api_verified"
+
+    confidence_result = calculate_confidence_score(source_type=source_type)
+
+    new_tier = ProductPricingTier(
+        product_id=tier.product_id,
+        tier_name=tier.tier_name,
+        tier_position=tier.tier_position,
+        pricing_model=tier.pricing_model,
+        base_price=tier.base_price,
+        price_currency=tier.price_currency,
+        price_unit=tier.price_unit,
+        price_display=tier.price_display,
+        percentage_rate=tier.percentage_rate,
+        percentage_basis=tier.percentage_basis,
+        min_volume=tier.min_volume,
+        max_volume=tier.max_volume,
+        included_features=tier.included_features,
+        excluded_features=tier.excluded_features,
+        contract_length=tier.contract_length,
+        setup_fee=tier.setup_fee,
+        implementation_cost=tier.implementation_cost,
+        price_source=tier.price_source,
+        price_verified=False,
+        confidence_score=confidence_result.score,
+        last_verified=datetime.utcnow()
+    )
+    db.add(new_tier)
+    db.commit()
+    db.refresh(new_tier)
+
+    return new_tier
+
+
+@app.put("/api/pricing-tiers/{tier_id}", response_model=PricingTierResponse)
+async def update_pricing_tier(tier_id: int, tier: PricingTierCreate, db: Session = Depends(get_db)):
+    """Update an existing pricing tier."""
+    existing = db.query(ProductPricingTier).filter(ProductPricingTier.id == tier_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Pricing tier not found")
+
+    # Update fields
+    existing.tier_name = tier.tier_name
+    existing.tier_position = tier.tier_position
+    existing.pricing_model = tier.pricing_model
+    existing.base_price = tier.base_price
+    existing.price_currency = tier.price_currency
+    existing.price_unit = tier.price_unit
+    existing.price_display = tier.price_display
+    existing.percentage_rate = tier.percentage_rate
+    existing.percentage_basis = tier.percentage_basis
+    existing.min_volume = tier.min_volume
+    existing.max_volume = tier.max_volume
+    existing.included_features = tier.included_features
+    existing.excluded_features = tier.excluded_features
+    existing.contract_length = tier.contract_length
+    existing.setup_fee = tier.setup_fee
+    existing.implementation_cost = tier.implementation_cost
+    existing.price_source = tier.price_source
+    existing.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(existing)
+
+    return existing
+
+
+@app.delete("/api/pricing-tiers/{tier_id}")
+async def delete_pricing_tier(tier_id: int, db: Session = Depends(get_db)):
+    """Delete a pricing tier."""
+    tier = db.query(ProductPricingTier).filter(ProductPricingTier.id == tier_id).first()
+    if not tier:
+        raise HTTPException(status_code=404, detail="Pricing tier not found")
+
+    db.delete(tier)
+    db.commit()
+
+    return {"message": "Pricing tier deleted successfully", "tier_id": tier_id}
+
+
+@app.post("/api/pricing-tiers/{tier_id}/verify")
+async def verify_pricing_tier(tier_id: int, db: Session = Depends(get_db)):
+    """Mark a pricing tier as verified."""
+    tier = db.query(ProductPricingTier).filter(ProductPricingTier.id == tier_id).first()
+    if not tier:
+        raise HTTPException(status_code=404, detail="Pricing tier not found")
+
+    tier.price_verified = True
+    tier.last_verified = datetime.utcnow()
+    # Boost confidence when verified
+    tier.confidence_score = min(100, (tier.confidence_score or 50) + 20)
+
+    db.commit()
+    db.refresh(tier)
+
+    return {
+        "message": "Pricing tier verified",
+        "tier_id": tier_id,
+        "confidence_score": tier.confidence_score
+    }
+
+
+# ============== PRICING COMPARISON ENDPOINT ==============
+
+@app.get("/api/pricing/compare")
+async def compare_pricing(
+    category: Optional[str] = None,  # e.g., "Patient Intake"
+    pricing_model: Optional[str] = None,  # e.g., "per_visit"
+    db: Session = Depends(get_db)
+):
+    """Compare pricing across competitors for a product category."""
+    query = db.query(ProductPricingTier).join(CompetitorProduct).join(Competitor)
+
+    if category:
+        query = query.filter(CompetitorProduct.product_category == category)
+
+    if pricing_model:
+        query = query.filter(ProductPricingTier.pricing_model == pricing_model)
+
+    tiers = query.all()
+
+    result = []
+    for t in tiers:
+        product = db.query(CompetitorProduct).filter(CompetitorProduct.id == t.product_id).first()
+        competitor = db.query(Competitor).filter(Competitor.id == product.competitor_id).first() if product else None
+
+        result.append({
+            "competitor_id": competitor.id if competitor else None,
+            "competitor_name": competitor.name if competitor else "Unknown",
+            "product_id": product.id if product else None,
+            "product_name": product.product_name if product else "Unknown",
+            "product_category": product.product_category if product else None,
+            "tier_name": t.tier_name,
+            "pricing_model": t.pricing_model,
+            "base_price": t.base_price,
+            "price_display": t.price_display,
+            "price_unit": t.price_unit,
+            "percentage_rate": t.percentage_rate,
+            "confidence_score": t.confidence_score,
+            "price_verified": t.price_verified,
+            "price_source": t.price_source
+        })
+
+    # Sort by base price (nulls last)
+    result.sort(key=lambda x: (x["base_price"] is None, x["base_price"] or 0))
+
+    return {
+        "category": category,
+        "pricing_model": pricing_model,
+        "total_tiers": len(result),
+        "comparison": result
+    }
+
+
+@app.get("/api/pricing/models")
+async def get_pricing_models():
+    """Get available healthcare pricing model types."""
+    return {
+        "pricing_models": [
+            {"value": "per_visit", "label": "Per Visit/Encounter", "description": "Charge per patient encounter", "example": "$3.00/visit"},
+            {"value": "per_provider", "label": "Per Provider", "description": "Monthly fee per provider/physician", "example": "$400/provider/month"},
+            {"value": "per_location", "label": "Per Location", "description": "Fee per practice location", "example": "$1,500/location/month"},
+            {"value": "subscription_flat", "label": "Flat Subscription", "description": "Fixed monthly fee", "example": "$299/month"},
+            {"value": "subscription_tiered", "label": "Tiered Subscription", "description": "Tiered by features or volume", "example": "$99-$499/month"},
+            {"value": "percentage_collections", "label": "Percentage of Collections", "description": "% of collected revenue", "example": "4-8% of collections"},
+            {"value": "percentage_charges", "label": "Percentage of Charges", "description": "% of billed charges", "example": "2-4% of charges"},
+            {"value": "per_bed", "label": "Per Bed", "description": "Hospital capacity pricing", "example": "$15,000/bed"},
+            {"value": "per_member", "label": "Per Member (PMPM)", "description": "Per covered life", "example": "$0.50 PMPM"},
+            {"value": "custom_enterprise", "label": "Custom/Enterprise", "description": "Negotiated pricing", "example": "Contact Sales"}
+        ],
+        "product_categories": [
+            "Patient Intake",
+            "Patient Payments",
+            "Revenue Cycle Management (RCM)",
+            "Practice Management",
+            "EHR/EMR",
+            "Telehealth",
+            "Patient Engagement",
+            "Scheduling",
+            "Analytics",
+            "Interoperability"
+        ]
+    }
+
+
+# ============== FEATURE MATRIX ENDPOINTS ==============
+
+@app.get("/api/products/{product_id}/features")
+async def get_product_features(product_id: int, db: Session = Depends(get_db)):
+    """Get all features for a product."""
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    features = db.query(ProductFeatureMatrix).filter(
+        ProductFeatureMatrix.product_id == product_id
+    ).all()
+
+    # Group by category
+    by_category = {}
+    for f in features:
+        if f.feature_category not in by_category:
+            by_category[f.feature_category] = []
+        by_category[f.feature_category].append({
+            "id": f.id,
+            "feature_name": f.feature_name,
+            "feature_status": f.feature_status,
+            "feature_tier": f.feature_tier,
+            "notes": f.notes,
+            "last_verified": f.last_verified
+        })
+
+    return {
+        "product_id": product_id,
+        "product_name": product.product_name,
+        "features_by_category": by_category,
+        "total_features": len(features)
+    }
+
+
+@app.post("/api/features")
+async def create_feature(feature: FeatureMatrixCreate, db: Session = Depends(get_db)):
+    """Add a feature to a product."""
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == feature.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    new_feature = ProductFeatureMatrix(
+        product_id=feature.product_id,
+        feature_category=feature.feature_category,
+        feature_name=feature.feature_name,
+        feature_status=feature.feature_status,
+        feature_tier=feature.feature_tier,
+        notes=feature.notes,
+        source_url=feature.source_url,
+        last_verified=datetime.utcnow()
+    )
+    db.add(new_feature)
+    db.commit()
+    db.refresh(new_feature)
+
+    return {
+        "id": new_feature.id,
+        "product_id": new_feature.product_id,
+        "feature_category": new_feature.feature_category,
+        "feature_name": new_feature.feature_name,
+        "feature_status": new_feature.feature_status,
+        "message": "Feature added successfully"
+    }
+
+
+@app.delete("/api/features/{feature_id}")
+async def delete_feature(feature_id: int, db: Session = Depends(get_db)):
+    """Delete a feature."""
+    feature = db.query(ProductFeatureMatrix).filter(ProductFeatureMatrix.id == feature_id).first()
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+
+    db.delete(feature)
+    db.commit()
+
+    return {"message": "Feature deleted successfully", "feature_id": feature_id}
+
+
+@app.get("/api/features/compare")
+async def compare_features(
+    category: str,  # Product category like "Patient Intake"
+    feature_category: Optional[str] = None,  # Feature category like "Payments"
+    db: Session = Depends(get_db)
+):
+    """Compare features across competitors for a product category."""
+    # Get all products in this category
+    products = db.query(CompetitorProduct).filter(
+        CompetitorProduct.product_category == category
+    ).all()
+
+    if not products:
+        return {"message": f"No products found in category: {category}", "comparison": []}
+
+    # Get all unique features
+    feature_query = db.query(ProductFeatureMatrix).filter(
+        ProductFeatureMatrix.product_id.in_([p.id for p in products])
+    )
+    if feature_category:
+        feature_query = feature_query.filter(ProductFeatureMatrix.feature_category == feature_category)
+
+    all_features = feature_query.all()
+
+    # Build comparison matrix
+    # Structure: {feature_name: {competitor_name: status}}
+    feature_names = set(f.feature_name for f in all_features)
+
+    comparison = []
+    for feature_name in sorted(feature_names):
+        feature_row = {"feature_name": feature_name, "competitors": {}}
+        for product in products:
+            competitor = db.query(Competitor).filter(Competitor.id == product.competitor_id).first()
+            comp_name = competitor.name if competitor else f"Competitor {product.competitor_id}"
+
+            # Find this feature for this product
+            feature = next(
+                (f for f in all_features if f.product_id == product.id and f.feature_name == feature_name),
+                None
+            )
+            feature_row["competitors"][comp_name] = feature.feature_status if feature else "unknown"
+        comparison.append(feature_row)
+
+    return {
+        "product_category": category,
+        "feature_category": feature_category,
+        "competitors": [
+            db.query(Competitor).filter(Competitor.id == p.competitor_id).first().name
+            for p in products
+        ],
+        "comparison": comparison
+    }
+
+
+# ============== PRODUCT EXTRACTION FROM CONTENT ==============
+
+@app.post("/api/competitors/{competitor_id}/extract-products")
+async def extract_products_from_content(
+    competitor_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Extract products and pricing from competitor's scraped content using GPT.
+    This endpoint triggers the extraction and stores results in the database.
+    """
+    from extractor import GPTExtractor
+
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    # Check if we have scraped content
+    # Try to get recent scrape content from the competitor's website
+    content = ""
+
+    # First check if there's recent DataSource with website content
+    recent_source = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.source_type == "website_scrape"
+    ).order_by(DataSource.extracted_at.desc()).first()
+
+    if recent_source and recent_source.current_value:
+        content = recent_source.current_value
+    else:
+        # Try to scrape fresh content
+        try:
+            from scraper import CompetitorScraper
+            import asyncio
+
+            async def scrape_for_products():
+                async with CompetitorScraper() as scraper:
+                    result = await scraper.scrape(competitor.website)
+                    return result.get("content", "") if isinstance(result, dict) else ""
+
+            # Run the scraper
+            content = asyncio.run(scrape_for_products())
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Could not get content for extraction: {str(e)}",
+                "competitor_id": competitor_id
+            }
+
+    if not content or len(content) < 100:
+        return {
+            "status": "error",
+            "message": "Not enough content available for extraction. Try scraping the competitor first.",
+            "competitor_id": competitor_id
+        }
+
+    # Extract products using GPT
+    extractor = GPTExtractor()
+    extraction_result = extractor.extract_products_and_pricing(competitor.name, content)
+
+    if "error" in extraction_result:
+        return {
+            "status": "error",
+            "message": extraction_result["error"],
+            "competitor_id": competitor_id
+        }
+
+    products_created = 0
+    tiers_created = 0
+
+    # Process extracted products
+    for product_data in extraction_result.get("products", []):
+        # Check if product already exists
+        existing_product = db.query(CompetitorProduct).filter(
+            CompetitorProduct.competitor_id == competitor_id,
+            CompetitorProduct.product_name == product_data.get("product_name")
+        ).first()
+
+        if existing_product:
+            # Update existing product
+            existing_product.product_category = product_data.get("product_category", existing_product.product_category)
+            existing_product.target_segment = product_data.get("target_segment", existing_product.target_segment)
+            existing_product.is_primary_product = product_data.get("is_primary_product", existing_product.is_primary_product)
+            existing_product.key_features = json.dumps(product_data.get("key_features", [])) if product_data.get("key_features") else existing_product.key_features
+            existing_product.last_updated = datetime.utcnow()
+            product = existing_product
+        else:
+            # Create new product
+            product = CompetitorProduct(
+                competitor_id=competitor_id,
+                product_name=product_data.get("product_name", f"{competitor.name} Product"),
+                product_category=product_data.get("product_category", "Unknown"),
+                target_segment=product_data.get("target_segment"),
+                is_primary_product=product_data.get("is_primary_product", False),
+                key_features=json.dumps(product_data.get("key_features", [])) if product_data.get("key_features") else None,
+                last_updated=datetime.utcnow()
+            )
+            db.add(product)
+            db.flush()  # Get the ID
+            products_created += 1
+
+        # Process pricing tiers
+        for tier_data in product_data.get("pricing_tiers", []):
+            # Check if tier exists
+            existing_tier = db.query(ProductPricingTier).filter(
+                ProductPricingTier.product_id == product.id,
+                ProductPricingTier.tier_name == tier_data.get("tier_name")
+            ).first()
+
+            if existing_tier:
+                # Update existing tier
+                existing_tier.pricing_model = tier_data.get("pricing_model", existing_tier.pricing_model)
+                existing_tier.base_price = tier_data.get("base_price", existing_tier.base_price)
+                existing_tier.price_currency = tier_data.get("price_currency", "USD")
+                existing_tier.price_unit = tier_data.get("price_unit", existing_tier.price_unit)
+                existing_tier.price_display = tier_data.get("price_display", existing_tier.price_display)
+                existing_tier.percentage_rate = tier_data.get("percentage_rate", existing_tier.percentage_rate)
+                existing_tier.setup_fee = tier_data.get("setup_fee", existing_tier.setup_fee)
+                existing_tier.contract_length = tier_data.get("contract_length", existing_tier.contract_length)
+                existing_tier.included_features = json.dumps(tier_data.get("included_features", [])) if tier_data.get("included_features") else existing_tier.included_features
+                existing_tier.price_source = "gpt_extraction"
+                existing_tier.updated_at = datetime.utcnow()
+            else:
+                # Calculate confidence score for extracted pricing
+                confidence_result = calculate_confidence_score(
+                    source_type="website_scrape",
+                    information_credibility=4  # GPT extraction from marketing content
+                )
+
+                # Create new tier
+                new_tier = ProductPricingTier(
+                    product_id=product.id,
+                    tier_name=tier_data.get("tier_name", "Standard"),
+                    tier_position=tier_data.get("tier_position", 1),
+                    pricing_model=tier_data.get("pricing_model", "custom_enterprise"),
+                    base_price=tier_data.get("base_price"),
+                    price_currency=tier_data.get("price_currency", "USD"),
+                    price_unit=tier_data.get("price_unit"),
+                    price_display=tier_data.get("price_display"),
+                    percentage_rate=tier_data.get("percentage_rate"),
+                    setup_fee=tier_data.get("setup_fee"),
+                    contract_length=tier_data.get("contract_length"),
+                    included_features=json.dumps(tier_data.get("included_features", [])) if tier_data.get("included_features") else None,
+                    price_source="gpt_extraction",
+                    price_verified=False,
+                    confidence_score=confidence_result.score
+                )
+                db.add(new_tier)
+                tiers_created += 1
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "competitor_id": competitor_id,
+        "competitor_name": competitor.name,
+        "products_created": products_created,
+        "tiers_created": tiers_created,
+        "extraction_confidence": extraction_result.get("extraction_confidence", 0),
+        "extraction_notes": extraction_result.get("extraction_notes", "")
+    }
+
+
+@app.post("/api/products/{product_id}/extract-features")
+async def extract_features_from_content(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Extract feature matrix for a product using GPT.
+    """
+    from extractor import GPTExtractor
+
+    product = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    competitor = db.query(Competitor).filter(Competitor.id == product.competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    # Get content
+    content = ""
+    recent_source = db.query(DataSource).filter(
+        DataSource.competitor_id == product.competitor_id,
+        DataSource.source_type == "website_scrape"
+    ).order_by(DataSource.extracted_at.desc()).first()
+
+    if recent_source and recent_source.current_value:
+        content = recent_source.current_value
+    else:
+        return {
+            "status": "error",
+            "message": "No content available for feature extraction. Scrape the competitor first."
+        }
+
+    # Extract features
+    extractor = GPTExtractor()
+    extraction_result = extractor.extract_feature_matrix(competitor.name, product.product_name, content)
+
+    if "error" in extraction_result:
+        return {
+            "status": "error",
+            "message": extraction_result["error"]
+        }
+
+    features_created = 0
+
+    for feature_data in extraction_result.get("features", []):
+        # Check if feature exists
+        existing = db.query(ProductFeatureMatrix).filter(
+            ProductFeatureMatrix.product_id == product_id,
+            ProductFeatureMatrix.feature_name == feature_data.get("feature_name")
+        ).first()
+
+        if not existing:
+            new_feature = ProductFeatureMatrix(
+                product_id=product_id,
+                feature_category=feature_data.get("feature_category", "Other"),
+                feature_name=feature_data.get("feature_name"),
+                feature_status=feature_data.get("feature_status", "unknown"),
+                feature_tier=feature_data.get("feature_tier"),
+                notes=feature_data.get("notes"),
+                last_verified=datetime.utcnow()
+            )
+            db.add(new_feature)
+            features_created += 1
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "product_id": product_id,
+        "product_name": product.product_name,
+        "features_created": features_created,
+        "extraction_confidence": extraction_result.get("extraction_confidence", 0)
+    }
+
+
 # ============== BULK UPDATE ENDPOINT ==============
 
 @app.post("/api/competitors/bulk-update")
