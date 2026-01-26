@@ -66,23 +66,38 @@ db.close()
 | Gemini Hybrid AI (4 phases) | ✅ Complete | 21/21 |
 | Live News Feed (4 phases) | ✅ Complete | 17/17 |
 | Sales & Marketing Module (5 phases) | ✅ Complete | 26/26 |
-| **TOTAL** | **89% Complete** | **74/83** |
+| Cloud Deployment (v5.1.0) | ✅ Complete | 3/3 |
+| Team Features (v5.2.0) | ✅ Complete | 3/3 |
+| **TOTAL** | **96% Complete** | **80/83** |
 
 ### Pending/Blocked Features
 | Module | Status | Reason |
 |--------|--------|--------|
 | Desktop App (v5.0.3) | 🔴 BLOCKED | PyInstaller .env path issue |
-| Cloud Deployment (v5.1.0) | ⏳ Pending | 3 tasks remaining |
-| Team Features (v5.2.0) | ⏳ Pending | 3 tasks remaining |
 
-### Next Priority Tasks
-| Task ID | Description | Priority | Blocker |
-|---------|-------------|----------|---------|
-| 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Technical |
-| 5.0.3-002 | Test installed desktop app end-to-end | HIGH | 5.0.3-001 |
-| 5.1.0-001 | Create Docker production config | MEDIUM | None |
-| 5.1.0-002 | Write cloud deployment guide | MEDIUM | None |
-| 5.1.0-003 | Set up CI/CD pipeline | LOW | None |
+---
+
+## Last 5 Tasks Completed
+
+| # | Task ID | Description | Date |
+|---|---------|-------------|------|
+| 1 | 5.2.0-003 | Shared annotations - Team notes on competitors | Jan 26, 2026 |
+| 2 | 5.2.0-002 | Role-based dashboards - Custom views per role | Jan 26, 2026 |
+| 3 | 5.2.0-001 | Multi-user improvements - Team collaboration | Jan 26, 2026 |
+| 4 | 5.1.0-003 | CI/CD pipeline - GitHub Actions & GitLab CI | Jan 26, 2026 |
+| 5 | 5.1.0-002 | Cloud deployment guide (AWS/GCP/Azure) | Jan 26, 2026 |
+
+---
+
+## Next 5 Tasks To Complete
+
+| # | Task ID | Description | Priority | Blocker |
+|---|---------|-------------|----------|---------|
+| 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Technical - path resolution |
+| 2 | 5.0.3-002 | Test installed desktop app end-to-end | HIGH | Depends on 5.0.3-001 |
+| 3 | - | All other features complete | - | None |
+| 4 | - | Production deployment | MEDIUM | None |
+| 5 | 5.1.0-003 | Set up CI/CD pipeline | LOW | None |
 
 ---
 

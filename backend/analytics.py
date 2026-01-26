@@ -793,7 +793,7 @@ class DashboardInsightGenerator:
 
     def _generate_fallback_summary(self, competitors: List[Dict[str, Any]]) -> Dict[str, str]:
         count = len(competitors)
-        high_threat = sum(1 for c in competitors if c.get('threat_level') == 'High')
+        high_threat = sum(1 for c in competitors if c.get('threat_level', '').upper() == 'HIGH')
         return {
             "summary": f"### Executive Brief (Automated)\n\nWe are currently tracking **{count} competitors**, of which **{high_threat} are High Threat**. \n\n**Actionable Insights:**\n- Monitor pricing changes weekly.\n- Investigate feature gaps in patient intake.\n- Review battlecards for high-threat targets.",
             "type": "fallback"

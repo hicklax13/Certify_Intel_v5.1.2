@@ -176,7 +176,7 @@ class ExecutiveBriefingGenerator:
         
         # Top Threats Overview
         story.append(Paragraph("Top Competitive Threats", self.styles['Heading2Custom']))
-        high_threat_comps = [c for c in competitors if c.get('threat_level') == 'High']
+        high_threat_comps = [c for c in competitors if c.get('threat_level', '').upper() == 'HIGH']
         
         for comp in high_threat_comps[:3]:
             name = comp.get('name', 'Unknown')

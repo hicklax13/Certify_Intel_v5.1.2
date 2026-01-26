@@ -6,6 +6,7 @@ import os
 import asyncio
 from datetime import datetime
 from typing import List, Optional
+from sqlalchemy import func
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -222,7 +223,7 @@ def schedule_daily_high_priority_check():
     db = SessionLocal()
     high_threat_ids = [
         c.id for c in db.query(Competitor).filter(
-            Competitor.threat_level == "High",
+            func.upper(Competitor.threat_level) == "HIGH",
             Competitor.is_deleted == False
         ).all()
     ]

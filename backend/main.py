@@ -428,9 +428,9 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
         
         # Calculate statistics
         total = len(competitors)
-        high_threat = sum(1 for c in competitors if c.threat_level == "High")
-        medium_threat = sum(1 for c in competitors if c.threat_level == "Medium")
-        low_threat = sum(1 for c in competitors if c.threat_level == "Low")
+        high_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH")
+        medium_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM")
+        low_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "LOW")
         public_companies = sum(1 for c in competitors if c.is_public)
         private_companies = total - public_companies
         
@@ -441,7 +441,7 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
             pricing_models[model] = pricing_models.get(model, 0) + 1
         
         # Gather top threats
-        top_threats = [c.name for c in competitors if c.threat_level == "High"][:5]
+        top_threats = [c.name for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"][:5]
         
         # Build comprehensive data summary for AI
         data_summary = f"""
@@ -2550,7 +2550,7 @@ def get_data_quality_overview(db: Session = Depends(get_db)):
     from datetime import timedelta
 
     # Total active competitors
-    total_competitors = db.query(Competitor).filter(Competitor.is_active == True).count()
+    total_competitors = db.query(Competitor).filter(Competitor.is_deleted == False).count()
 
     # Get all data sources
     sources = db.query(DataSource).all()
@@ -2603,7 +2603,7 @@ def get_data_quality_overview(db: Session = Depends(get_db)):
 
     # Per-competitor quality scores
     competitor_scores = []
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
     for comp in competitors:
         comp_sources = [s for s in sources if s.competitor_id == comp.id]
         if comp_sources:
@@ -4612,12 +4612,13 @@ async def bulk_update_competitors(
 
 
 # Import routers
-from routers import reports, discovery, sales_marketing
+from routers import reports, discovery, sales_marketing, teams
 import api_routes
 
 # Include routers
 app.include_router(discovery.router)
 app.include_router(api_routes.router)  # Covers analytics, winloss, external, etc.
+app.include_router(teams.router)  # Team Features (v5.2.0)
 app.include_router(reports.router)
 app.include_router(sales_marketing.router)  # Sales & Marketing Module (v5.0.7)
 
@@ -4996,9 +4997,9 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     stats = {
         "total_competitors": len(competitors),
         "active": len([c for c in competitors if c.status == "Active"]),
-        "high_threat": len([c for c in competitors if c.threat_level == "High"]),
-        "medium_threat": len([c for c in competitors if c.threat_level == "Medium"]),
-        "low_threat": len([c for c in competitors if c.threat_level == "Low"]),
+        "high_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"]),
+        "medium_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM"]),
+        "low_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "LOW"]),
         "last_updated": datetime.utcnow().isoformat()
     }
     
@@ -6009,6 +6010,74 @@ async def get_stock_data(company_name: str, db: Session = Depends(get_db)):
     }
 
 
+# --- Review Platform Endpoints ---
+
+@app.get("/api/reviews/certify-health")
+async def get_certify_reviews():
+    """Get Certify Health's reviews from G2, Trustpilot, etc."""
+    try:
+        from review_scraper import get_certify_health_reviews
+        result = await get_certify_health_reviews()
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/reviews/competitor/{competitor_key}")
+async def get_competitor_reviews_endpoint(competitor_key: str):
+    """Get reviews for a competitor (e.g., phreesia, luma_health)."""
+    try:
+        from review_scraper import get_competitor_reviews
+        result = await get_competitor_reviews(competitor_key)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/reviews/compare")
+async def compare_reviews():
+    """Get reviews for Certify Health and top competitors for comparison."""
+    try:
+        from review_scraper import get_certify_health_reviews, get_competitor_reviews, KNOWN_REVIEW_URLS
+        import asyncio
+
+        # Get Certify Health reviews
+        certify_task = get_certify_health_reviews()
+
+        # Get top competitor reviews
+        competitor_keys = ["phreesia", "luma_health", "solutionreach", "clearwave"]
+        competitor_tasks = [get_competitor_reviews(key) for key in competitor_keys]
+
+        # Run all in parallel
+        results = await asyncio.gather(certify_task, *competitor_tasks)
+
+        return {
+            "certify_health": results[0],
+            "competitors": {key: results[i+1] for i, key in enumerate(competitor_keys)}
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/reviews/platforms")
+async def list_review_platforms():
+    """List available review platforms and known competitor mappings."""
+    try:
+        from review_scraper import KNOWN_REVIEW_URLS
+        return {
+            "platforms": ["g2", "trustpilot", "google_business"],
+            "certify_links": {
+                "g2_review": "https://www.g2.com/products/certify-health/take_survey",
+                "g2_video": "https://interviews.g2.com/review/certify-health?mode=call&auto=true",
+                "capterra": "https://reviews.capterra.com/products/new/5baef775-663a-4b3c-95cf-dc868b7aa283/",
+                "trustpilot": "https://www.trustpilot.com/review/certifyhealth.com",
+                "google": "https://g.page/r/CfVO-Pq4X5IhEAE/review"
+            },
+            "known_competitors": list(KNOWN_REVIEW_URLS.keys())
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 
 # --- Alert Endpoints ---
 
@@ -6050,9 +6119,9 @@ def generate_weekly_briefing(db: Session = Depends(get_db)):
         # Calculate stats
         stats = {
             "total_competitors": len(competitors),
-            "high_threat": len([c for c in competitors if c.threat_level == "High"]),
-            "medium_threat": len([c for c in competitors if c.threat_level == "Medium"]),
-            "low_threat": len([c for c in competitors if c.threat_level == "Low"])
+            "high_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"]),
+            "medium_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM"]),
+            "low_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "LOW"])
         }
         
         manager = ReportManager("./exports")

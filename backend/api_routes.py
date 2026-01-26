@@ -573,9 +573,9 @@ async def generate_weekly_briefing():
     
     stats = {
         "total_competitors": len(competitors),
-        "high_threat": len([c for c in competitors if c.threat_level == "High"]),
-        "medium_threat": len([c for c in competitors if c.threat_level == "Medium"]),
-        "low_threat": len([c for c in competitors if c.threat_level == "Low"])
+        "high_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"]),
+        "medium_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM"]),
+        "low_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "LOW"])
     }
     
     path = report_manager.generate_weekly_briefing(comp_dicts, change_dicts, stats)

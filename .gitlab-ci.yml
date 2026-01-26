@@ -1,0 +1,110 @@
+# =============================================================================
+# Certify Intel - GitLab CI/CD Pipeline
+# =============================================================================
+# Alternative to GitHub Actions for GitLab users
+# =============================================================================
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  PYTHON_VERSION: "3.11"
+  DOCKER_IMAGE: certify-intel-backend
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# -----------------------------------------------------------------------------
+# Test Stage
+# -----------------------------------------------------------------------------
+test:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  cache:
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    SECRET_KEY: "test-secret-key"
+    DATABASE_URL: "sqlite:///./test.db"
+  before_script:
+    - cd backend
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    - pip install pytest pytest-asyncio pytest-cov
+  script:
+    - python -m pytest tests/ -v --cov=. --cov-report=term-missing
+  coverage: '/TOTAL.*\s+(\d+%)/'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - pip install flake8 black isort
+  script:
+    - cd backend
+    - flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    - black --check --diff . || true
+    - isort --check-only --diff . || true
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# Build Stage
+# -----------------------------------------------------------------------------
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA -f backend/Dockerfile.prod backend/
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# -----------------------------------------------------------------------------
+# Deploy Stage
+# -----------------------------------------------------------------------------
+.deploy_template: &deploy_template
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl openssh-client
+  rules:
+    - if: $CI_COMMIT_TAG
+
+deploy_staging:
+  <<: *deploy_template
+  environment:
+    name: staging
+    url: https://staging.certify-intel.example.com
+  script:
+    - echo "Deploying to staging..."
+    # Add your staging deployment commands here
+    # Example with SSH:
+    # - ssh $STAGING_USER@$STAGING_HOST "docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA && docker-compose up -d"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+
+deploy_production:
+  <<: *deploy_template
+  environment:
+    name: production
+    url: https://certify-intel.example.com
+  script:
+    - echo "Deploying to production..."
+    # Add your production deployment commands here
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
