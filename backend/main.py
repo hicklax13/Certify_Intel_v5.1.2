@@ -1954,6 +1954,60 @@ class FeatureMatrixCreate(BaseModel):
     source_url: Optional[str] = None
 
 
+# ============== PHASE 4: CUSTOMER COUNT VERIFICATION ==============
+
+class CustomerCountCreate(BaseModel):
+    """Create a customer count estimate for a competitor."""
+    competitor_id: int
+    count_value: Optional[int] = None  # Numeric: 3000
+    count_display: str  # Display: "3,000+" or "3,000-5,000"
+    count_type: str = "estimate"  # "exact", "minimum", "range", "estimate"
+    count_unit: str  # "healthcare_organizations", "providers", "locations", "users", "lives_covered"
+    count_definition: Optional[str] = None  # "Number of distinct hospital/clinic customers"
+    segment_breakdown: Optional[str] = None  # JSON: {"hospitals": 500, "ambulatory": 2500}
+    primary_source: str  # "website", "sec_10k", "press_release"
+    primary_source_url: Optional[str] = None
+    primary_source_date: Optional[datetime] = None
+    as_of_date: Optional[datetime] = None  # When this count was valid
+
+
+class CustomerCountResponse(BaseModel):
+    id: int
+    competitor_id: int
+    count_value: Optional[int]
+    count_display: Optional[str]
+    count_type: Optional[str]
+    count_unit: Optional[str]
+    count_definition: Optional[str]
+    segment_breakdown: Optional[str]
+    is_verified: bool
+    verification_method: Optional[str]
+    verification_date: Optional[datetime]
+    primary_source: Optional[str]
+    primary_source_url: Optional[str]
+    primary_source_date: Optional[datetime]
+    all_sources: Optional[str]
+    source_agreement_score: Optional[float]
+    confidence_score: Optional[int]
+    confidence_level: Optional[str]
+    confidence_notes: Optional[str]
+    as_of_date: Optional[datetime]
+    previous_count: Optional[int]
+    growth_rate: Optional[float]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class CustomerCountVerifyRequest(BaseModel):
+    """Request to verify a customer count with additional sources."""
+    verification_method: str  # "sec_filing", "triangulation", "sales_intel", "manual"
+    verification_notes: Optional[str] = None
+    additional_sources: Optional[List[dict]] = None  # List of {source_type, source_url, value}
+
+
 # ============== PRODUCT CRUD ENDPOINTS ==============
 
 @app.get("/api/competitors/{competitor_id}/products", response_model=List[ProductResponse])
@@ -2704,6 +2758,538 @@ async def extract_features_from_content(
         "product_name": product.product_name,
         "features_created": features_created,
         "extraction_confidence": extraction_result.get("extraction_confidence", 0)
+    }
+
+
+# ============== PHASE 4: CUSTOMER COUNT VERIFICATION ENDPOINTS ==============
+
+@app.get("/api/competitors/{competitor_id}/customer-counts", response_model=List[CustomerCountResponse])
+async def get_customer_counts(competitor_id: int, db: Session = Depends(get_db)):
+    """Get all customer count estimates for a competitor, ordered by date."""
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    counts = db.query(CustomerCountEstimate).filter(
+        CustomerCountEstimate.competitor_id == competitor_id
+    ).order_by(CustomerCountEstimate.as_of_date.desc()).all()
+
+    return counts
+
+
+@app.get("/api/competitors/{competitor_id}/customer-count/latest", response_model=CustomerCountResponse)
+async def get_latest_customer_count(competitor_id: int, db: Session = Depends(get_db)):
+    """Get the most recent verified customer count for a competitor."""
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    # First try to get verified count
+    count = db.query(CustomerCountEstimate).filter(
+        CustomerCountEstimate.competitor_id == competitor_id,
+        CustomerCountEstimate.is_verified == True
+    ).order_by(CustomerCountEstimate.as_of_date.desc()).first()
+
+    # If no verified count, get any most recent
+    if not count:
+        count = db.query(CustomerCountEstimate).filter(
+            CustomerCountEstimate.competitor_id == competitor_id
+        ).order_by(CustomerCountEstimate.as_of_date.desc()).first()
+
+    if not count:
+        raise HTTPException(status_code=404, detail="No customer count estimates found")
+
+    return count
+
+
+@app.post("/api/customer-counts", response_model=CustomerCountResponse)
+async def create_customer_count(
+    count_data: CustomerCountCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new customer count estimate."""
+    # Verify competitor exists
+    competitor = db.query(Competitor).filter(Competitor.id == count_data.competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    # Calculate confidence score based on source type
+    source_mapping = {
+        "sec_10k": "sec_filing",
+        "sec_filing": "sec_filing",
+        "website": "website_scrape",
+        "press_release": "news_article",
+        "definitive_hc": "definitive_hc",
+        "klas_report": "klas_report",
+        "linkedin": "linkedin_estimate",
+        "g2_reviews": "api_verified",
+        "manual": "manual_verified"
+    }
+    source_type = source_mapping.get(count_data.primary_source, "unknown")
+    confidence_result = calculate_confidence_score(source_type=source_type)
+
+    # Get previous count for growth calculation
+    previous = db.query(CustomerCountEstimate).filter(
+        CustomerCountEstimate.competitor_id == count_data.competitor_id
+    ).order_by(CustomerCountEstimate.as_of_date.desc()).first()
+
+    growth_rate = None
+    previous_count = None
+    if previous and previous.count_value and count_data.count_value:
+        previous_count = previous.count_value
+        if previous_count > 0:
+            growth_rate = ((count_data.count_value - previous_count) / previous_count) * 100
+
+    new_count = CustomerCountEstimate(
+        competitor_id=count_data.competitor_id,
+        count_value=count_data.count_value,
+        count_display=count_data.count_display,
+        count_type=count_data.count_type,
+        count_unit=count_data.count_unit,
+        count_definition=count_data.count_definition,
+        segment_breakdown=count_data.segment_breakdown,
+        primary_source=count_data.primary_source,
+        primary_source_url=count_data.primary_source_url,
+        primary_source_date=count_data.primary_source_date,
+        as_of_date=count_data.as_of_date or datetime.utcnow(),
+        previous_count=previous_count,
+        growth_rate=growth_rate,
+        confidence_score=confidence_result.score,
+        confidence_level=confidence_result.level,
+        is_verified=(count_data.primary_source in ["sec_10k", "sec_filing", "definitive_hc"])
+    )
+    db.add(new_count)
+    db.commit()
+    db.refresh(new_count)
+
+    # Log activity
+    log_activity(
+        db, current_user["email"], current_user["id"],
+        "customer_count_added",
+        f"Added customer count for {competitor.name}: {count_data.count_display}"
+    )
+
+    return new_count
+
+
+@app.put("/api/customer-counts/{count_id}", response_model=CustomerCountResponse)
+async def update_customer_count(
+    count_id: int,
+    count_data: CustomerCountCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an existing customer count estimate."""
+    count = db.query(CustomerCountEstimate).filter(CustomerCountEstimate.id == count_id).first()
+    if not count:
+        raise HTTPException(status_code=404, detail="Customer count estimate not found")
+
+    # Update fields
+    for field in ["count_value", "count_display", "count_type", "count_unit",
+                  "count_definition", "segment_breakdown", "primary_source",
+                  "primary_source_url", "primary_source_date", "as_of_date"]:
+        if hasattr(count_data, field):
+            value = getattr(count_data, field)
+            if value is not None:
+                setattr(count, field, value)
+
+    count.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(count)
+
+    return count
+
+
+@app.delete("/api/customer-counts/{count_id}")
+async def delete_customer_count(
+    count_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a customer count estimate."""
+    count = db.query(CustomerCountEstimate).filter(CustomerCountEstimate.id == count_id).first()
+    if not count:
+        raise HTTPException(status_code=404, detail="Customer count estimate not found")
+
+    competitor = db.query(Competitor).filter(Competitor.id == count.competitor_id).first()
+    db.delete(count)
+    db.commit()
+
+    log_activity(
+        db, current_user["email"], current_user["id"],
+        "customer_count_deleted",
+        f"Deleted customer count for {competitor.name if competitor else 'Unknown'}"
+    )
+
+    return {"status": "deleted", "count_id": count_id}
+
+
+@app.post("/api/customer-counts/{count_id}/verify", response_model=CustomerCountResponse)
+async def verify_customer_count(
+    count_id: int,
+    verification: CustomerCountVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Verify a customer count with additional sources or methods."""
+    count = db.query(CustomerCountEstimate).filter(CustomerCountEstimate.id == count_id).first()
+    if not count:
+        raise HTTPException(status_code=404, detail="Customer count estimate not found")
+
+    # Update verification status
+    count.is_verified = True
+    count.verification_method = verification.verification_method
+    count.verification_date = datetime.utcnow()
+    count.confidence_notes = verification.verification_notes
+
+    # If additional sources provided, store them and recalculate confidence
+    if verification.additional_sources:
+        import json
+        existing_sources = json.loads(count.all_sources) if count.all_sources else []
+        existing_sources.extend(verification.additional_sources)
+        count.all_sources = json.dumps(existing_sources)
+        count.corroborating_sources = len(existing_sources)
+
+        # Calculate source agreement score
+        if count.count_value:
+            values = [count.count_value]
+            for source in existing_sources:
+                if source.get("value"):
+                    try:
+                        values.append(int(str(source["value"]).replace(",", "").replace("+", "")))
+                    except (ValueError, TypeError):
+                        pass
+
+            if len(values) > 1:
+                avg = sum(values) / len(values)
+                # Agreement score: 1.0 if all within 20% of average, 0 if wildly different
+                deviations = [abs(v - avg) / avg for v in values if avg > 0]
+                if deviations:
+                    count.source_agreement_score = max(0, 1 - (sum(deviations) / len(deviations) / 0.2))
+
+        # Recalculate confidence with corroboration
+        confidence_result = calculate_confidence_score(
+            source_type="manual_verified" if verification.verification_method == "manual" else "api_verified",
+            corroborating_sources=len(existing_sources)
+        )
+        count.confidence_score = confidence_result.score
+        count.confidence_level = confidence_result.level
+
+    count.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(count)
+
+    # Log activity
+    competitor = db.query(Competitor).filter(Competitor.id == count.competitor_id).first()
+    log_activity(
+        db, current_user["email"], current_user["id"],
+        "customer_count_verified",
+        f"Verified customer count for {competitor.name if competitor else 'Unknown'}"
+    )
+
+    return count
+
+
+@app.get("/api/customer-counts/compare")
+async def compare_customer_counts(
+    unit: Optional[str] = None,
+    min_confidence: int = 0,
+    db: Session = Depends(get_db)
+):
+    """Compare customer counts across all competitors."""
+    query = db.query(CustomerCountEstimate)
+
+    if unit:
+        query = query.filter(CustomerCountEstimate.count_unit == unit)
+    if min_confidence > 0:
+        query = query.filter(CustomerCountEstimate.confidence_score >= min_confidence)
+
+    # Get latest count per competitor
+    from sqlalchemy import func
+    subquery = db.query(
+        CustomerCountEstimate.competitor_id,
+        func.max(CustomerCountEstimate.as_of_date).label("max_date")
+    ).group_by(CustomerCountEstimate.competitor_id).subquery()
+
+    counts = query.join(
+        subquery,
+        (CustomerCountEstimate.competitor_id == subquery.c.competitor_id) &
+        (CustomerCountEstimate.as_of_date == subquery.c.max_date)
+    ).all()
+
+    result = []
+    for c in counts:
+        competitor = db.query(Competitor).filter(Competitor.id == c.competitor_id).first()
+        result.append({
+            "competitor_id": c.competitor_id,
+            "competitor_name": competitor.name if competitor else "Unknown",
+            "count_value": c.count_value,
+            "count_display": c.count_display,
+            "count_unit": c.count_unit,
+            "confidence_score": c.confidence_score,
+            "confidence_level": c.confidence_level,
+            "is_verified": c.is_verified,
+            "as_of_date": c.as_of_date.isoformat() if c.as_of_date else None,
+            "growth_rate": c.growth_rate
+        })
+
+    # Sort by count_value descending
+    result.sort(key=lambda x: x["count_value"] or 0, reverse=True)
+
+    return {
+        "comparisons": result,
+        "total_competitors": len(result),
+        "unit_filter": unit,
+        "min_confidence_filter": min_confidence
+    }
+
+
+@app.get("/api/customer-counts/units")
+async def get_customer_count_units():
+    """Get all available customer count unit types with descriptions."""
+    return {
+        "units": [
+            {
+                "value": "healthcare_organizations",
+                "label": "Healthcare Organizations",
+                "description": "Distinct hospital/clinic/practice entities"
+            },
+            {
+                "value": "providers",
+                "label": "Providers",
+                "description": "Individual physicians or clinicians using the platform"
+            },
+            {
+                "value": "locations",
+                "label": "Locations",
+                "description": "Physical practice sites or facilities"
+            },
+            {
+                "value": "users",
+                "label": "Users",
+                "description": "All user accounts (may include staff, admins)"
+            },
+            {
+                "value": "lives_covered",
+                "label": "Lives Covered",
+                "description": "Patient lives managed through the platform"
+            },
+            {
+                "value": "encounters",
+                "label": "Encounters/Visits",
+                "description": "Annual patient encounters processed"
+            },
+            {
+                "value": "beds",
+                "label": "Hospital Beds",
+                "description": "Licensed hospital beds served"
+            }
+        ]
+    }
+
+
+@app.post("/api/competitors/{competitor_id}/triangulate-customer-count")
+async def triangulate_customer_count(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Triangulate customer count from multiple sources.
+    Collects data from: website scrapes, SEC filings, news articles, existing estimates.
+    """
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    sources = []
+
+    # 1. Get from existing DataSource records (website scrapes)
+    website_source = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.field_name == "customer_count"
+    ).order_by(DataSource.extracted_at.desc()).first()
+
+    if website_source and website_source.current_value:
+        sources.append({
+            "source_type": "website_scrape",
+            "value": website_source.current_value,
+            "source_url": website_source.source_url,
+            "date": website_source.extracted_at.isoformat() if website_source.extracted_at else None
+        })
+
+    # 2. Get from Competitor model directly
+    if competitor.customer_count:
+        sources.append({
+            "source_type": "existing_record",
+            "value": competitor.customer_count,
+            "source_url": competitor.website,
+            "date": competitor.last_updated.isoformat() if competitor.last_updated else None
+        })
+
+    # 3. Try SEC data for public companies
+    if competitor.is_public and competitor.ticker_symbol:
+        try:
+            from sec_edgar_scraper import SECEdgarScraper
+            scraper = SECEdgarScraper()
+            sec_data = scraper.get_company_data(competitor.name)
+            if sec_data and sec_data.customers_mentioned:
+                sources.append({
+                    "source_type": "sec_filing",
+                    "value": f"{len(sec_data.customers_mentioned)}+ (named customers)",
+                    "source_url": f"https://sec.gov/cgi-bin/browse-edgar?CIK={sec_data.cik}",
+                    "date": sec_data.last_updated
+                })
+        except Exception as e:
+            print(f"SEC scraper error for {competitor.name}: {e}")
+
+    # 4. Check existing CustomerCountEstimate records
+    existing_counts = db.query(CustomerCountEstimate).filter(
+        CustomerCountEstimate.competitor_id == competitor_id
+    ).all()
+
+    for ec in existing_counts:
+        if ec.count_display:
+            sources.append({
+                "source_type": ec.primary_source or "previous_estimate",
+                "value": ec.count_display,
+                "source_url": ec.primary_source_url,
+                "date": ec.as_of_date.isoformat() if ec.as_of_date else None,
+                "confidence": ec.confidence_score
+            })
+
+    if not sources:
+        return {
+            "status": "no_sources",
+            "competitor": competitor.name,
+            "message": "No customer count data found from any source"
+        }
+
+    # Triangulate - use triangulate_data_points from confidence_scoring
+    triangulation_sources = [
+        {
+            "value": s["value"],
+            "source_type": s["source_type"],
+            "reliability": get_source_defaults(s["source_type"]).get("reliability", "F"),
+            "credibility": get_source_defaults(s["source_type"]).get("credibility", 6)
+        }
+        for s in sources
+    ]
+
+    result = triangulate_data_points(triangulation_sources)
+
+    # Create a new CustomerCountEstimate with triangulated result
+    # Parse the best value to extract numeric count
+    import re
+    best_value = result.best_value
+    count_value = None
+    count_type = "estimate"
+
+    # Try to extract number from value like "3,000+" or "3000-5000"
+    if best_value and best_value != "Unknown":
+        numbers = re.findall(r'[\d,]+', best_value.replace(",", ""))
+        if numbers:
+            try:
+                count_value = int(numbers[0])
+                if "+" in best_value:
+                    count_type = "minimum"
+                elif "-" in best_value or "to" in best_value.lower():
+                    count_type = "range"
+                else:
+                    count_type = "exact"
+            except ValueError:
+                pass
+
+    new_estimate = CustomerCountEstimate(
+        competitor_id=competitor_id,
+        count_value=count_value,
+        count_display=best_value if best_value != "Unknown" else None,
+        count_type=count_type,
+        count_unit="healthcare_organizations",  # Default, should be refined
+        primary_source=result.source_used,
+        all_sources=json.dumps(sources),
+        source_agreement_score=1.0 if not result.discrepancy_flag else 0.5,
+        confidence_score=result.confidence_score,
+        confidence_level=result.confidence_level,
+        confidence_notes=result.review_reason,
+        is_verified=result.confidence_level == "high",
+        verification_method="triangulation" if len(sources) > 1 else None,
+        verification_date=datetime.utcnow() if len(sources) > 1 else None,
+        as_of_date=datetime.utcnow()
+    )
+    db.add(new_estimate)
+    db.commit()
+    db.refresh(new_estimate)
+
+    log_activity(
+        db, current_user["email"], current_user["id"],
+        "customer_count_triangulated",
+        f"Triangulated customer count for {competitor.name} from {len(sources)} sources"
+    )
+
+    return {
+        "status": "success",
+        "competitor": competitor.name,
+        "triangulation_result": {
+            "best_value": result.best_value,
+            "confidence_score": result.confidence_score,
+            "confidence_level": result.confidence_level,
+            "source_used": result.source_used,
+            "discrepancy_flag": result.discrepancy_flag,
+            "review_reason": result.review_reason
+        },
+        "sources_analyzed": len(sources),
+        "sources": sources,
+        "new_estimate_id": new_estimate.id
+    }
+
+
+@app.get("/api/customer-counts/history/{competitor_id}")
+async def get_customer_count_history(
+    competitor_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get historical customer count data for trend analysis."""
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    counts = db.query(CustomerCountEstimate).filter(
+        CustomerCountEstimate.competitor_id == competitor_id
+    ).order_by(CustomerCountEstimate.as_of_date.asc()).all()
+
+    history = []
+    for c in counts:
+        history.append({
+            "id": c.id,
+            "count_value": c.count_value,
+            "count_display": c.count_display,
+            "count_type": c.count_type,
+            "count_unit": c.count_unit,
+            "as_of_date": c.as_of_date.isoformat() if c.as_of_date else None,
+            "growth_rate": c.growth_rate,
+            "confidence_level": c.confidence_level,
+            "is_verified": c.is_verified,
+            "primary_source": c.primary_source
+        })
+
+    # Calculate overall growth trend
+    growth_trend = None
+    if len(history) >= 2:
+        first_with_value = next((h for h in history if h["count_value"]), None)
+        last_with_value = next((h for h in reversed(history) if h["count_value"]), None)
+        if first_with_value and last_with_value and first_with_value["count_value"] > 0:
+            total_growth = ((last_with_value["count_value"] - first_with_value["count_value"]) /
+                          first_with_value["count_value"]) * 100
+            growth_trend = round(total_growth, 1)
+
+    return {
+        "competitor": competitor.name,
+        "competitor_id": competitor_id,
+        "history": history,
+        "total_records": len(history),
+        "growth_trend_percent": growth_trend
     }
 
 
