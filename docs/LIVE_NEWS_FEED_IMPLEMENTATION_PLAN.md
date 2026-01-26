@@ -5,267 +5,122 @@ Add a dedicated "News Feed" page to Certify Intel that displays an aggregated, f
 
 ---
 
-## Data Sources (FREE)
+## Complete Data Sources Table (3 Existing + 10 New)
 
-| Source | Cost | Limit | Already Implemented |
-|--------|------|-------|---------------------|
-| **Google News RSS** | FREE | Unlimited | ✅ Yes (`news_monitor.py`) |
-| **NewsAPI.org** | FREE tier | 100 req/day | ✅ Yes (needs API key) |
-| **Bing News API** | FREE tier | 1000 req/mo | ✅ Yes (needs API key) |
-| **GNews API** | FREE tier | 100 req/day | ❌ Can add |
-| **MediaStack** | FREE tier | 500 req/mo | ❌ Can add |
+### EXISTING SOURCES (Currently in Codebase)
 
-**Recommendation**: Use Google News RSS (already implemented, unlimited, no API key required).
+| # | Source | API Key Required | Account Required | Free Tier Limit | Status | Data Provided |
+|---|--------|------------------|------------------|-----------------|--------|---------------|
+| 1 | [Google News RSS](https://news.google.com/rss) | ❌ No | ❌ No | **Unlimited** | ✅ Active | News articles by company name search |
+| 2 | [NewsAPI.org](https://newsapi.org/) | ✅ Yes (`NEWSAPI_KEY`) | ✅ Yes | 100 req/day | ⚠️ Inactive | 80,000+ sources, historical news |
+| 3 | [Bing News API](https://www.microsoft.com/en-us/bing/apis/bing-news-search-api) | ✅ Yes (`BING_NEWS_KEY`) | ✅ Yes | 1,000 req/mo | ⚠️ Inactive | Real-time news, trending topics |
 
 ---
 
-## Implementation Steps
+### NEW SOURCES TO ADD
 
-### Step 1: Backend - New Aggregated Endpoint
+#### Category A: Free News APIs (No Cost)
 
-**File**: `backend/main.py`
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 4 | [GNews API](https://gnews.io/) | ✅ Yes | ✅ Yes (free) | 100 req/day | 60,000+ sources, historical to 6 years | Lightweight, fast response, good for breaking news |
+| 5 | [MediaStack](https://mediastack.com/) | ✅ Yes | ✅ Yes (free) | 500 req/mo | 7,500+ sources in 50 countries, 13 languages | Broad international coverage for global competitors |
+| 6 | [TheNewsAPI](https://www.thenewsapi.com/) | ✅ Yes | ✅ Yes (no credit card) | Free tier | 40,000+ sources, 50 countries, 30 languages | 1M+ articles indexed weekly, advanced filtering |
+| 7 | [NewsData.io](https://newsdata.io/) | ✅ Yes | ✅ Yes (free) | 200 req/day | 89 languages, crypto/tech news specialty | Best for tech/healthcare news categorization |
 
-Add endpoint: `GET /api/news-feed`
+#### Category B: Government Open Data (100% Free, No Limits)
 
-**Query Parameters**:
-| Parameter | Required | Type | Description |
-|-----------|----------|------|-------------|
-| `competitor_id` | Yes | int | Filter by specific competitor |
-| `start_date` | Yes | string | Start of date range (YYYY-MM-DD) |
-| `end_date` | Yes | string | End of date range (YYYY-MM-DD) |
-| `sentiment` | No | string | Filter: positive, negative, neutral |
-| `event_type` | No | string | Filter: funding, acquisition, product_launch, partnership |
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 8 | [SEC EDGAR API](https://www.sec.gov/search-filings/edgar-application-programming-interfaces) | ❌ No | ❌ No | **Unlimited** (10 req/sec) | Company filings (10-K, 10-Q, 8-K), financials, ownership | Track public competitor SEC filings, M&A, leadership changes |
+| 9 | [USPTO PatentsView API](https://patentsview.org/apis/purpose) | ❌ No | ❌ No | **Unlimited** | Patent filings, inventor data, innovation trends | Track competitor R&D activity, product launches, IP |
 
-**Response Schema**:
-```json
-{
-  "articles": [
-    {
-      "title": "Article Title",
-      "url": "https://...",
-      "source": "TechCrunch",
-      "published_date": "2026-01-25T10:30:00Z",
-      "competitor_name": "Phreesia",
-      "competitor_id": 1,
-      "sentiment": "positive",
-      "event_type": "funding",
-      "snippet": "Brief description..."
-    }
-  ],
-  "total_count": 45,
-  "filters_applied": {
-    "competitor_id": 1,
-    "date_range": "2026-01-01 to 2026-01-25"
-  }
-}
-```
+#### Category C: Open Source Tools (GitHub)
 
----
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 10 | [pygooglenews](https://github.com/kotartemiy/pygooglenews) | ❌ No | ❌ No | **Unlimited** | Enhanced Google News with geo, topic, date filters | Better filtering than raw RSS, Python native |
+| 11 | [Universal-News-Scraper](https://github.com/Ilias1988/Universal-News-Scraper) | ❌ No | ❌ No | **Unlimited** | Multi-source aggregation, anti-blocking, CSV export | Backup scraper with Bing RSS auto-discovery |
 
-### Step 2: Frontend - New Sidebar Menu Item
+#### Category D: AI Subscription Tools (Included in Your Plans)
 
-**File**: `frontend/index.html`
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 12 | [ChatGPT Deep Research + Operator](https://openai.com/index/introducing-deep-research/) (ChatGPT Plus $20/mo) | ❌ Included | ✅ ChatGPT Plus | 25 queries/mo (Plus), 40 agent actions/mo | Multi-source synthesis, web browsing, competitor reports | Automated competitive analysis reports on demand |
+| 13 | [Gemini Deep Research](https://gemini.google/overview/deep-research/) (Google AI Pro $20/mo) | ❌ Included | ✅ Gemini Pro | Included in subscription | Web grounding, cited research reports | Google Search integration, Workspace export |
 
-Add after "Change Log" in sidebar:
-```html
-<a href="#" class="nav-item" onclick="showPage('newsfeed')">
-    <span class="nav-icon">📰</span>
-    <span class="nav-text">News Feed</span>
-</a>
-```
+#### Category E: AI Enhancement Tools
+
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 14 | [Firecrawl MCP Server](https://github.com/firecrawl/firecrawl-mcp-server) (Claude Max $200/mo) | ✅ Yes (free tier) | ✅ Firecrawl account | 500 credits free | Web scraping, structured data extraction | Scrape competitor websites, pricing pages, job boards |
+| 15 | [Hugging Face Sentiment Models](https://huggingface.co/models?other=sentiment-analysis) | ❌ No | ❌ No | **Unlimited** | Sentiment classification (positive/negative/neutral) | Enhance existing keyword sentiment with ML models |
+
+#### Category F: Company Intelligence (Free Tiers)
+
+| # | Source | API Key Required | Account Required | Free Tier Limit | Data Provided | Why Add It |
+|---|--------|------------------|------------------|-----------------|---------------|------------|
+| 16 | [Growjo API](https://growjo.com/) | ❌ No | ❌ No | **Unlimited** | 200K+ startups, revenue estimates, growth signals | Track competitor growth, hiring trends, funding signals |
 
 ---
 
-### Step 3: Frontend - News Feed Page Section
+## Summary Table: All 16 Sources
 
-**File**: `frontend/index.html`
+| # | Source | Cost | Key Needed | Limit | Best For |
+|---|--------|------|------------|-------|----------|
+| 1 | Google News RSS | FREE | ❌ | Unlimited | Primary news source |
+| 2 | NewsAPI.org | FREE | ✅ | 100/day | Historical articles |
+| 3 | Bing News API | FREE | ✅ | 1000/mo | Trending news |
+| 4 | GNews API | FREE | ✅ | 100/day | Breaking news |
+| 5 | MediaStack | FREE | ✅ | 500/mo | International coverage |
+| 6 | TheNewsAPI | FREE | ✅ | Free tier | Volume (1M+/week) |
+| 7 | NewsData.io | FREE | ✅ | 200/day | Tech/healthcare news |
+| 8 | SEC EDGAR | FREE | ❌ | Unlimited | Financial filings |
+| 9 | USPTO Patents | FREE | ❌ | Unlimited | R&D/innovation tracking |
+| 10 | pygooglenews | FREE | ❌ | Unlimited | Enhanced RSS parsing |
+| 11 | Universal-News-Scraper | FREE | ❌ | Unlimited | Backup scraper |
+| 12 | ChatGPT Deep Research | $20/mo | ❌ | 25/mo | AI research reports |
+| 13 | Gemini Deep Research | $20/mo | ❌ | Included | Google-powered research |
+| 14 | Firecrawl MCP | $200/mo* | ✅ | 500 free | Website scraping |
+| 15 | Hugging Face Models | FREE | ❌ | Unlimited | ML sentiment analysis |
+| 16 | Growjo | FREE | ❌ | Unlimited | Company growth data |
 
-Add new page section:
-```html
-<section id="newsfeedPage" class="page" style="display:none;">
-    <h2>Live News Feed</h2>
-    <p class="page-description">Real-time news monitoring for tracked competitors</p>
-
-    <!-- Required Filters -->
-    <div class="filter-bar">
-        <div class="filter-group">
-            <label for="newsCompetitor">Competitor *</label>
-            <select id="newsCompetitor" required>
-                <option value="">-- Select Competitor --</option>
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="newsStartDate">From Date *</label>
-            <input type="date" id="newsStartDate" required>
-        </div>
-        <div class="filter-group">
-            <label for="newsEndDate">To Date *</label>
-            <input type="date" id="newsEndDate" required>
-        </div>
-        <div class="filter-group">
-            <label for="newsSentiment">Sentiment</label>
-            <select id="newsSentiment">
-                <option value="">All</option>
-                <option value="positive">Positive</option>
-                <option value="neutral">Neutral</option>
-                <option value="negative">Negative</option>
-            </select>
-        </div>
-        <button class="btn-primary" onclick="loadNewsFeed()">Search News</button>
-    </div>
-
-    <!-- Results Table -->
-    <div class="table-card">
-        <table class="data-table" id="newsFeedTable">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Competitor</th>
-                    <th>Headline</th>
-                    <th>Source</th>
-                    <th>Sentiment</th>
-                    <th>Event Type</th>
-                </tr>
-            </thead>
-            <tbody id="newsFeedBody">
-                <tr><td colspan="6" class="empty-state">Select a competitor and date range to view news</td></tr>
-            </tbody>
-        </table>
-    </div>
-</section>
-```
+*Included with Claude Max subscription
 
 ---
 
-### Step 4: Frontend - JavaScript Functions
+## What Each Source Enhances
 
-**File**: `frontend/app_v2.js`
-
-```javascript
-// Populate competitor dropdown on News Feed page
-function populateNewsCompetitorDropdown() {
-    const select = document.getElementById('newsCompetitor');
-    if (!select) return;
-    select.innerHTML = '<option value="">-- Select Competitor --</option>' +
-        competitors.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-}
-
-// Load news feed based on filters
-async function loadNewsFeed() {
-    const competitorId = document.getElementById('newsCompetitor').value;
-    const startDate = document.getElementById('newsStartDate').value;
-    const endDate = document.getElementById('newsEndDate').value;
-    const sentiment = document.getElementById('newsSentiment').value;
-
-    // Validate required fields
-    if (!competitorId || !startDate || !endDate) {
-        alert('Please fill in all required fields: Competitor, From Date, and To Date');
-        return;
-    }
-
-    const tbody = document.getElementById('newsFeedBody');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading news articles...</td></tr>';
-
-    try {
-        let url = `/api/news-feed?competitor_id=${competitorId}&start_date=${startDate}&end_date=${endDate}`;
-        if (sentiment) url += `&sentiment=${sentiment}`;
-
-        const data = await fetchAPI(url);
-
-        if (data.articles?.length) {
-            tbody.innerHTML = data.articles.map(article => `
-                <tr>
-                    <td>${formatDate(article.published_date)}</td>
-                    <td>${article.competitor_name}</td>
-                    <td><a href="${article.url}" target="_blank">${article.title}</a></td>
-                    <td>${article.source}</td>
-                    <td><span class="badge badge-${article.sentiment}">${article.sentiment}</span></td>
-                    <td>${article.event_type || '-'}</td>
-                </tr>
-            `).join('');
-        } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No news articles found for this selection</td></tr>';
-        }
-    } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" class="error-state">Error loading news feed</td></tr>';
-    }
-}
-```
+| Source | Enhances | New Data Added |
+|--------|----------|----------------|
+| GNews, MediaStack, TheNewsAPI, NewsData.io | News Feed | More sources, languages, better coverage |
+| SEC EDGAR | Change Log, Analytics | 8-K filings (M&A, leadership), 10-K financials |
+| USPTO Patents | Analytics, Battlecards | Patent counts, innovation scores, R&D focus |
+| pygooglenews | News Feed | Better date/geo filtering on Google News |
+| ChatGPT/Gemini Deep Research | Battlecards, Analytics | AI-generated competitive reports |
+| Firecrawl MCP | Competitors, Data Quality | Live website scraping for pricing, features |
+| Hugging Face | News Feed, Analytics | ML-based sentiment (replaces keyword matching) |
+| Growjo | Competitors, Dashboard | Revenue estimates, growth rates, hiring data |
 
 ---
 
-### Step 5: Backend Endpoint Implementation
+## Implementation Priority
 
-**File**: `backend/main.py`
+### Phase 1: Quick Wins (No API Keys Needed)
+1. **SEC EDGAR** - Add endpoint for 8-K filings (leadership changes, M&A)
+2. **USPTO PatentsView** - Already partially implemented, enhance for news feed
+3. **pygooglenews** - Replace raw RSS parsing with library
+4. **Hugging Face** - Upgrade sentiment from keywords to ML model
 
-```python
-@app.get("/api/news-feed")
-async def get_news_feed(
-    competitor_id: int,
-    start_date: str,
-    end_date: str,
-    sentiment: Optional[str] = None,
-    event_type: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Aggregated news feed with required filtering.
-    Uses FREE Google News RSS (no API key required).
-    """
-    db = SessionLocal()
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    db.close()
+### Phase 2: API Key Sources (Free Registration)
+5. **GNews API** - Add as secondary news source
+6. **NewsData.io** - Add for tech/healthcare specialty
+7. **MediaStack** - Add for international coverage
 
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
-
-    # Fetch news using existing NewsMonitor
-    monitor = NewsMonitor()
-    digest = monitor.fetch_news(competitor.name)
-
-    # Parse date range
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-
-    # Filter articles
-    filtered = []
-    for article in digest.articles:
-        # Parse article date
-        try:
-            article_date = datetime.strptime(article.published_date[:10], "%Y-%m-%d")
-        except:
-            continue
-
-        # Apply date filter
-        if not (start <= article_date <= end):
-            continue
-
-        # Apply sentiment filter
-        if sentiment and article.sentiment != sentiment:
-            continue
-
-        # Apply event type filter
-        if event_type and article.event_type != event_type:
-            continue
-
-        filtered.append({
-            **asdict(article),
-            "competitor_name": competitor.name,
-            "competitor_id": competitor_id
-        })
-
-    return {
-        "articles": filtered,
-        "total_count": len(filtered),
-        "filters_applied": {
-            "competitor_id": competitor_id,
-            "competitor_name": competitor.name,
-            "date_range": f"{start_date} to {end_date}",
-            "sentiment": sentiment,
-            "event_type": event_type
-        }
-    }
-```
+### Phase 3: AI Subscription Integration
+8. **ChatGPT Deep Research** - Add "Generate Report" button on Battlecards
+9. **Gemini Deep Research** - Add as alternative research option
+10. **Firecrawl MCP** - Add website scraping for competitor profiles
 
 ---
 
@@ -274,13 +129,15 @@ async def get_news_feed(
 | File | Changes |
 |------|---------|
 | `backend/main.py` | Add `/api/news-feed` endpoint |
+| `backend/news_monitor.py` | Add new source integrations |
 | `frontend/index.html` | Add sidebar item + page section |
 | `frontend/app_v2.js` | Add `loadNewsFeed()` and dropdown population |
 | `frontend/styles.css` | Badge styles for sentiment (if not exists) |
+| `backend/requirements.txt` | Add `pygooglenews`, `transformers` |
 
 ---
 
-## Required User Inputs
+## Required User Inputs (News Feed Page)
 
 | Field | Required | Validation |
 |-------|----------|------------|
@@ -288,6 +145,7 @@ async def get_news_feed(
 | From Date | ✅ Yes | Valid date, not future |
 | To Date | ✅ Yes | Valid date, >= From Date |
 | Sentiment | ❌ No | Optional filter |
+| Source | ❌ No | Optional: filter by data source |
 
 ---
 
@@ -299,25 +157,21 @@ async def get_news_feed(
 | Frontend HTML | 10 min |
 | Frontend JS | 15 min |
 | CSS styling | 5 min |
-| Testing | 10 min |
-| **Total** | **~55 min** |
+| Add pygooglenews | 10 min |
+| Add Hugging Face sentiment | 20 min |
+| Testing | 15 min |
+| **Total** | **~1.5 hours** |
 
 ---
 
-## Future Enhancements (Optional)
+## Research Sources
 
-1. **Multi-competitor selection** - Select multiple competitors at once
-2. **Export to CSV** - Download results
-3. **Email alerts** - Notify when new articles match criteria
-4. **Keyword search** - Search within article titles/snippets
-5. **Auto-refresh** - Poll for new articles every X minutes
-
----
-
-## No Additional Costs Required
-
-This implementation uses the **existing Google News RSS** integration which is:
-- ✅ FREE (no API key required)
-- ✅ Unlimited requests
-- ✅ Already implemented in `news_monitor.py`
-- ✅ No external dependencies to install
+- [NewsData.io - Free News APIs 2026](https://newsdata.io/blog/best-free-news-api/)
+- [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
+- [USPTO PatentsView](https://patentsview.org/apis/purpose)
+- [OpenAI Deep Research](https://openai.com/index/introducing-deep-research/)
+- [Gemini Deep Research](https://gemini.google/overview/deep-research/)
+- [Firecrawl MCP Server](https://github.com/firecrawl/firecrawl-mcp-server)
+- [Hugging Face Sentiment Models](https://huggingface.co/models?other=sentiment-analysis)
+- [Growjo Company API](https://growjo.com/)
+- [GitHub News Aggregator Topic](https://github.com/topics/news-aggregator)
