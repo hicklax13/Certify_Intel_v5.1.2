@@ -74,6 +74,7 @@ db.close()
 | Module | Status | Reason |
 |--------|--------|--------|
 | Desktop App (v5.0.3) | 🔴 BLOCKED | PyInstaller .env path issue |
+| Vertex AI Integration (v5.3.0) | ⏳ PROPOSED | Pending approval - 30 tasks, 6-8 weeks |
 
 ---
 
@@ -95,9 +96,36 @@ db.close()
 |---|---------|-------------|----------|---------|
 | 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Technical - path resolution |
 | 2 | 5.0.3-002 | Test installed desktop app end-to-end | HIGH | Depends on 5.0.3-001 |
-| 3 | - | All other features complete | - | None |
-| 4 | - | Production deployment | MEDIUM | None |
-| 5 | 5.1.0-003 | Set up CI/CD pipeline | LOW | None |
+| 3 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
+| 4 | VERTEX-1.2 | Create vertex_ai_provider.py | HIGH | Depends on VERTEX-1.1 |
+| 5 | - | Production deployment | MEDIUM | None |
+
+---
+
+## Proposed Feature: Vertex AI Integration (v5.3.0)
+
+> **Status**: ⏳ PROPOSED - Pending Approval
+> **Reference**: [`docs/VERTEX_AI_IMPLEMENTATION_PLAN.md`](docs/VERTEX_AI_IMPLEMENTATION_PLAN.md)
+> **Estimated Effort**: 6-8 weeks across 5 phases
+> **Estimated Cost**: ~$78/month
+
+### Key Capabilities
+| Feature | Description |
+|---------|-------------|
+| **RAG Engine** | Per-competitor knowledge bases with grounded AI responses |
+| **Vector Search** | Semantic search across all competitor data ("Find competitors weak on integration") |
+| **Agent Builder** | Autonomous CI agents for research, monitoring, alerting |
+| **Fine-Tuning** | Custom model trained on healthcare competitive intelligence |
+| **HIPAA Compliance** | Enterprise security with VPC-SC, CMEK, BAA |
+
+### Implementation Phases
+| Phase | Description | Duration |
+|-------|-------------|----------|
+| 1 | Core Vertex AI Migration | Week 1-2 |
+| 2 | RAG Engine Integration | Week 2-3 |
+| 3 | Vector Search Implementation | Week 3-4 |
+| 4 | Agent Builder Integration | Week 4-6 |
+| 5 | Fine-Tuning & Security | Week 6-8 |
 
 ---
 
@@ -681,5 +709,7 @@ Dimension Metadata → DimensionAnalyzer → SalesMarketingModule
 | `CLAUDE.md` | This file - development documentation |
 | `docs/SALES_MARKETING_MODULE_PLAN.md` | Sales module design |
 | `docs/LIVE_NEWS_FEED_IMPLEMENTATION_PLAN.md` | News feed design |
+| `docs/CLOUD_DEPLOYMENT_GUIDE.md` | AWS/GCP/Azure deployment |
+| `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md` | Vertex AI integration plan (PROPOSED) |
 | `backend/.env.example` | Configuration template |
 | `backend/requirements.txt` | Python dependencies |

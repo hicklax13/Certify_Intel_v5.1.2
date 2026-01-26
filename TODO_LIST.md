@@ -133,6 +133,104 @@
 
 ---
 
+### v5.3.0 - Vertex AI Integration (PROPOSED - Pending Approval)
+
+**Goal**: Migrate from Google AI SDK to enterprise Vertex AI for RAG, Agent Builder, Vector Search, fine-tuning, and HIPAA compliance.
+
+**Reference**: `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md`
+
+**Estimated Effort**: 6-8 weeks across 5 phases
+
+**Status**: ⏳ **PROPOSED** - Awaiting approval before implementation begins
+
+#### Key Benefits
+| Feature | Current State | With Vertex AI |
+|---------|---------------|----------------|
+| RAG Engine | Manual implementation | Managed RAG with per-competitor corpora |
+| Vector Search | Keyword-based | Semantic search across all competitor data |
+| Agent Builder | Manual orchestration | Autonomous CI agents with MCP tools |
+| Fine-Tuning | Not available | Custom model for healthcare CI |
+| HIPAA Compliance | Not available | Enterprise BAA available |
+| Security | API key auth | VPC-SC, CMEK, IAM, audit logging |
+
+#### Phase 1: Core Vertex AI Migration (Week 1-2)
+| ID | Task | Status | Priority | Details |
+|----|------|--------|----------|---------|
+| VERTEX-1.1 | Set up GCP project with Vertex AI | PENDING | HIGH | Enable APIs, configure IAM |
+| VERTEX-1.2 | Create vertex_ai_provider.py | PENDING | HIGH | Replace google-generativeai (~800 lines) |
+| VERTEX-1.3 | Migrate existing AI calls | PENDING | HIGH | Update gemini_provider.py imports |
+| VERTEX-1.4 | Add service account auth | PENDING | HIGH | Replace API key with ADC |
+| VERTEX-1.5 | Update .env configuration | PENDING | HIGH | Add GCP project, location |
+| VERTEX-1.6 | Create provider abstraction | PENDING | MEDIUM | Support both providers |
+
+#### Phase 2: RAG Engine Integration (Week 2-3)
+| ID | Task | Status | Priority | Details |
+|----|------|--------|----------|---------|
+| VERTEX-2.1 | Create RAG corpus management | PENDING | HIGH | Per-competitor corpora |
+| VERTEX-2.2 | Build document ingestion pipeline | PENDING | HIGH | Index SEC, news, reviews, patents |
+| VERTEX-2.3 | Implement grounded generation | PENDING | HIGH | Ground all AI responses in corpus |
+| VERTEX-2.4 | Add RAG API endpoints | PENDING | HIGH | CRUD for corpora |
+| VERTEX-2.5 | Integrate with battlecard generator | PENDING | MEDIUM | Grounded battlecards with citations |
+| VERTEX-2.6 | Add citation extraction | PENDING | MEDIUM | Show sources in UI |
+
+#### Phase 3: Vector Search Implementation (Week 3-4)
+| ID | Task | Status | Priority | Details |
+|----|------|--------|----------|---------|
+| VERTEX-3.1 | Create Vector Search index | PENDING | HIGH | Competitor data embeddings |
+| VERTEX-3.2 | Build embedding pipeline | PENDING | HIGH | Auto-embed new data |
+| VERTEX-3.3 | Implement semantic search API | PENDING | HIGH | Natural language queries |
+| VERTEX-3.4 | Add similarity search | PENDING | MEDIUM | Find similar competitors |
+| VERTEX-3.5 | Create search UI component | PENDING | MEDIUM | Frontend search bar |
+| VERTEX-3.6 | Index historical data | PENDING | LOW | Backfill existing data |
+
+#### Phase 4: Agent Builder Integration (Week 4-6)
+| ID | Task | Status | Priority | Details |
+|----|------|--------|----------|---------|
+| VERTEX-4.1 | Create CI Agent definition | PENDING | HIGH | System instructions, tools |
+| VERTEX-4.2 | Build MCP tool integrations | PENDING | HIGH | Connect scrapers, APIs |
+| VERTEX-4.3 | Implement agent memory | PENDING | HIGH | Persistent research context |
+| VERTEX-4.4 | Add scheduled agent tasks | PENDING | MEDIUM | Daily/weekly monitoring |
+| VERTEX-4.5 | Create agent chat UI | PENDING | MEDIUM | Interactive research |
+| VERTEX-4.6 | Build alert system | PENDING | MEDIUM | Agent-triggered alerts |
+
+#### Phase 5: Fine-Tuning & Security (Week 6-8)
+| ID | Task | Status | Priority | Details |
+|----|------|--------|----------|---------|
+| VERTEX-5.1 | Prepare fine-tuning dataset | PENDING | MEDIUM | Historical battlecards, extractions |
+| VERTEX-5.2 | Train custom CI model | PENDING | MEDIUM | SFT on Gemini 2.5 Flash |
+| VERTEX-5.3 | Configure VPC-SC | PENDING | HIGH | Network isolation |
+| VERTEX-5.4 | Set up CMEK | PENDING | MEDIUM | Customer-managed encryption |
+| VERTEX-5.5 | Enable audit logging | PENDING | HIGH | Compliance logging |
+| VERTEX-5.6 | Obtain HIPAA BAA | PENDING | HIGH | Healthcare compliance |
+
+#### Files to Create (12)
+| File | Lines | Description |
+|------|-------|-------------|
+| `backend/vertex_ai_provider.py` | ~800 | Core Vertex AI provider |
+| `backend/vertex_config.py` | ~200 | Configuration management |
+| `backend/vertex_rag_engine.py` | ~600 | RAG corpus management |
+| `backend/vertex_vector_search.py` | ~500 | Vector Search integration |
+| `backend/vertex_agent_builder.py` | ~1,000 | Agent Builder integration |
+| `backend/vertex_mcp_tools.py` | ~600 | MCP tool definitions |
+| `backend/vertex_fine_tuning.py` | ~400 | Model fine-tuning |
+| `backend/vertex_security.py` | ~300 | Security configuration |
+| `backend/routers/vertex_rag.py` | ~400 | RAG API endpoints |
+| `backend/routers/vertex_search.py` | ~300 | Search API endpoints |
+| `backend/routers/vertex_agent.py` | ~500 | Agent API endpoints |
+| `frontend/vertex_agent.js` | ~600 | Agent chat UI |
+
+#### Estimated Cost: ~$78/month
+| Service | Monthly Cost |
+|---------|--------------|
+| Gemini 3 Flash tokens | $22.50 |
+| Gemini 2.5 Pro (complex) | $6.25 |
+| Vector Search | $12.50 |
+| Agent Sessions | $20.00 |
+| Fine-Tuning (quarterly) | $16.67 |
+| **Total** | **~$78/month** |
+
+---
+
 ### v5.0.7 - Sales & Marketing Module ✅ COMPLETED (January 26, 2026)
 
 **Goal**: Add 9 Competitive Evaluation Dimensions as structured data, enabling AI to organize competitor findings and surface actionable insights for sales deal execution and marketing campaigns.
@@ -376,7 +474,14 @@
 | v5.1.0 Cloud Deployment | 3 | 0 | 0 | 3 | 0 |
 | v5.2.0 Team Features | 3 | 0 | 0 | 3 | 0 |
 | Live News Feed | 17 | 0 | 0 | 17 | 0 |
-| **Development TOTAL** | **83** | **2** | **0** | **80** | **1** |
+| **Completed TOTAL** | **83** | **2** | **0** | **80** | **1** |
+
+### Proposed Features (Pending Approval)
+
+| Category | Total | Status |
+|----------|-------|--------|
+| v5.3.0 Vertex AI Integration | 30 | ⏳ PROPOSED |
+| **Proposed TOTAL** | **30** | Pending Approval |
 
 ### Manual Configuration Tasks (User)
 
@@ -423,11 +528,12 @@
 3. **✅ COMPLETED**: Team Features (v5.2.0) - Teams, annotations, role-based dashboards
 4. **✅ COMPLETED**: Gemini API Key (API-001) - Hybrid AI mode now active
 5. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
+6. **⏳ PROPOSED**: Vertex AI Integration (v5.3.0) - Pending approval, see `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md`
 
 ---
 
-**Last Updated**: January 26, 2026, 2:30 PM EST
-**Updated By**: Claude Opus 4.5 (API Key Audit Complete)
+**Last Updated**: January 26, 2026, 4:15 PM EST
+**Updated By**: Claude Opus 4.5 (Vertex AI Planning Session Complete)
 
 ---
 
@@ -1039,3 +1145,82 @@
 - Sales & Marketing Module v5.0.7 FULLY COMPLETE
 - All 26 tasks across 5 phases completed
 - Total new code: ~3,500+ lines
+
+---
+
+## Session Log: January 26, 2026 (Session 7 - Vertex AI Planning)
+
+**Session**: Vertex AI Implementation Plan Creation & Documentation
+**Duration**: ~1 hour
+**Tasks Completed**: Documentation and planning tasks
+
+### Session Summary
+
+This session focused on reviewing, documenting, and integrating the Vertex AI implementation plan into the Certify Intel project documentation.
+
+### Changes Made:
+
+1. **Reviewed Vertex AI Plan**
+   - Analyzed comprehensive Vertex AI implementation strategy provided by user
+   - Validated 5-phase approach covering 30 tasks over 6-8 weeks
+   - Confirmed cost estimate of ~$78/month for enterprise features
+
+2. **Created Documentation Files**
+   - Created `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md` - Full implementation plan (~800 lines)
+   - Created `backend/generate_vertex_ai_pdf.py` - PDF generation script (~400 lines)
+   - Generated `VERTEX AI IMPLEMENTATION PLAN.pdf` - Professional PDF document
+
+3. **Updated TODO_LIST.md**
+   - Added v5.3.0 Vertex AI Integration section with 30 tasks across 5 phases
+   - Updated Summary Statistics to include proposed features
+   - Added Vertex AI to Recommended Next Steps
+
+4. **Updated CLAUDE.md**
+   - Added Vertex AI to Pending/Blocked Features section
+   - Updated Next 5 Tasks To Complete
+   - Added Proposed Feature summary section
+   - Updated Support Files section with new documentation
+
+### Files Created (3):
+| File | Lines | Description |
+|------|-------|-------------|
+| `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md` | ~800 | Full implementation plan with code samples |
+| `backend/generate_vertex_ai_pdf.py` | ~400 | ReportLab PDF generator |
+| `VERTEX AI IMPLEMENTATION PLAN.pdf` | - | Professional PDF document |
+
+### Files Modified (2):
+| File | Changes |
+|------|---------|
+| `TODO_LIST.md` | Added v5.3.0 section, updated stats, added session log |
+| `CLAUDE.md` | Added Vertex AI references, updated next tasks |
+
+### Current State of Certify Intel:
+
+**Version:** v5.0.7
+**Status:** 96% Complete (80/83 development tasks)
+
+| Category | Status |
+|----------|--------|
+| Web Application | Production-Ready |
+| Backend API | 130+ endpoints functional |
+| Hybrid AI | OpenAI + Gemini operational |
+| Sales & Marketing | 9 dimensions fully implemented |
+| News Feed | 13 sources integrated |
+| Data Quality | Admiralty Code scoring active |
+| Desktop App | BLOCKED (PyInstaller .env issue) |
+| Vertex AI | PROPOSED (pending approval) |
+
+### Next 5 Tasks for Future Session:
+
+| # | Task ID | Description | Priority | Status |
+|---|---------|-------------|----------|--------|
+| 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | BLOCKED |
+| 2 | VERTEX-1.1 | Set up GCP project with Vertex AI (if approved) | HIGH | PENDING |
+| 3 | VERTEX-1.2 | Create vertex_ai_provider.py (~800 lines) | HIGH | PENDING |
+| 4 | API-002 | Register for GNews API (user action) | LOW | PENDING |
+| 5 | NOTIF-001 | Configure SMTP email alerts (user action) | MEDIUM | PENDING |
+
+---
+
+**Last Session Update**: January 26, 2026, 4:15 PM EST
+**Updated By**: Claude Opus 4.5 (Vertex AI Planning Session)
