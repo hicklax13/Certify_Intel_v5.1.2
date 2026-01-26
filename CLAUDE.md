@@ -101,6 +101,51 @@ db.close()
 
 ---
 
+## Personal To-Do List (Connor Hickey)
+
+> **Last Updated**: January 26, 2026
+
+### API Registration Tasks
+
+| # | Task | Status | Priority | Notes |
+|---|------|--------|----------|-------|
+| 1 | Register for GNews API | ⬜ PENDING | MEDIUM | https://gnews.io - 100 req/day free |
+| 2 | Register for MediaStack API | ⬜ PENDING | MEDIUM | https://mediastack.com - 500 req/month free |
+| 3 | Register for NewsData.io API | ⬜ PENDING | MEDIUM | https://newsdata.io - 200 req/day free |
+| 4 | Register for Firecrawl API | ⬜ PENDING | MEDIUM | https://www.firecrawl.dev - 500 credits/month free |
+| 5 | Register for NewsAPI.org | ⬜ PENDING | LOW | https://newsapi.org - 100 req/day free |
+
+### Data API Registration Tasks
+
+| # | Task | Status | Priority | Notes |
+|---|------|--------|----------|-------|
+| 1 | Set up SEC EDGAR access | ✅ DONE | - | Free, no registration needed |
+| 2 | Set up USPTO Patent API | ✅ DONE | - | Free, no registration needed |
+| 3 | Register for KLAS API (if available) | ⬜ PENDING | LOW | May require subscription |
+| 4 | Register for G2/Capterra API | ⬜ PENDING | LOW | May require partnership |
+
+### Notification & Alert Configuration
+
+| # | Task | Status | Priority | Notes |
+|---|------|--------|----------|-------|
+| 1 | Configure SMTP Email Alerts | ⬜ PENDING | HIGH | Need: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD |
+| 2 | Set up Slack Webhook | ⬜ PENDING | MEDIUM | https://api.slack.com/messaging/webhooks |
+| 3 | Set up Microsoft Teams Webhook | ⬜ PENDING | MEDIUM | Create incoming webhook in Teams channel |
+| 4 | Configure Twilio SMS Alerts | ⬜ PENDING | LOW | Need: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, phone numbers |
+| 5 | Set up PagerDuty Integration | ⬜ PENDING | LOW | For critical production alerts |
+
+### Infrastructure & Security
+
+| # | Task | Status | Priority | Notes |
+|---|------|--------|----------|-------|
+| 1 | Set up production database (PostgreSQL) | ⬜ PENDING | HIGH | For cloud deployment |
+| 2 | Configure SSL/TLS certificates | ⬜ PENDING | HIGH | Let's Encrypt or purchased cert |
+| 3 | Set up backup automation | ⬜ PENDING | MEDIUM | Daily database backups |
+| 4 | Configure rate limiting | ⬜ PENDING | MEDIUM | Protect API endpoints |
+| 5 | Set up monitoring (Datadog/New Relic) | ⬜ PENDING | LOW | Production observability |
+
+---
+
 ## Latest Session - January 26, 2026
 
 ### Session #9: v5.0.7 Sales & Marketing Module Complete (9:00 AM)

@@ -362,7 +362,43 @@
 | v5.1.0 Cloud Deployment | 3 | 0 | 0 | 3 | 0 |
 | v5.2.0 Team Features | 3 | 0 | 0 | 3 | 0 |
 | Live News Feed | 17 | 0 | 0 | 17 | 0 |
-| **TOTAL** | **83** | **2** | **0** | **80** | **1** |
+| **Development TOTAL** | **83** | **2** | **0** | **80** | **1** |
+
+### Manual Configuration Tasks (User)
+
+| Category | Total | Pending | Completed |
+|----------|-------|---------|-----------|
+| API Keys - Critical | 1 | 0 | 1 |
+| API Keys - Optional | 4 | 4 | 0 |
+| Notifications - Optional | 3 | 3 | 0 |
+| **Config TOTAL** | **8** | **7** | **1** |
+
+---
+
+## Manual Configuration Tasks (User Action Required)
+
+### API Keys - Critical
+
+| ID | Task | Status | Priority | Instructions |
+|----|------|--------|----------|--------------|
+| API-001 | Get Google Gemini API Key | ✅ COMPLETED | **CRITICAL** | Added to `.env` - Hybrid AI mode now fully functional |
+
+### API Keys - Optional (Free Tiers Available)
+
+| ID | Task | Status | Priority | Instructions |
+|----|------|--------|----------|--------------|
+| API-002 | Get GNews API Key | PENDING | LOW | https://gnews.io → Register free → 100 req/day → Add to `.env` as `GNEWS_API_KEY=` |
+| API-003 | Get MediaStack API Key | PENDING | LOW | https://mediastack.com → Register free → 500 req/month → Add to `.env` as `MEDIASTACK_API_KEY=` |
+| API-004 | Get NewsData.io API Key | PENDING | LOW | https://newsdata.io → Register free → 200 req/day → Add to `.env` as `NEWSDATA_API_KEY=` |
+| API-005 | Get Firecrawl API Key | PENDING | LOW | https://www.firecrawl.dev → Register free → 500 credits/month → Add to `.env` as `FIRECRAWL_API_KEY=` |
+
+### Notifications - Optional
+
+| ID | Task | Status | Priority | Instructions |
+|----|------|--------|----------|--------------|
+| NOTIF-001 | Configure Email (SMTP) | PENDING | MEDIUM | Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD to `.env` |
+| NOTIF-002 | Configure Slack Webhook | PENDING | LOW | https://api.slack.com/messaging/webhooks → Create webhook → Add to `.env` as `SLACK_WEBHOOK_URL=` |
+| NOTIF-003 | Configure Teams Webhook | PENDING | LOW | Create incoming webhook in Teams → Add to `.env` as `TEAMS_WEBHOOK_URL=` |
 
 ---
 
@@ -371,12 +407,13 @@
 1. **✅ COMPLETED**: Sales & Marketing Module (v5.0.7) - All 26 tasks complete
 2. **✅ COMPLETED**: Cloud Deployment (v5.1.0) - Docker, nginx, AWS/GCP/Azure guides
 3. **✅ COMPLETED**: Team Features (v5.2.0) - Teams, annotations, role-based dashboards
-4. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
+4. **✅ COMPLETED**: Gemini API Key (API-001) - Hybrid AI mode now active
+5. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
 
 ---
 
-**Last Updated**: January 26, 2026, 1:05 PM EST
-**Updated By**: Claude Opus 4.5 (v5.1.0 + v5.2.0 Implementation Complete)
+**Last Updated**: January 26, 2026, 2:30 PM EST
+**Updated By**: Claude Opus 4.5 (API Key Audit Complete)
 
 ---
 

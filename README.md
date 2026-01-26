@@ -2,7 +2,7 @@
 
 **Competitive Intelligence Platform for Healthcare Technology**
 
-![Version](https://img.shields.io/badge/version-5.0.6-blue)
+![Version](https://img.shields.io/badge/version-5.0.7-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Web-lightgrey)
 ![License](https://img.shields.io/badge/license-Proprietary-red)
 ![Status](https://img.shields.io/badge/status-Production%20Ready-green)
@@ -864,4 +864,4 @@ Proprietary - Certify Health Internal Use Only
 ---
 
 *Last Updated: January 26, 2026*
-*Version: 5.0.6*
+*Version: 5.0.7*
