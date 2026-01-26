@@ -3293,6 +3293,260 @@ async def get_customer_count_history(
     }
 
 
+# ============== PHASE 5: ENHANCED SCRAPER WITH SOURCE TRACKING ==============
+
+@app.post("/api/scrape/enhanced/{competitor_id}")
+async def run_enhanced_scrape(
+    competitor_id: int,
+    background_tasks: BackgroundTasks,
+    pages: Optional[List[str]] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Run enhanced scrape with full source tracking for each extracted field.
+
+    This uses the EnhancedGPTExtractor to track which page each data point
+    came from, with confidence scores based on page type and field relevance.
+
+    Args:
+        competitor_id: ID of the competitor to scrape
+        pages: Optional list of pages to scrape (default: homepage, pricing, about, features)
+    """
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    if not pages:
+        pages = ["homepage", "pricing", "about", "features", "customers"]
+
+    # Run in background
+    background_tasks.add_task(
+        _run_enhanced_scrape_job,
+        competitor_id,
+        competitor.name,
+        competitor.website,
+        pages,
+        current_user["email"]
+    )
+
+    log_activity(
+        db, current_user["email"], current_user["id"],
+        "enhanced_scrape_started",
+        f"Started enhanced scrape for {competitor.name} ({len(pages)} pages)"
+    )
+
+    return {
+        "status": "started",
+        "competitor_id": competitor_id,
+        "competitor_name": competitor.name,
+        "pages_to_scrape": pages,
+        "message": "Enhanced scrape started in background"
+    }
+
+
+async def _run_enhanced_scrape_job(
+    competitor_id: int,
+    competitor_name: str,
+    website: str,
+    pages: List[str],
+    user_email: str
+):
+    """
+    Background job for enhanced scraping with full source tracking.
+    """
+    from scraper import CompetitorScraper
+    from extractor import EnhancedGPTExtractor
+
+    db = SessionLocal()
+
+    try:
+        competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+        if not competitor:
+            print(f"Enhanced scrape: Competitor {competitor_id} not found")
+            return
+
+        print(f"[Enhanced Scrape] Starting for {competitor_name}...")
+
+        # 1. Scrape all requested pages
+        page_contents = {}
+        async with CompetitorScraper() as scraper:
+            for page_type in pages:
+                try:
+                    if page_type == "homepage":
+                        url = website
+                    else:
+                        url = f"{website.rstrip('/')}/{page_type}"
+
+                    result = await scraper.scrape(url)
+                    if result and result.get("content"):
+                        page_contents[page_type] = result["content"]
+                        print(f"  [OK] Scraped {page_type}: {len(result['content'])} chars")
+                    else:
+                        print(f"  [--] No content from {page_type}")
+                except Exception as e:
+                    print(f"  [ERR] Failed to scrape {page_type}: {e}")
+
+        if not page_contents:
+            print(f"[Enhanced Scrape] No content scraped for {competitor_name}")
+            return
+
+        # 2. Extract with source tracking
+        extractor = EnhancedGPTExtractor()
+        extracted = extractor.extract_with_sources(
+            competitor_name=competitor_name,
+            competitor_website=website,
+            page_contents=page_contents
+        )
+
+        print(f"[Enhanced Scrape] Extracted {len(extracted.field_sources)} fields from {len(page_contents)} pages")
+
+        # 3. Store DataSource records with confidence scoring
+        data_sources = extractor.to_data_sources(extracted, competitor_id)
+        changes_count = 0
+        new_values_count = 0
+
+        for ds_data in data_sources:
+            field_name = ds_data["field_name"]
+            new_value = ds_data["current_value"]
+
+            # Check if field is locked by manual correction
+            is_locked = db.query(DataSource).filter(
+                DataSource.competitor_id == competitor_id,
+                DataSource.field_name == field_name,
+                DataSource.source_type == "manual"
+            ).first()
+
+            if is_locked:
+                print(f"  [LOCKED] Skipping {field_name} (manual correction exists)")
+                continue
+
+            # Get old value
+            old_value = getattr(competitor, field_name, None) if hasattr(competitor, field_name) else None
+            old_str = str(old_value) if old_value else None
+
+            # Update competitor if field exists
+            if hasattr(competitor, field_name) and new_value:
+                if old_str != new_value:
+                    # Log change
+                    change_record = DataChangeHistory(
+                        competitor_id=competitor_id,
+                        competitor_name=competitor_name,
+                        field_name=field_name,
+                        old_value=old_str,
+                        new_value=new_value,
+                        changed_by=f"Enhanced Scrape ({user_email})",
+                        change_reason="Enhanced scrape with source tracking"
+                    )
+                    db.add(change_record)
+                    setattr(competitor, field_name, new_value)
+
+                    if old_value is None or old_str == "" or old_str == "None":
+                        new_values_count += 1
+                    else:
+                        changes_count += 1
+
+            # Create/update DataSource record
+            existing_source = db.query(DataSource).filter(
+                DataSource.competitor_id == competitor_id,
+                DataSource.field_name == field_name,
+                DataSource.source_type == "website_scrape"
+            ).first()
+
+            if existing_source:
+                # Update existing
+                existing_source.previous_value = existing_source.current_value
+                existing_source.current_value = new_value
+                existing_source.source_url = ds_data["source_url"]
+                existing_source.source_name = ds_data["source_name"]
+                existing_source.extracted_at = ds_data["extracted_at"]
+                existing_source.confidence_score = ds_data["confidence_score"]
+                existing_source.confidence_level = ds_data["confidence_level"]
+                existing_source.updated_at = datetime.utcnow()
+            else:
+                # Create new
+                new_source = DataSource(
+                    competitor_id=competitor_id,
+                    field_name=field_name,
+                    current_value=new_value,
+                    source_type="website_scrape",
+                    source_url=ds_data["source_url"],
+                    source_name=ds_data["source_name"],
+                    extraction_method="gpt_extraction",
+                    extracted_at=ds_data["extracted_at"],
+                    source_reliability=ds_data["source_reliability"],
+                    information_credibility=ds_data["information_credibility"],
+                    confidence_score=ds_data["confidence_score"],
+                    confidence_level=ds_data["confidence_level"],
+                    data_as_of_date=ds_data["data_as_of_date"]
+                )
+                db.add(new_source)
+
+        competitor.last_updated = datetime.utcnow()
+        db.commit()
+
+        print(f"[Enhanced Scrape] Completed for {competitor_name}: {changes_count} changes, {new_values_count} new values")
+
+        # 4. Run triangulation for key fields
+        try:
+            triangulator = DataTriangulator(db)
+            await triangulator.triangulate_all_key_fields(
+                competitor_id=competitor_id,
+                competitor_name=competitor_name,
+                website=website,
+                is_public=competitor.is_public,
+                ticker_symbol=competitor.ticker_symbol
+            )
+            db.commit()
+            print(f"[Enhanced Scrape] Triangulation completed for {competitor_name}")
+        except Exception as e:
+            print(f"[Enhanced Scrape] Triangulation error: {e}")
+
+    except Exception as e:
+        print(f"[Enhanced Scrape] Error for {competitor_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+    finally:
+        db.close()
+
+
+@app.get("/api/scrape/enhanced/{competitor_id}/sources")
+async def get_enhanced_scrape_sources(
+    competitor_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all source data from the most recent enhanced scrape."""
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    sources = db.query(DataSource).filter(
+        DataSource.competitor_id == competitor_id,
+        DataSource.source_type == "website_scrape"
+    ).order_by(DataSource.extracted_at.desc()).all()
+
+    result = []
+    for s in sources:
+        result.append({
+            "field_name": s.field_name,
+            "current_value": s.current_value,
+            "source_url": s.source_url,
+            "source_name": s.source_name,
+            "confidence_score": s.confidence_score,
+            "confidence_level": s.confidence_level,
+            "extracted_at": s.extracted_at.isoformat() if s.extracted_at else None,
+            "is_verified": s.is_verified
+        })
+
+    return {
+        "competitor": competitor.name,
+        "competitor_id": competitor_id,
+        "sources": result,
+        "total_fields": len(result)
+    }
+
+
 # ============== BULK UPDATE ENDPOINT ==============
 
 @app.post("/api/competitors/bulk-update")

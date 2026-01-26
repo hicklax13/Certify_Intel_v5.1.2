@@ -4,9 +4,9 @@
 
 **Certify Intel** is a production-ready Competitive Intelligence Platform designed to track, analyze, and counter 30+ competitors in the healthcare technology space. It provides a centralized, real-time dashboard for sales, product, and leadership teams.
 
-**Version**: v5.0.4
+**Version**: v5.0.5
 **Status**: 🟢 Web Version Production-Ready | 🔴 Desktop App Blocked
-**Last Updated**: January 26, 2026, 2:00 AM EST
+**Last Updated**: January 26, 2026, 2:30 AM EST
 
 ---
 
@@ -233,6 +233,51 @@ Confidence: 100/100 (high), 3 sources agreeing
 
 **Files Modified:**
 - `backend/main.py` - Added 10+ new endpoints for customer count management (~400 lines)
+
+---
+
+### Session #6 (continued): Data Quality Enhancement - Phase 5 (2:30 AM)
+
+**Feature Implementation: Enhanced Scraper with Source Tracking**
+
+✅ **New Data Classes** (`backend/extractor.py`)
+- `FieldSourceInfo` - Source metadata for individual extracted fields
+- `ExtractedDataWithSource` - Enhanced extraction result with full provenance tracking
+- Tracks: source_page, source_url, extraction_context, per-field confidence
+
+✅ **EnhancedGPTExtractor Class** (`backend/extractor.py`)
+- Multi-page extraction with source tracking
+- Confidence scoring matrix based on page type + field relevance
+- Context snippet extraction showing where values were found
+- Converts results to DataSource records for database storage
+
+✅ **Confidence Scoring Matrix**
+| Page Type | Field | Base Confidence |
+|-----------|-------|----------------|
+| pricing | base_price | 75 |
+| pricing | pricing_model | 75 |
+| about | customer_count | 65 |
+| about | employee_count | 65 |
+| about | year_founded | 80 |
+| customers | key_customers | 75 |
+| features | key_features | 70 |
+| homepage | (default) | 50 |
+
+✅ **New API Endpoints**
+- `POST /api/scrape/enhanced/{competitor_id}` - Run enhanced scrape with source tracking
+- `GET /api/scrape/enhanced/{competitor_id}/sources` - Get all sources from latest scrape
+
+**Enhanced Scrape Features:**
+- Scrapes multiple pages (homepage, pricing, about, features, customers)
+- Tracks which page each data point came from
+- Calculates confidence based on field/page relevance
+- Stores context snippets showing extraction source
+- Respects manual corrections (locked fields)
+- Runs triangulation after extraction
+
+**Files Modified:**
+- `backend/extractor.py` - Added FieldSourceInfo, ExtractedDataWithSource, EnhancedGPTExtractor (~300 lines)
+- `backend/main.py` - Added enhanced scrape endpoints (~200 lines)
 
 ---
 
