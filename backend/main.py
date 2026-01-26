@@ -787,6 +787,888 @@ def api_health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat(), "version": "1.0.0"}
 
 
+# AI Provider Status (v5.0.2)
+@app.get("/api/ai/status")
+def get_ai_status():
+    """
+    Get current AI provider status and configuration.
+
+    v5.0.2: Shows hybrid AI routing status (OpenAI/Gemini).
+    """
+    from extractor import OPENAI_AVAILABLE, GEMINI_AVAILABLE, get_extractor
+
+    extractor = get_extractor()
+    provider_config = os.getenv("AI_PROVIDER", "hybrid")
+
+    # Check Gemini availability
+    gemini_available = GEMINI_AVAILABLE and bool(os.getenv("GOOGLE_AI_API_KEY"))
+    openai_available = OPENAI_AVAILABLE and bool(os.getenv("OPENAI_API_KEY"))
+
+    # Determine active provider for different task types
+    active_for_extraction = "none"
+    active_for_summary = "none"
+
+    if hasattr(extractor, 'get_provider'):
+        active_for_extraction = extractor.get_provider("data_extraction")
+    elif openai_available:
+        active_for_extraction = "openai"
+    elif gemini_available:
+        active_for_extraction = "gemini"
+
+    # Summary uses the insight generator
+    from analytics import DashboardInsightGenerator
+    insight_gen = DashboardInsightGenerator()
+    active_for_summary = insight_gen.get_active_provider()
+
+    return {
+        "status": "configured" if (openai_available or gemini_available) else "not_configured",
+        "provider_config": provider_config,
+        "providers": {
+            "openai": {
+                "available": openai_available,
+                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            },
+            "gemini": {
+                "available": gemini_available,
+                "model": os.getenv("GOOGLE_AI_MODEL", "gemini-2.5-flash")
+            }
+        },
+        "routing": {
+            "data_extraction": active_for_extraction,
+            "executive_summary": active_for_summary,
+            "bulk_tasks": os.getenv("AI_BULK_TASKS", "gemini"),
+            "quality_tasks": os.getenv("AI_QUALITY_TASKS", "openai")
+        },
+        "fallback_enabled": os.getenv("AI_FALLBACK_ENABLED", "true").lower() == "true",
+        "version": "v5.0.5",
+        "multimodal": {
+            "screenshot_analysis": True,
+            "pdf_analysis": True
+        }
+    }
+
+
+# ============== MULTIMODAL AI ENDPOINTS (v5.0.5) ==============
+
+@app.post("/api/ai/analyze-screenshot")
+async def analyze_screenshot(
+    competitor_name: str = Form(...),
+    page_type: str = Form("homepage"),
+    file: UploadFile = File(...)
+):
+    """
+    Analyze a competitor website screenshot using Gemini multimodal AI.
+
+    v5.0.5: New endpoint for visual competitive intelligence.
+
+    Args:
+        competitor_name: Name of the competitor
+        page_type: Type of page (homepage, pricing, features, about)
+        file: Screenshot image file (PNG, JPEG, WebP, GIF)
+
+    Returns:
+        Extracted competitive intelligence as JSON
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        # Read file content
+        content = await file.read()
+
+        # Validate file type
+        allowed_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file.content_type}. Use PNG, JPEG, WebP, or GIF."
+            )
+
+        # Analyze screenshot
+        result = provider.analyze_screenshot(content, competitor_name, page_type)
+
+        return {
+            "success": "error" not in result,
+            "data": result,
+            "competitor": competitor_name,
+            "page_type": page_type,
+            "filename": file.filename
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Screenshot analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/analyze-pdf")
+async def analyze_pdf(
+    document_type: str = Form("general"),
+    competitor_name: Optional[str] = Form(None),
+    custom_prompt: Optional[str] = Form(None),
+    file: UploadFile = File(...)
+):
+    """
+    Analyze a PDF document using Gemini AI.
+
+    v5.0.5: New endpoint for document analysis.
+
+    Args:
+        document_type: Type of document (whitepaper, case_study, datasheet, annual_report, general)
+        competitor_name: Name of the competitor (optional)
+        custom_prompt: Custom analysis prompt (optional)
+        file: PDF file
+
+    Returns:
+        Extracted insights as JSON
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        # Read file content
+        content = await file.read()
+
+        # Validate file type
+        if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type. Please upload a PDF file."
+            )
+
+        # Analyze PDF
+        result = provider.analyze_pdf(
+            pdf_source=content,
+            prompt=custom_prompt,
+            competitor_name=competitor_name,
+            document_type=document_type
+        )
+
+        return {
+            "success": "error" not in result,
+            "data": result,
+            "document_type": document_type,
+            "competitor": competitor_name,
+            "filename": file.filename
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PDF analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/analyze-image")
+async def analyze_image(
+    prompt: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """
+    Analyze any image using Gemini multimodal AI.
+
+    v5.0.5: General purpose image analysis endpoint.
+
+    Args:
+        prompt: Analysis prompt describing what to extract
+        file: Image file (PNG, JPEG, WebP, GIF)
+
+    Returns:
+        AI analysis response
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        # Read file content
+        content = await file.read()
+
+        # Validate file type
+        allowed_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file.content_type}. Use PNG, JPEG, WebP, or GIF."
+            )
+
+        # Analyze image
+        response = provider.analyze_image(content, prompt)
+
+        return {
+            "success": response.success,
+            "content": response.content,
+            "model": response.model,
+            "cost_estimate": response.cost_estimate,
+            "latency_ms": response.latency_ms,
+            "error": response.error,
+            "filename": file.filename
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== v5.0.6 ADVANCED AI FEATURES ==============
+
+@app.post("/api/ai/analyze-video")
+async def analyze_video(
+    video_type: str = Form("demo"),
+    competitor_name: Optional[str] = Form(None),
+    custom_prompt: Optional[str] = Form(None),
+    file: UploadFile = File(...)
+):
+    """
+    Analyze a video using Gemini multimodal AI.
+
+    v5.0.6: Video intelligence for competitor demos, webinars, and tutorials.
+
+    Args:
+        video_type: Type of video (demo, webinar, tutorial, advertisement, general)
+        competitor_name: Optional competitor name for context
+        custom_prompt: Optional custom analysis prompt
+        file: Video file (MP4, WebM, MOV)
+
+    Returns:
+        Extracted competitive intelligence from video
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        # Read file content
+        content = await file.read()
+
+        # Check file size (limit to 50MB)
+        if len(content) > 50 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="Video file too large. Maximum size is 50MB."
+            )
+
+        # Validate file type
+        allowed_types = ["video/mp4", "video/webm", "video/quicktime"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file.content_type}. Use MP4, WebM, or MOV."
+            )
+
+        # Analyze video
+        result = provider.analyze_video(
+            video_source=content,
+            prompt=custom_prompt,
+            competitor_name=competitor_name,
+            video_type=video_type
+        )
+
+        result["filename"] = file.filename
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Video analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/search-grounded")
+async def search_grounded(
+    query: str = Form(...),
+    competitor_name: Optional[str] = Form(None),
+    search_type: str = Form("general")
+):
+    """
+    Search with Gemini's real-time Google Search grounding.
+
+    v5.0.6: Get current, factual information about competitors.
+
+    Args:
+        query: Search query or question
+        competitor_name: Optional competitor name for context
+        search_type: Type of search (general, news, financial, product)
+
+    Returns:
+        Grounded response with real-time information
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        result = provider.search_and_ground(
+            query=query,
+            competitor_name=competitor_name,
+            search_type=search_type
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Grounded search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/research-competitor")
+async def research_competitor(
+    competitor_name: str = Form(...),
+    research_areas: Optional[str] = Form(None)
+):
+    """
+    Comprehensive competitor research using real-time grounding.
+
+    v5.0.6: Deep research feature for competitor profiles.
+
+    Args:
+        competitor_name: Name of the competitor
+        research_areas: Comma-separated areas (overview,products,pricing,news,financials)
+
+    Returns:
+        Comprehensive research results
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        areas = None
+        if research_areas:
+            areas = [a.strip() for a in research_areas.split(",")]
+
+        result = provider.research_competitor(
+            competitor_name=competitor_name,
+            research_areas=areas
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Competitor research failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/process-news-batch")
+async def process_news_batch(request: Request):
+    """
+    Process multiple news articles efficiently using Flash-Lite.
+
+    v5.0.6: Bulk processing for cost-effective news analysis.
+
+    Request body:
+        articles: List of {title, snippet, url} objects
+        analysis_type: summary, sentiment, categorize, or extract
+
+    Returns:
+        List of analysis results
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        body = await request.json()
+        articles = body.get("articles", [])
+        analysis_type = body.get("analysis_type", "summary")
+
+        if not articles:
+            raise HTTPException(status_code=400, detail="No articles provided")
+
+        if len(articles) > 100:
+            raise HTTPException(status_code=400, detail="Maximum 100 articles per batch")
+
+        results = provider.process_news_batch(
+            articles=articles,
+            analysis_type=analysis_type
+        )
+
+        return {
+            "results": results,
+            "articles_processed": len(articles),
+            "analysis_type": analysis_type
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"News batch processing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/analyze-news-trends")
+async def analyze_news_trends(request: Request):
+    """
+    Analyze trends across multiple news articles.
+
+    v5.0.6: Trend analysis for competitive intelligence.
+
+    Request body:
+        articles: List of {title, snippet, url} objects
+        competitor_name: Optional competitor focus
+
+    Returns:
+        Trend analysis with themes, sentiment, and recommendations
+    """
+    try:
+        from gemini_provider import GeminiProvider
+
+        provider = GeminiProvider()
+        if not provider.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI not available. Configure GOOGLE_AI_API_KEY."
+            )
+
+        body = await request.json()
+        articles = body.get("articles", [])
+        competitor_name = body.get("competitor_name")
+
+        if not articles:
+            raise HTTPException(status_code=400, detail="No articles provided")
+
+        result = provider.analyze_news_trends(
+            articles=articles,
+            competitor_name=competitor_name
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"News trend analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== DEEP RESEARCH ENDPOINTS (v5.0.6) ==============
+
+@app.post("/api/ai/deep-research")
+async def deep_research(request: Request):
+    """
+    Generate deep research report for a competitor.
+
+    v5.0.6: NEWS-4B/4C - ChatGPT and Gemini Deep Research integration.
+
+    Request body:
+        competitor_name: Name of the competitor
+        research_type: Type of research (battlecard, market_analysis, product_deep_dive, quick_summary)
+        provider: Optional provider preference (chatgpt, gemini, or auto)
+        additional_context: Optional additional context
+
+    Returns:
+        Research result with content, sections, and metadata
+    """
+    try:
+        from ai_research import get_research_manager
+
+        body = await request.json()
+        competitor_name = body.get("competitor_name")
+        research_type = body.get("research_type", "battlecard")
+        provider = body.get("provider")  # None for auto-selection
+        additional_context = body.get("additional_context")
+
+        if not competitor_name:
+            raise HTTPException(status_code=400, detail="competitor_name is required")
+
+        manager = get_research_manager()
+        result = manager.research(
+            competitor_name=competitor_name,
+            research_type=research_type,
+            provider=provider,
+            additional_context=additional_context
+        )
+
+        from dataclasses import asdict
+        return asdict(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deep research failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/generate-battlecard")
+async def generate_battlecard_endpoint(request: Request):
+    """
+    Generate a sales battlecard for a competitor.
+
+    v5.0.6: One-click battlecard generation.
+
+    Request body:
+        competitor_name: Name of the competitor
+        provider: Optional provider preference
+        additional_context: Optional additional context
+
+    Returns:
+        Complete battlecard with sections
+    """
+    try:
+        from ai_research import generate_battlecard
+
+        body = await request.json()
+        competitor_name = body.get("competitor_name")
+        provider = body.get("provider")
+        additional_context = body.get("additional_context")
+
+        if not competitor_name:
+            raise HTTPException(status_code=400, detail="competitor_name is required")
+
+        result = generate_battlecard(
+            competitor_name=competitor_name,
+            provider=provider,
+            additional_context=additional_context
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Battlecard generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ai/research-types")
+async def get_research_types():
+    """
+    Get available research types and descriptions.
+
+    v5.0.6: Research type discovery endpoint.
+
+    Returns:
+        List of available research types with descriptions
+    """
+    try:
+        from ai_research import get_research_manager
+        manager = get_research_manager()
+        return {
+            "research_types": manager.get_research_types(),
+            "providers": manager.get_available_providers()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get research types: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ai/research-providers")
+async def get_research_providers():
+    """
+    Get available AI research providers and their status.
+
+    v5.0.6: Provider availability check.
+
+    Returns:
+        Provider availability status
+    """
+    try:
+        from ai_research import get_research_manager
+        manager = get_research_manager()
+        return manager.get_available_providers()
+    except Exception as e:
+        logger.error(f"Failed to get research providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== FIRECRAWL ENDPOINTS (v5.0.6) ==============
+
+@app.post("/api/firecrawl/scrape")
+async def firecrawl_scrape(request: Request):
+    """
+    Scrape a URL using Firecrawl.
+
+    v5.0.6: NEWS-4D - Firecrawl MCP integration.
+
+    Request body:
+        url: URL to scrape
+        formats: Optional list of formats (markdown, html, links)
+        only_main_content: Whether to extract only main content (default: true)
+
+    Returns:
+        Scraped content with metadata
+    """
+    try:
+        from firecrawl_integration import get_firecrawl_client
+        from dataclasses import asdict
+
+        client = get_firecrawl_client()
+        if not client.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Firecrawl not available. Configure FIRECRAWL_API_KEY."
+            )
+
+        body = await request.json()
+        url = body.get("url")
+
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required")
+
+        result = await client.scrape(
+            url=url,
+            formats=body.get("formats"),
+            only_main_content=body.get("only_main_content", True),
+            include_tags=body.get("include_tags"),
+            exclude_tags=body.get("exclude_tags"),
+            wait_for=body.get("wait_for"),
+            timeout=body.get("timeout", 30000)
+        )
+
+        await client.close()
+        return asdict(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Firecrawl scrape failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/firecrawl/scrape-batch")
+async def firecrawl_scrape_batch(request: Request):
+    """
+    Scrape multiple URLs using Firecrawl.
+
+    v5.0.6: Batch scraping for efficiency.
+
+    Request body:
+        urls: List of URLs to scrape
+        formats: Optional list of formats
+
+    Returns:
+        Batch results with all scraped content
+    """
+    try:
+        from firecrawl_integration import get_firecrawl_client
+        from dataclasses import asdict
+
+        client = get_firecrawl_client()
+        if not client.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Firecrawl not available. Configure FIRECRAWL_API_KEY."
+            )
+
+        body = await request.json()
+        urls = body.get("urls", [])
+
+        if not urls:
+            raise HTTPException(status_code=400, detail="urls is required")
+
+        result = await client.scrape_batch(
+            urls=urls,
+            formats=body.get("formats"),
+            only_main_content=body.get("only_main_content", True)
+        )
+
+        await client.close()
+        return asdict(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Firecrawl batch scrape failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/firecrawl/scrape-competitor")
+async def firecrawl_scrape_competitor(request: Request):
+    """
+    Scrape a competitor website for intelligence.
+
+    v5.0.6: Specialized competitor scraping with structured extraction.
+
+    Request body:
+        url: Competitor website URL
+        include_subpages: Whether to scrape subpages (default: true)
+
+    Returns:
+        Structured competitor data from homepage, pricing, about, etc.
+    """
+    try:
+        from firecrawl_integration import get_competitor_scraper
+
+        scraper = get_competitor_scraper()
+        if not scraper.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Firecrawl not available. Configure FIRECRAWL_API_KEY."
+            )
+
+        body = await request.json()
+        url = body.get("url")
+
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required")
+
+        result = await scraper.scrape_competitor_website(
+            url=url,
+            include_subpages=body.get("include_subpages", True)
+        )
+
+        await scraper.close()
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Firecrawl competitor scrape failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/firecrawl/crawl")
+async def firecrawl_crawl(request: Request):
+    """
+    Start a crawl job for a website.
+
+    v5.0.6: Website crawling for comprehensive data collection.
+
+    Request body:
+        url: Starting URL
+        limit: Maximum pages to crawl (default: 10)
+        max_depth: Maximum link depth (default: 2)
+
+    Returns:
+        Crawl job ID and status
+    """
+    try:
+        from firecrawl_integration import get_firecrawl_client
+
+        client = get_firecrawl_client()
+        if not client.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Firecrawl not available. Configure FIRECRAWL_API_KEY."
+            )
+
+        body = await request.json()
+        url = body.get("url")
+
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required")
+
+        result = await client.crawl(
+            url=url,
+            limit=body.get("limit", 10),
+            max_depth=body.get("max_depth", 2),
+            include_paths=body.get("include_paths"),
+            exclude_paths=body.get("exclude_paths")
+        )
+
+        await client.close()
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Firecrawl crawl failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/firecrawl/crawl/{job_id}")
+async def firecrawl_crawl_status(job_id: str):
+    """
+    Get the status of a crawl job.
+
+    v5.0.6: Check crawl job progress and results.
+
+    Args:
+        job_id: Crawl job ID
+
+    Returns:
+        Crawl job status and results
+    """
+    try:
+        from firecrawl_integration import get_firecrawl_client
+
+        client = get_firecrawl_client()
+        if not client.is_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Firecrawl not available."
+            )
+
+        result = await client.get_crawl_status(job_id)
+        await client.close()
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Firecrawl status check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/firecrawl/status")
+async def firecrawl_status():
+    """
+    Check Firecrawl service availability.
+
+    v5.0.6: Service health check.
+
+    Returns:
+        Availability status
+    """
+    try:
+        from firecrawl_integration import get_firecrawl_client
+        client = get_firecrawl_client()
+        return {
+            "available": client.is_available,
+            "configured": bool(os.getenv("FIRECRAWL_API_KEY"))
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "configured": False,
+            "error": str(e)
+        }
+
+
 # Analytics sub-endpoints
 @app.get("/api/analytics/threats")
 def get_threat_analytics(db: Session = Depends(get_db)):
@@ -2647,10 +3529,12 @@ async def extract_products_from_content(
     db: Session = Depends(get_db)
 ):
     """
-    Extract products and pricing from competitor's scraped content using GPT.
+    Extract products and pricing from competitor's scraped content using AI.
     This endpoint triggers the extraction and stores results in the database.
+
+    v5.0.2: Uses hybrid AI routing (OpenAI or Gemini based on config)
     """
-    from extractor import GPTExtractor
+    from extractor import get_extractor
 
     competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not competitor:
@@ -2695,8 +3579,8 @@ async def extract_products_from_content(
             "competitor_id": competitor_id
         }
 
-    # Extract products using GPT
-    extractor = GPTExtractor()
+    # Extract products using AI (v5.0.2 - hybrid routing)
+    extractor = get_extractor()
     extraction_result = extractor.extract_products_and_pricing(competitor.name, content)
 
     if "error" in extraction_result:
@@ -2808,9 +3692,11 @@ async def extract_features_from_content(
     db: Session = Depends(get_db)
 ):
     """
-    Extract feature matrix for a product using GPT.
+    Extract feature matrix for a product using AI.
+
+    v5.0.2: Uses hybrid AI routing (OpenAI or Gemini based on config)
     """
-    from extractor import GPTExtractor
+    from extractor import get_extractor
 
     product = db.query(CompetitorProduct).filter(CompetitorProduct.id == product_id).first()
     if not product:
@@ -2835,8 +3721,8 @@ async def extract_features_from_content(
             "message": "No content available for feature extraction. Scrape the competitor first."
         }
 
-    # Extract features
-    extractor = GPTExtractor()
+    # Extract features (v5.0.2 - hybrid routing)
+    extractor = get_extractor()
     extraction_result = extractor.extract_feature_matrix(competitor.name, product.product_name, content)
 
     if "error" in extraction_result:
@@ -3726,13 +4612,14 @@ async def bulk_update_competitors(
 
 
 # Import routers
-from routers import reports, discovery
+from routers import reports, discovery, sales_marketing
 import api_routes
 
 # Include routers
 app.include_router(discovery.router)
 app.include_router(api_routes.router)  # Covers analytics, winloss, external, etc.
 app.include_router(reports.router)
+app.include_router(sales_marketing.router)  # Sales & Marketing Module (v5.0.7)
 
 app.add_middleware(
     CORSMiddleware,
@@ -4364,10 +5251,10 @@ async def run_scrape_job(competitor_id: int):
         # Try to use the full scraper if available
         try:
             from scraper import CompetitorScraper
-            from extractor import GPTExtractor
-            
+            from extractor import get_extractor
+
             scraper = CompetitorScraper()
-            extractor = GPTExtractor()
+            extractor = get_extractor()  # v5.0.2: Uses hybrid AI routing
             
             # Scrape the website
             content = await scraper.scrape(comp.website)
@@ -4525,24 +5412,24 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
         # Try to use the full scraper if available
         try:
             from scraper import CompetitorScraper
-            from extractor import GPTExtractor
+            from extractor import get_extractor
 
             scraper = CompetitorScraper()
-            extractor = GPTExtractor()
+            extractor = get_extractor()  # v5.0.2: Uses hybrid AI routing
 
             # Scrape the website
             content = await scraper.scrape(comp.website)
             source_url = comp.website if not comp.website.startswith("http") else comp.website
 
             if content:
-                # Extract data using GPT
+                # Extract data using AI (v5.0.2 - hybrid routing)
                 from dataclasses import asdict
 
                 extracted_obj = extractor.extract_from_content(comp.name, content.get("content", ""))
-                extracted = asdict(extracted_obj)
+                extracted = asdict(extracted_obj) if hasattr(extracted_obj, '__dataclass_fields__') else extracted_obj
 
-                # Get extraction confidence from GPT (if available)
-                gpt_confidence = extracted.get("confidence_score") or 50
+                # Get extraction confidence from AI (if available)
+                ai_confidence = extracted.get("confidence_score") or 50
 
                 if extracted:
                     # Update competitor with extracted data
@@ -4616,7 +5503,7 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
                                 previous_value=old_str,
                                 source_url=source_url,
                                 source_name=f"{comp.name} Website",
-                                gpt_confidence=gpt_confidence
+                                gpt_confidence=ai_confidence  # v5.0.2: renamed to ai_confidence
                             )
 
                     comp.last_updated = datetime.utcnow()
@@ -5370,6 +6257,180 @@ def get_news_by_name(company_name: str, days: int = 7):
         return fetch_competitor_news(company_name, days)
     except Exception as e:
         return {"error": str(e), "articles": []}
+
+
+# ============== News Feed Endpoint (v5.0.3 - Phase 1) ==============
+
+@app.get("/api/news-feed")
+def get_news_feed(
+    competitor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    source: Optional[str] = None,
+    event_type: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db)
+):
+    """
+    Aggregated news feed with filtering across all competitors.
+
+    v5.0.3: Core News Feed implementation.
+
+    Args:
+        competitor_id: Filter by specific competitor ID
+        start_date: Start date filter (YYYY-MM-DD)
+        end_date: End date filter (YYYY-MM-DD)
+        sentiment: Filter by sentiment (positive, neutral, negative)
+        source: Filter by news source (google_news, sec_edgar, newsapi, gnews, mediastack)
+        event_type: Filter by event type (funding, acquisition, product_launch, partnership, leadership, financial, legal, general)
+        page: Page number for pagination
+        page_size: Number of articles per page
+
+    Returns:
+        Aggregated news articles with stats and pagination
+    """
+    try:
+        from news_monitor import NewsMonitor
+        from datetime import datetime, timedelta
+
+        monitor = NewsMonitor()
+        all_articles = []
+
+        # Get competitors to fetch news for
+        competitors_query = db.query(Competitor).filter(Competitor.is_deleted == False)
+        if competitor_id:
+            competitors_query = competitors_query.filter(Competitor.id == competitor_id)
+        competitors_list = competitors_query.all()
+
+        # Determine date range (default to last 30 days)
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            except ValueError:
+                start_dt = datetime.utcnow() - timedelta(days=30)
+        else:
+            start_dt = datetime.utcnow() - timedelta(days=30)
+
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            except ValueError:
+                end_dt = datetime.utcnow()
+        else:
+            end_dt = datetime.utcnow()
+
+        # Calculate days to look back
+        days_lookback = (datetime.utcnow() - start_dt).days + 1
+
+        # Fetch news for each competitor
+        for comp in competitors_list:
+            try:
+                digest = monitor.fetch_news(comp.name, days=days_lookback)
+
+                # Add competitor info to each article
+                for article in digest.articles:
+                    article_dict = {
+                        "competitor_id": comp.id,
+                        "competitor_name": comp.name,
+                        "title": article.title,
+                        "url": article.url,
+                        "source": article.source,
+                        "source_type": "google_news",  # Default source type
+                        "published_at": article.published_date,
+                        "snippet": article.snippet,
+                        "sentiment": article.sentiment,
+                        "event_type": article.event_type or "general",
+                        "is_major_event": article.is_major_event
+                    }
+                    all_articles.append(article_dict)
+            except Exception as e:
+                print(f"Error fetching news for {comp.name}: {e}")
+                continue
+
+        # Filter by date range
+        filtered_articles = []
+        for article in all_articles:
+            try:
+                pub_date_str = article.get("published_at", "")
+                if pub_date_str:
+                    # Handle various date formats
+                    for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%a, %d %b %Y %H:%M:%S %Z", "%a, %d %b %Y %H:%M:%S GMT"]:
+                        try:
+                            pub_date = datetime.strptime(pub_date_str[:19], fmt[:len(pub_date_str)])
+                            break
+                        except:
+                            continue
+                    else:
+                        pub_date = datetime.utcnow()
+
+                    if start_dt <= pub_date <= end_dt:
+                        filtered_articles.append(article)
+                else:
+                    filtered_articles.append(article)  # Include if no date
+            except:
+                filtered_articles.append(article)  # Include on date parse error
+
+        all_articles = filtered_articles
+
+        # Apply sentiment filter
+        if sentiment:
+            all_articles = [a for a in all_articles if a.get("sentiment", "").lower() == sentiment.lower()]
+
+        # Apply source filter
+        if source:
+            all_articles = [a for a in all_articles if a.get("source_type", "").lower() == source.lower() or source.lower() in a.get("source", "").lower()]
+
+        # Apply event type filter
+        if event_type:
+            all_articles = [a for a in all_articles if a.get("event_type", "").lower() == event_type.lower()]
+
+        # Sort by date (most recent first)
+        all_articles.sort(key=lambda x: x.get("published_at", ""), reverse=True)
+
+        # Calculate stats
+        stats = {
+            "total": len(all_articles),
+            "positive": len([a for a in all_articles if a.get("sentiment") == "positive"]),
+            "neutral": len([a for a in all_articles if a.get("sentiment") == "neutral"]),
+            "negative": len([a for a in all_articles if a.get("sentiment") == "negative"])
+        }
+
+        # Paginate
+        total_items = len(all_articles)
+        total_pages = max(1, (total_items + page_size - 1) // page_size)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_articles = all_articles[start_idx:end_idx]
+
+        return {
+            "articles": paginated_articles,
+            "stats": stats,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_items": total_items,
+                "total_pages": total_pages
+            },
+            "filters_applied": {
+                "competitor_id": competitor_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "sentiment": sentiment,
+                "source": source,
+                "event_type": event_type
+            }
+        }
+
+    except Exception as e:
+        print(f"Error in news feed: {e}")
+        return {
+            "articles": [],
+            "stats": {"total": 0, "positive": 0, "neutral": 0, "negative": 0},
+            "pagination": {"page": 1, "page_size": page_size, "total_items": 0, "total_pages": 1},
+            "error": str(e)
+        }
 
 
 @app.get("/api/alerts/price-changes")

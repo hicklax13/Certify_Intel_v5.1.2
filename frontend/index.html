@@ -48,11 +48,17 @@
                 <a href="#" class="nav-item" data-page="changes">
                     <span class="icon">🔔</span> Change Log
                 </a>
+                <a href="#" class="nav-item" data-page="newsfeed">
+                    <span class="icon">📰</span> News Feed
+                </a>
                 <a href="#" class="nav-item" data-page="analytics">
                     <span class="icon">📈</span> Analytics & Reports
                 </a>
                 <a href="#" class="nav-item" data-page="battlecards">
                     <span class="icon">🃏</span> Battlecards
+                </a>
+                <a href="#" class="nav-item" data-page="salesmarketing">
+                    <span class="icon">🎯</span> Sales & Marketing
                 </a>
                 <a href="#" class="nav-item" data-page="dataquality">
                     <span class="icon">✅</span> Data Quality
@@ -512,6 +518,144 @@
                 </div>
             </section>
 
+            <!-- News Feed Page (v5.0.3 - Phase 1) -->
+            <section id="newsfeedPage" class="page">
+                <div class="page-header">
+                    <h2>📰 News Feed</h2>
+                    <p class="subtitle">Aggregated news and intelligence from multiple sources</p>
+                </div>
+
+                <!-- Filters Bar -->
+                <div class="news-feed-filters">
+                    <div class="filter-group">
+                        <label for="newsCompetitorFilter">Competitor</label>
+                        <select id="newsCompetitorFilter" onchange="loadNewsFeed()">
+                            <option value="">All Competitors</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsDateFrom">From Date</label>
+                        <input type="date" id="newsDateFrom" onchange="loadNewsFeed()">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsDateTo">To Date</label>
+                        <input type="date" id="newsDateTo" onchange="loadNewsFeed()">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsSentimentFilter">Sentiment</label>
+                        <select id="newsSentimentFilter" onchange="loadNewsFeed()">
+                            <option value="">All Sentiment</option>
+                            <option value="positive">🟢 Positive</option>
+                            <option value="neutral">🟡 Neutral</option>
+                            <option value="negative">🔴 Negative</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsSourceFilter">Source</label>
+                        <select id="newsSourceFilter" onchange="loadNewsFeed()">
+                            <option value="">All Sources</option>
+                            <option value="google_news">Google News</option>
+                            <option value="sec_edgar">SEC EDGAR</option>
+                            <option value="newsapi">NewsAPI</option>
+                            <option value="gnews">GNews</option>
+                            <option value="mediastack">MediaStack</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsEventFilter">Event Type</label>
+                        <select id="newsEventFilter" onchange="loadNewsFeed()">
+                            <option value="">All Events</option>
+                            <option value="funding">💰 Funding</option>
+                            <option value="acquisition">🤝 Acquisition</option>
+                            <option value="product_launch">🚀 Product Launch</option>
+                            <option value="partnership">🔗 Partnership</option>
+                            <option value="leadership">👔 Leadership</option>
+                            <option value="financial">📊 Financial</option>
+                            <option value="legal">⚖️ Legal</option>
+                            <option value="general">📄 General</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="loadNewsFeed()">
+                        🔍 Search
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetNewsFeedFilters()">
+                        ↺ Reset
+                    </button>
+                </div>
+
+                <!-- News Stats Summary -->
+                <div class="news-feed-stats" id="newsFeedStats">
+                    <div class="news-stat-card">
+                        <span class="stat-value" id="totalNewsCount">-</span>
+                        <span class="stat-label">Total Articles</span>
+                    </div>
+                    <div class="news-stat-card positive">
+                        <span class="stat-value" id="positiveNewsCount">-</span>
+                        <span class="stat-label">Positive</span>
+                    </div>
+                    <div class="news-stat-card neutral">
+                        <span class="stat-value" id="neutralNewsCount">-</span>
+                        <span class="stat-label">Neutral</span>
+                    </div>
+                    <div class="news-stat-card negative">
+                        <span class="stat-value" id="negativeNewsCount">-</span>
+                        <span class="stat-label">Negative</span>
+                    </div>
+                </div>
+
+                <!-- News Feed Loading Indicator -->
+                <div id="newsFeedLoading" class="news-feed-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <span>Loading news articles...</span>
+                </div>
+
+                <!-- News Feed Table -->
+                <div class="news-feed-container">
+                    <table class="news-feed-table" id="newsFeedTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Competitor</th>
+                                <th>Headline</th>
+                                <th>Source</th>
+                                <th>Sentiment</th>
+                                <th>Event Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="newsFeedTableBody">
+                            <!-- Loaded dynamically -->
+                            <tr class="news-empty-state">
+                                <td colspan="7">
+                                    <div class="empty-state-content">
+                                        <span class="empty-icon">📰</span>
+                                        <p>No news articles found. Adjust your filters or refresh data.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="news-feed-pagination" id="newsFeedPagination">
+                    <button class="pagination-btn" id="newsPrevBtn" onclick="loadNewsFeed(currentNewsPage - 1)" disabled>
+                        ← Previous
+                    </button>
+                    <span class="pagination-info" id="newsPageInfo">Page 1 of 1</span>
+                    <button class="pagination-btn" id="newsNextBtn" onclick="loadNewsFeed(currentNewsPage + 1)" disabled>
+                        Next →
+                    </button>
+                </div>
+            </section>
+
             <!-- Analytics Page -->
             <section id="analyticsPage" class="page">
                 <div class="page-header">
@@ -609,8 +753,159 @@
                     <h2>Sales Battlecards</h2>
                     <button class="btn btn-secondary" onclick="generateAllBattlecards()">📄 Generate All PDFs</button>
                 </div>
+
+                <!-- v5.0.7: Quick Dimension Scorecard Widget -->
+                <div class="dimension-widget-container" id="battlecardDimensionWidget">
+                    <div class="dimension-widget-header">
+                        <h3>🎯 Quick Dimension Overview</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="showPage('salesmarketing')">
+                            Open Full Module →
+                        </button>
+                    </div>
+                    <div class="dimension-widget-selector">
+                        <select id="battlecardDimensionCompetitor" class="form-select" onchange="loadBattlecardDimensionWidget()">
+                            <option value="">-- Select Competitor for Dimensions --</option>
+                        </select>
+                    </div>
+                    <div id="battlecardDimensionScores" class="dimension-widget-scores">
+                        <p class="sm-placeholder">Select a competitor to see their dimension scores</p>
+                    </div>
+                </div>
+
                 <div class="battlecards-grid" id="battlecardsGrid">
                     <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Sales & Marketing Module Page (v5.0.7) -->
+            <section id="salesmarketingPage" class="page">
+                <div class="page-header">
+                    <h2>🎯 Sales & Marketing Module</h2>
+                    <p class="page-description">Competitive dimensions, battlecards, and sales enablement tools based on 9 key evaluation criteria</p>
+                </div>
+
+                <!-- Sub-navigation Tabs -->
+                <div class="sm-module-tabs">
+                    <button class="sm-tab-btn active" onclick="showSalesMarketingTab('dimensions')">
+                        📊 Dimension Scorecard
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('battlecards')">
+                        ⚔️ Dynamic Battlecards
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('comparison')">
+                        📈 Competitor Comparison
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('talkingpoints')">
+                        💬 Talking Points
+                    </button>
+                </div>
+
+                <!-- Tab Content: Dimension Scorecard -->
+                <div id="sm-dimensionsTab" class="sm-tab-content active">
+                    <div class="sm-filter-bar">
+                        <select id="dimensionCompetitorSelect" class="form-select" onchange="loadCompetitorDimensions()">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="aiSuggestDimensions()">
+                            🤖 AI Suggest Scores
+                        </button>
+                        <button class="btn btn-primary" onclick="saveAllDimensions()">
+                            💾 Save All Changes
+                        </button>
+                    </div>
+
+                    <!-- Dimension Profile Summary -->
+                    <div id="dimensionProfileSummary" class="sm-profile-summary" style="display: none;">
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Overall Score</span>
+                            <span class="sm-summary-value" id="smOverallScore">--</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Strengths</span>
+                            <span class="sm-summary-value sm-strength" id="smStrengthCount">0</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Weaknesses</span>
+                            <span class="sm-summary-value sm-weakness" id="smWeaknessCount">0</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Sales Priority</span>
+                            <span class="sm-summary-value" id="smSalesPriority">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Dimension Grid -->
+                    <div id="dimensionGrid" class="sm-dimension-grid">
+                        <p class="sm-placeholder">Select a competitor to view and edit their 9-dimension scorecard.</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Dynamic Battlecards -->
+                <div id="sm-battlecardsTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="battlecardCompetitorSelect" class="form-select">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <select id="battlecardType" class="form-select">
+                            <option value="full">Full Battlecard</option>
+                            <option value="quick">Quick Reference (1-Page)</option>
+                            <option value="objection_handler">Objection Handler</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="generateDynamicBattlecard()">
+                            ⚔️ Generate Battlecard
+                        </button>
+                    </div>
+                    <div id="dynamicBattlecardContent" class="sm-battlecard-container">
+                        <p class="sm-placeholder">Select a competitor and battlecard type, then click Generate to create a dimension-based battlecard.</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Competitor Comparison -->
+                <div id="sm-comparisonTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="compareCompetitor1" class="form-select">
+                            <option value="">-- Select Competitor 1 --</option>
+                        </select>
+                        <span class="sm-vs-label">vs</span>
+                        <select id="compareCompetitor2" class="form-select">
+                            <option value="">-- Select Competitor 2 --</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadDimensionComparison()">
+                            Compare Dimensions
+                        </button>
+                        <button class="btn btn-secondary" onclick="compareVsCertify()">
+                            📊 vs Certify Health
+                        </button>
+                    </div>
+                    <div id="comparisonContent" class="sm-comparison-container">
+                        <canvas id="dimensionRadarChart" style="max-height: 400px;"></canvas>
+                        <div id="comparisonDetails" class="sm-comparison-details"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Talking Points -->
+                <div id="sm-talkingpointsTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="talkingPointsCompetitor" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <select id="talkingPointsDimension" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">All Dimensions</option>
+                        </select>
+                        <select id="talkingPointsType" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">All Types</option>
+                            <option value="strength">Strengths</option>
+                            <option value="weakness">Weaknesses</option>
+                            <option value="objection">Objections</option>
+                            <option value="counter">Counter-Points</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="showAddTalkingPointModal()">
+                            ➕ Add Talking Point
+                        </button>
+                    </div>
+                    <div id="talkingPointsList" class="sm-talking-points-container">
+                        <p class="sm-placeholder">Select a competitor to view talking points organized by dimension.</p>
+                    </div>
                 </div>
             </section>
 
@@ -964,6 +1259,76 @@
                     </div>
                 </div>
 
+                <!-- AI Provider Settings (v5.0.2) -->
+                <div class="settings-card full-width icon-card" id="aiProviderSettings" style="border: 1px solid #10B981;">
+                    <h3>🤖 AI Provider Configuration</h3>
+                    <p style="margin-bottom: 15px;">Configure which AI provider to use for different tasks. <span id="aiProviderVersion" style="color: var(--text-secondary); font-size: 0.85em;">v5.0.2</span></p>
+
+                    <div id="aiProviderStatus" class="ai-provider-status" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <!-- OpenAI Status -->
+                        <div class="provider-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: white; font-size: 16px;">✦</span>
+                                </div>
+                                <div>
+                                    <strong>OpenAI</strong>
+                                    <div id="openaiStatusBadge" class="status-badge" style="margin-left: 0;">Checking...</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">
+                                Model: <span id="openaiModel">gpt-4o-mini</span>
+                            </div>
+                        </div>
+
+                        <!-- Gemini Status -->
+                        <div class="provider-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #4285F4 0%, #8E44AD 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: white; font-size: 16px;">◇</span>
+                                </div>
+                                <div>
+                                    <strong>Google Gemini</strong>
+                                    <div id="geminiStatusBadge" class="status-badge" style="margin-left: 0;">Checking...</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">
+                                Model: <span id="geminiModel">gemini-2.5-flash</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Task Routing Display -->
+                    <div id="aiTaskRouting" style="background: var(--card-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.95em;">Task Routing</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 0.85em;">
+                            <div>
+                                <span style="color: var(--text-secondary);">Data Extraction:</span>
+                                <span id="routingExtraction" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Executive Summary:</span>
+                                <span id="routingSummary" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Bulk Tasks:</span>
+                                <span id="routingBulk" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Quality Tasks:</span>
+                                <span id="routingQuality" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 0.85em; color: var(--text-secondary);">
+                        <strong>Note:</strong> AI provider settings are configured via environment variables. Edit <code>.env</code> to change providers.
+                        <br>• <code>AI_PROVIDER=hybrid</code> - Smart routing (recommended)
+                        <br>• <code>AI_PROVIDER=openai</code> - Use OpenAI for all tasks
+                        <br>• <code>AI_PROVIDER=gemini</code> - Use Gemini for all tasks (90% cheaper)
+                    </div>
+                </div>
+
                 <div class="settings-card full-width icon-card" style="border: 1px solid var(--primary-color);">
                     <h3>🤖 AI Admin & Knowledge Base</h3>
                     <p>Manage AI personas, prompts, and internal knowledge sources (RAG).</p>
@@ -1265,6 +1630,7 @@
     <script src="enhanced_analytics.js?v=2"></script>
     <script src="app_v2.js?v=6"></script>
     <script src="prompt_manager.js?v=3"></script>
+    <script src="sales_marketing.js?v=1"></script>
 </body>
 
 </html>

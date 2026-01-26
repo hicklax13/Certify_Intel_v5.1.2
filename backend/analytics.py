@@ -653,10 +653,18 @@ class CompetitorSummarizer:
 # ============== Dashboard AI Insights ==============
 
 class DashboardInsightGenerator:
-    """Generates high-level executive insights for the entire dashboard."""
-    
+    """
+    Generates high-level executive insights for the entire dashboard.
+
+    v5.0.2: Supports both OpenAI and Gemini providers with hybrid routing.
+    """
+
     def __init__(self):
         self.client = None
+        self.gemini_extractor = None
+        self.provider = os.getenv("AI_PROVIDER", "hybrid")
+
+        # Initialize OpenAI
         try:
             from openai import OpenAI
             api_key = os.getenv("OPENAI_API_KEY")
@@ -664,32 +672,110 @@ class DashboardInsightGenerator:
                 self.client = OpenAI(api_key=api_key)
         except ImportError:
             pass
-            
-    def generate_insight(self, competitors: List[Dict[str, Any]]) -> Dict[str, str]:
-        """Generate an executive summary and actionable insights."""
-        
-        # fallback if no AI
-        if not self.client:
+
+        # Initialize Gemini (v5.0.2)
+        try:
+            from gemini_provider import GeminiExtractor
+            if os.getenv("GOOGLE_AI_API_KEY"):
+                self.gemini_extractor = GeminiExtractor()
+        except ImportError:
+            pass
+
+    @property
+    def has_openai(self) -> bool:
+        """Check if OpenAI is available."""
+        return self.client is not None
+
+    @property
+    def has_gemini(self) -> bool:
+        """Check if Gemini is available."""
+        return self.gemini_extractor is not None and self.gemini_extractor.is_available
+
+    def get_active_provider(self) -> str:
+        """Determine which provider to use for summaries."""
+        if self.provider == "openai" and self.has_openai:
+            return "openai"
+        elif self.provider == "gemini" and self.has_gemini:
+            return "gemini"
+        elif self.provider == "hybrid":
+            # For executive summaries, prefer quality (OpenAI) but fallback to Gemini
+            quality_pref = os.getenv("AI_QUALITY_TASKS", "openai")
+            if quality_pref == "openai" and self.has_openai:
+                return "openai"
+            elif quality_pref == "gemini" and self.has_gemini:
+                return "gemini"
+            # Fallback chain
+            return "openai" if self.has_openai else ("gemini" if self.has_gemini else "none")
+
+        # Fallback to whatever is available
+        return "openai" if self.has_openai else ("gemini" if self.has_gemini else "none")
+
+    def generate_insight(self, competitors: List[Dict[str, Any]], custom_prompt: Optional[str] = None) -> Dict[str, str]:
+        """
+        Generate an executive summary and actionable insights.
+
+        v5.0.2: Supports hybrid AI routing between OpenAI and Gemini.
+        """
+        active_provider = self.get_active_provider()
+
+        # Fallback if no AI
+        if active_provider == "none":
             return self._generate_fallback_summary(competitors)
-            
+
         # Prepare context
         context = self._prepare_context(competitors)
-        
+
+        system_prompt = custom_prompt or "You are a Chief Strategy Officer. Analyze the competitive landscape data provided and generate a concise executive summary (2-3 sentences) and 3 bullet points of actionable strategic advice for 'Certify Health' (our company). Focus on threats, pricing pressure, and feature gaps."
+
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a Chief Strategy Officer. Analyze the competitive landscape data provided and generate a concise executive summary (2-3 sentences) and 3 bullet points of actionable strategic advice for 'Certify Health' (our company). Focus on threats, pricing pressure, and feature gaps."},
-                    {"role": "user", "content": f"Competitive Landscape Data:\n{context}"}
-                ],
-                temperature=0.7,
-                max_tokens=250
-            )
-            content = response.choices[0].message.content
-            return self._parse_ai_response(content)
+            if active_provider == "gemini":
+                return self._generate_with_gemini(competitors, system_prompt)
+            else:
+                return self._generate_with_openai(context, system_prompt)
         except Exception as e:
-            print(f"AI Insight Error: {e}")
+            print(f"AI Insight Error ({active_provider}): {e}")
+            # Try fallback provider
+            fallback_enabled = os.getenv("AI_FALLBACK_ENABLED", "true").lower() == "true"
+            if fallback_enabled:
+                try:
+                    if active_provider == "openai" and self.has_gemini:
+                        return self._generate_with_gemini(competitors, system_prompt)
+                    elif active_provider == "gemini" and self.has_openai:
+                        return self._generate_with_openai(context, system_prompt)
+                except Exception as fallback_error:
+                    print(f"Fallback AI Error: {fallback_error}")
+
             return self._generate_fallback_summary(competitors)
+
+    def _generate_with_openai(self, context: str, system_prompt: str) -> Dict[str, str]:
+        """Generate summary using OpenAI."""
+        response = self.client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Competitive Landscape Data:\n{context}"}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+        content = response.choices[0].message.content
+        result = self._parse_ai_response(content)
+        result["provider"] = "openai"
+        result["model"] = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        return result
+
+    def _generate_with_gemini(self, competitors: List[Dict[str, Any]], custom_prompt: str) -> Dict[str, str]:
+        """Generate summary using Gemini."""
+        summary = self.gemini_extractor.generate_executive_summary(
+            competitor_data=competitors,
+            custom_prompt=custom_prompt,
+        )
+        return {
+            "summary": summary,
+            "type": "ai",
+            "provider": "gemini",
+            "model": self.gemini_extractor.provider.config.model
+        }
 
     def _prepare_context(self, competitors: List[Dict[str, Any]]) -> str:
         lines = []

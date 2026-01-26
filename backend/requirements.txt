@@ -12,11 +12,22 @@ requests>=2.31.0
 lxml>=5.1.0
 html5lib>=1.1
 duckduckgo-search>=5.0.0
+pygooglenews>=0.1.2  # Enhanced Google News parsing (v5.0.3)
 
 # AI
 openai>=1.10.0
 tiktoken>=0.5.2
 langchain
+google-generativeai>=0.8.0  # Gemini API (v5.0.2)
+
+# ML Sentiment Analysis (v5.0.5 - Phase 4)
+transformers>=4.36.0  # Hugging Face transformers
+torch>=2.1.0  # PyTorch backend
+accelerate>=0.25.0  # Faster inference
+
+# Multimodal AI (v5.0.5 - Phase 3)
+Pillow>=10.2.0  # Image processing
+PyMuPDF>=1.23.0  # PDF processing (fitz)
 
 # Utilities
 python-dotenv>=1.0.0

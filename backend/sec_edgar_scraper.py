@@ -1,16 +1,41 @@
 """
-Certify Intel - SEC EDGAR Scraper
+Certify Intel - SEC EDGAR Scraper (v5.0.3)
 Fetches public company filings, financials, and risk disclosures.
+
+v5.0.3: Added news feed integration with get_news_articles() method.
 """
 import os
 import re
 import json
-from datetime import datetime
-from typing import Dict, Any, List, Optional
+import time
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
+
+
+# SEC EDGAR 8-K Item types and their meanings (for news event classification)
+SEC_8K_ITEMS = {
+    "1.01": {"name": "Entry into Material Agreement", "event_type": "financial", "is_major": True},
+    "1.02": {"name": "Termination of Material Agreement", "event_type": "financial", "is_major": True},
+    "1.03": {"name": "Bankruptcy or Receivership", "event_type": "financial", "is_major": True},
+    "2.01": {"name": "Completion of Acquisition/Disposition", "event_type": "acquisition", "is_major": True},
+    "2.02": {"name": "Results of Operations (Earnings)", "event_type": "financial", "is_major": False},
+    "2.03": {"name": "Creation of Direct Financial Obligation", "event_type": "financial", "is_major": True},
+    "2.05": {"name": "Costs for Exit/Disposal Activities", "event_type": "financial", "is_major": True},
+    "3.01": {"name": "Delisting/Transfer of Securities", "event_type": "financial", "is_major": True},
+    "3.02": {"name": "Unregistered Sales of Equity", "event_type": "funding", "is_major": False},
+    "4.01": {"name": "Changes in Accountant", "event_type": "leadership", "is_major": True},
+    "4.02": {"name": "Non-Reliance on Prior Financial Statements", "event_type": "financial", "is_major": True},
+    "5.01": {"name": "Changes in Control", "event_type": "acquisition", "is_major": True},
+    "5.02": {"name": "Departure/Election of Directors/Officers", "event_type": "leadership", "is_major": True},
+    "5.03": {"name": "Amendments to Articles/Bylaws", "event_type": "legal", "is_major": False},
+    "7.01": {"name": "Regulation FD Disclosure", "event_type": "financial", "is_major": False},
+    "8.01": {"name": "Other Events", "event_type": "general", "is_major": False},
+    "9.01": {"name": "Financial Statements and Exhibits", "event_type": "financial", "is_major": False},
+}
 
 
 @dataclass
@@ -324,7 +349,7 @@ class SECEdgarScraper:
     def compare_financials(self, company_names: List[str]) -> Dict[str, Any]:
         """Compare financials across public companies."""
         comparison = []
-        
+
         for name in company_names:
             try:
                 data = self.get_company_data(name)
@@ -343,12 +368,12 @@ class SECEdgarScraper:
                     })
             except Exception:
                 continue
-        
+
         if not comparison:
             return {"message": "No public companies with financials found"}
-        
+
         comparison.sort(key=lambda x: x["revenue"] or 0, reverse=True)
-        
+
         return {
             "companies": comparison,
             "highest_revenue": comparison[0]["name"] if comparison else None,
@@ -356,19 +381,168 @@ class SECEdgarScraper:
             "best_margins": max(comparison, key=lambda x: x["gross_margin"] or 0)["name"] if comparison else None
         }
 
+    # ============== News Feed Integration (v5.0.3) ==============
+
+    def get_news_articles(self, company_name: str, days_back: int = 90) -> List[Dict[str, Any]]:
+        """
+        Get SEC filings formatted as news articles for the news feed.
+
+        Args:
+            company_name: Company name or ticker
+            days_back: Number of days to look back
+
+        Returns:
+            List of article dictionaries compatible with news feed
+        """
+        articles = []
+        data = self.get_company_data(company_name)
+
+        if not data.stock_symbol or "Private" in data.stock_symbol:
+            return articles  # No SEC filings for private companies
+
+        cutoff_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+        for filing in data.recent_filings:
+            # Check if filing is within date range
+            if filing.filing_date < cutoff_date:
+                continue
+
+            # Determine event type based on form type
+            event_type = self._get_event_type_for_form(filing.form_type, filing.description)
+
+            # Determine sentiment
+            sentiment = "neutral"
+            if "earnings" in filing.description.lower():
+                sentiment = "neutral"  # Earnings can be positive or negative
+            elif "acquisition" in filing.description.lower():
+                sentiment = "positive"
+
+            # Create news-like title
+            title = self._create_filing_title(data.company_name, filing)
+
+            article = {
+                "title": title,
+                "url": filing.url,
+                "source": "SEC EDGAR",
+                "source_type": "sec_edgar",
+                "published_at": filing.filing_date,
+                "snippet": f"{data.company_name} ({data.stock_symbol}) filed {filing.form_type}: {filing.description}",
+                "sentiment": sentiment,
+                "event_type": event_type,
+                "is_major_event": filing.form_type in ["8-K", "10-K"],
+                "form_type": filing.form_type,
+                "ticker": data.stock_symbol
+            }
+            articles.append(article)
+
+        return articles
+
+    def _get_event_type_for_form(self, form_type: str, description: str) -> str:
+        """Determine event type based on form type and description."""
+        description_lower = description.lower()
+
+        if form_type == "10-K":
+            return "financial"
+        elif form_type == "10-Q":
+            return "financial"
+        elif form_type == "8-K":
+            # Try to identify specific 8-K event type
+            if "earnings" in description_lower or "results" in description_lower:
+                return "financial"
+            elif "acquisition" in description_lower or "merger" in description_lower:
+                return "acquisition"
+            elif "officer" in description_lower or "director" in description_lower:
+                return "leadership"
+            elif "agreement" in description_lower:
+                return "partnership"
+            else:
+                return "general"
+        elif form_type in ["S-1", "S-11"]:
+            return "funding"
+        elif form_type == "DEF 14A":
+            return "leadership"  # Proxy statements often about leadership/governance
+        else:
+            return "general"
+
+    def _create_filing_title(self, company_name: str, filing: SECFiling) -> str:
+        """Create a news-style title for the filing."""
+        form_titles = {
+            "10-K": f"{company_name} Files Annual Report (10-K)",
+            "10-Q": f"{company_name} Files Quarterly Report (10-Q)",
+            "8-K": f"{company_name}: {filing.description}",
+            "S-1": f"{company_name} Files Registration Statement",
+            "DEF 14A": f"{company_name} Files Proxy Statement",
+        }
+        return form_titles.get(filing.form_type, f"{company_name} - {filing.form_type} Filing")
+
+    def check_for_major_events(self, company_name: str, days_back: int = 7) -> List[Dict[str, Any]]:
+        """
+        Check for major SEC events that should trigger alerts.
+
+        Args:
+            company_name: Company name or ticker
+            days_back: Number of days to look back
+
+        Returns:
+            List of major events
+        """
+        data = self.get_company_data(company_name)
+        major_events = []
+
+        if not data.stock_symbol or "Private" in data.stock_symbol:
+            return major_events
+
+        cutoff_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+        for filing in data.recent_filings:
+            if filing.filing_date < cutoff_date:
+                continue
+
+            # 8-K filings are typically newsworthy
+            if filing.form_type == "8-K":
+                event_type = self._get_event_type_for_form(filing.form_type, filing.description)
+
+                major_events.append({
+                    "company": company_name,
+                    "ticker": data.stock_symbol,
+                    "event_type": event_type,
+                    "form_type": filing.form_type,
+                    "title": self._create_filing_title(data.company_name, filing),
+                    "description": filing.description,
+                    "filed_date": filing.filing_date,
+                    "url": filing.url,
+                    "alert_level": "High" if event_type in ["acquisition", "leadership"] else "Medium"
+                })
+
+        return major_events
+
 
 def get_sec_data(company_name: str) -> Dict[str, Any]:
     """Get SEC EDGAR data for a company."""
     scraper = SECEdgarScraper()
     data = scraper.get_company_data(company_name)
-    
+
     result = asdict(data)
     # Helper to serialize SECFiling objects
     result["recent_filings"] = [asdict(f) for f in data.recent_filings]
     # Helper to serialize FinancialData objects
     result["financials"] = [asdict(f) for f in data.financials]
-    
+
     return result
+
+
+# ============== News Feed Integration Functions (v5.0.3) ==============
+
+def get_sec_news(company_name: str, days_back: int = 90) -> List[Dict[str, Any]]:
+    """Get SEC filings as news articles for the news feed."""
+    scraper = SECEdgarScraper()
+    return scraper.get_news_articles(company_name, days_back=days_back)
+
+
+def check_sec_alerts(company_name: str, days_back: int = 7) -> List[Dict[str, Any]]:
+    """Check for major SEC events that should trigger alerts."""
+    scraper = SECEdgarScraper()
+    return scraper.check_for_major_events(company_name, days_back=days_back)
 
 
 if __name__ == "__main__":

@@ -283,12 +283,24 @@ function showPage(pageName) {
             break;
         case 'battlecards':
             loadBattlecards();
+            // v5.0.7: Initialize dimension widget on battlecards page
+            if (typeof initBattlecardDimensionWidget === 'function') {
+                initBattlecardDimensionWidget();
+            }
             break;
         case 'discovered':
             loadDiscovered();
             break;
         case 'dataquality':
             loadDataQuality();
+            break;
+        case 'newsfeed':
+            initNewsFeedPage();
+            break;
+        case 'salesmarketing':
+            if (typeof initSalesMarketingModule === 'function') {
+                initSalesMarketingModule();
+            }
             break;
         case 'settings':
             loadSettings();
@@ -4440,6 +4452,83 @@ async function loadSettings() {
     loadTeam();
     if (typeof loadAlertRules === 'function') loadAlertRules();
     if (typeof checkIntegrations === 'function') checkIntegrations();
+    loadAIProviderStatus(); // v5.0.2
+}
+
+// ============== AI Provider Status (v5.0.2) ==============
+
+async function loadAIProviderStatus() {
+    try {
+        const response = await fetch('/api/ai/status');
+        if (!response.ok) {
+            console.warn('AI status endpoint not available');
+            return;
+        }
+
+        const data = await response.json();
+
+        // Update OpenAI status
+        const openaiStatusBadge = document.getElementById('openaiStatusBadge');
+        const openaiModel = document.getElementById('openaiModel');
+        if (openaiStatusBadge && data.providers?.openai) {
+            openaiStatusBadge.textContent = data.providers.openai.available ? 'Active' : 'Not Configured';
+            openaiStatusBadge.style.background = data.providers.openai.available ? '#10B981' : '#6B7280';
+            openaiStatusBadge.style.color = 'white';
+            openaiStatusBadge.style.padding = '2px 8px';
+            openaiStatusBadge.style.borderRadius = '4px';
+            openaiStatusBadge.style.fontSize = '0.75em';
+        }
+        if (openaiModel && data.providers?.openai?.model) {
+            openaiModel.textContent = data.providers.openai.model;
+        }
+
+        // Update Gemini status
+        const geminiStatusBadge = document.getElementById('geminiStatusBadge');
+        const geminiModel = document.getElementById('geminiModel');
+        if (geminiStatusBadge && data.providers?.gemini) {
+            geminiStatusBadge.textContent = data.providers.gemini.available ? 'Active' : 'Not Configured';
+            geminiStatusBadge.style.background = data.providers.gemini.available ? '#4285F4' : '#6B7280';
+            geminiStatusBadge.style.color = 'white';
+            geminiStatusBadge.style.padding = '2px 8px';
+            geminiStatusBadge.style.borderRadius = '4px';
+            geminiStatusBadge.style.fontSize = '0.75em';
+        }
+        if (geminiModel && data.providers?.gemini?.model) {
+            geminiModel.textContent = data.providers.gemini.model;
+        }
+
+        // Update task routing display
+        const routingExtraction = document.getElementById('routingExtraction');
+        const routingSummary = document.getElementById('routingSummary');
+        const routingBulk = document.getElementById('routingBulk');
+        const routingQuality = document.getElementById('routingQuality');
+
+        if (data.routing) {
+            if (routingExtraction) routingExtraction.textContent = data.routing.data_extraction || '-';
+            if (routingSummary) routingSummary.textContent = data.routing.executive_summary || '-';
+            if (routingBulk) routingBulk.textContent = data.routing.bulk_tasks || '-';
+            if (routingQuality) routingQuality.textContent = data.routing.quality_tasks || '-';
+
+            // Color code active providers
+            [routingExtraction, routingSummary, routingBulk, routingQuality].forEach(el => {
+                if (el) {
+                    const provider = el.textContent.toLowerCase();
+                    if (provider === 'gemini') {
+                        el.style.color = '#4285F4';
+                    } else if (provider === 'openai') {
+                        el.style.color = '#10B981';
+                    } else {
+                        el.style.color = 'var(--text-secondary)';
+                    }
+                }
+            });
+        }
+
+        console.log('AI Provider Status loaded:', data);
+
+    } catch (error) {
+        console.warn('Failed to load AI provider status:', error);
+    }
 }
 
 // ============== Mobile Responsiveness ==============
@@ -5355,4 +5444,346 @@ async function triggerEnhancedScrape(competitorId) {
         console.error('Enhanced scrape error:', error);
         showToast(`Error: ${error.message || 'Enhanced scrape failed'}`, 'error');
     }
+}
+
+
+// ============== News Feed Functions (v5.0.3 - Phase 1) ==============
+
+let currentNewsPage = 1;
+const NEWS_PAGE_SIZE = 25;
+let newsFeedData = [];
+
+/**
+ * Initialize the News Feed page
+ */
+async function initNewsFeedPage() {
+    console.log('Initializing News Feed page...');
+
+    // Set default date range (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+
+    document.getElementById('newsDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('newsDateTo').value = today.toISOString().split('T')[0];
+
+    // Populate competitor dropdown
+    await populateNewsCompetitorDropdown();
+
+    // Load initial news feed
+    await loadNewsFeed();
+}
+
+/**
+ * Populate the competitor dropdown in news feed filters
+ */
+async function populateNewsCompetitorDropdown() {
+    const dropdown = document.getElementById('newsCompetitorFilter');
+    if (!dropdown) return;
+
+    // Use cached competitors if available, otherwise fetch
+    let competitorList = competitors;
+    if (!competitorList || competitorList.length === 0) {
+        const data = await fetchAPI('/api/competitors');
+        competitorList = data || [];
+    }
+
+    // Reset dropdown
+    dropdown.innerHTML = '<option value="">All Competitors</option>';
+
+    // Add competitors
+    competitorList.forEach(comp => {
+        if (!comp.is_deleted) {
+            const option = document.createElement('option');
+            option.value = comp.id;
+            option.textContent = comp.name;
+            dropdown.appendChild(option);
+        }
+    });
+}
+
+/**
+ * Load news feed with current filters
+ */
+async function loadNewsFeed(page = 1) {
+    currentNewsPage = page;
+
+    // Show loading state
+    document.getElementById('newsFeedLoading').style.display = 'flex';
+    document.getElementById('newsFeedTableBody').innerHTML = '';
+
+    // Gather filter values
+    const competitorId = document.getElementById('newsCompetitorFilter')?.value || '';
+    const dateFrom = document.getElementById('newsDateFrom')?.value || '';
+    const dateTo = document.getElementById('newsDateTo')?.value || '';
+    const sentiment = document.getElementById('newsSentimentFilter')?.value || '';
+    const source = document.getElementById('newsSourceFilter')?.value || '';
+    const eventType = document.getElementById('newsEventFilter')?.value || '';
+
+    // Build query string
+    const params = new URLSearchParams();
+    if (competitorId) params.append('competitor_id', competitorId);
+    if (dateFrom) params.append('start_date', dateFrom);
+    if (dateTo) params.append('end_date', dateTo);
+    if (sentiment) params.append('sentiment', sentiment);
+    if (source) params.append('source', source);
+    if (eventType) params.append('event_type', eventType);
+    params.append('page', page);
+    params.append('page_size', NEWS_PAGE_SIZE);
+
+    try {
+        const result = await fetchAPI(`/api/news-feed?${params.toString()}`);
+
+        // Hide loading state
+        document.getElementById('newsFeedLoading').style.display = 'none';
+
+        if (result && result.articles) {
+            newsFeedData = result.articles;
+            renderNewsFeedTable(result.articles);
+            updateNewsFeedStats(result.stats);
+            updateNewsFeedPagination(result.pagination);
+        } else {
+            renderEmptyState();
+            updateNewsFeedStats({ total: 0, positive: 0, neutral: 0, negative: 0 });
+        }
+    } catch (error) {
+        console.error('Error loading news feed:', error);
+        document.getElementById('newsFeedLoading').style.display = 'none';
+        renderEmptyState('Error loading news. Please try again.');
+    }
+}
+
+/**
+ * Render the news feed table with articles
+ */
+function renderNewsFeedTable(articles) {
+    const tbody = document.getElementById('newsFeedTableBody');
+    if (!tbody) return;
+
+    if (!articles || articles.length === 0) {
+        renderEmptyState();
+        return;
+    }
+
+    tbody.innerHTML = articles.map(article => `
+        <tr class="news-row" onclick="viewNewsArticle('${escapeHtml(article.url || '')}')">
+            <td class="news-date">${formatNewsDate(article.published_at)}</td>
+            <td class="news-competitor">
+                <span class="competitor-badge">${escapeHtml(article.competitor_name || 'Unknown')}</span>
+            </td>
+            <td class="news-headline">
+                <a href="${escapeHtml(article.url || '#')}" target="_blank" title="${escapeHtml(article.title || '')}">
+                    ${escapeHtml(truncateText(article.title || 'No title', 80))}
+                </a>
+            </td>
+            <td class="news-source">
+                <span class="source-badge ${article.source_type || ''}">${formatSourceName(article.source || article.source_type)}</span>
+            </td>
+            <td class="news-sentiment">
+                ${renderSentimentBadge(article.sentiment)}
+            </td>
+            <td class="news-event">
+                ${renderEventTypeBadge(article.event_type)}
+            </td>
+            <td class="news-actions">
+                <button class="btn-icon" onclick="event.stopPropagation(); viewNewsArticle('${escapeHtml(article.url || '')}')" title="Open Article">
+                    🔗
+                </button>
+                <button class="btn-icon" onclick="event.stopPropagation(); addToKnowledgeBase(${JSON.stringify(article).replace(/"/g, '&quot;')})" title="Add to KB">
+                    📚
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * Render empty state message
+ */
+function renderEmptyState(message = 'No news articles found. Adjust your filters or refresh data.') {
+    const tbody = document.getElementById('newsFeedTableBody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr class="news-empty-state">
+                <td colspan="7">
+                    <div class="empty-state-content">
+                        <span class="empty-icon">📰</span>
+                        <p>${message}</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+/**
+ * Update news feed stats display
+ */
+function updateNewsFeedStats(stats) {
+    document.getElementById('totalNewsCount').textContent = stats?.total || 0;
+    document.getElementById('positiveNewsCount').textContent = stats?.positive || 0;
+    document.getElementById('neutralNewsCount').textContent = stats?.neutral || 0;
+    document.getElementById('negativeNewsCount').textContent = stats?.negative || 0;
+}
+
+/**
+ * Update pagination controls
+ */
+function updateNewsFeedPagination(pagination) {
+    if (!pagination) {
+        document.getElementById('newsPageInfo').textContent = 'Page 1 of 1';
+        document.getElementById('newsPrevBtn').disabled = true;
+        document.getElementById('newsNextBtn').disabled = true;
+        return;
+    }
+
+    const { page, total_pages, total_items } = pagination;
+    document.getElementById('newsPageInfo').textContent = `Page ${page} of ${total_pages} (${total_items} articles)`;
+    document.getElementById('newsPrevBtn').disabled = page <= 1;
+    document.getElementById('newsNextBtn').disabled = page >= total_pages;
+}
+
+/**
+ * Reset all news feed filters
+ */
+function resetNewsFeedFilters() {
+    // Reset competitor
+    document.getElementById('newsCompetitorFilter').value = '';
+
+    // Reset date range to last 30 days
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+
+    document.getElementById('newsDateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('newsDateTo').value = today.toISOString().split('T')[0];
+
+    // Reset other filters
+    document.getElementById('newsSentimentFilter').value = '';
+    document.getElementById('newsSourceFilter').value = '';
+    document.getElementById('newsEventFilter').value = '';
+
+    // Reset pagination
+    currentNewsPage = 1;
+
+    // Reload
+    loadNewsFeed();
+}
+
+/**
+ * Format date for display
+ */
+function formatNewsDate(dateStr) {
+    if (!dateStr) return '—';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+/**
+ * Format source name for display
+ */
+function formatSourceName(source) {
+    if (!source) return 'Unknown';
+    const sourceMap = {
+        'google_news': 'Google News',
+        'sec_edgar': 'SEC EDGAR',
+        'newsapi': 'NewsAPI',
+        'gnews': 'GNews',
+        'mediastack': 'MediaStack',
+        'bing_news': 'Bing News',
+        'website_scrape': 'Website'
+    };
+    return sourceMap[source] || source.charAt(0).toUpperCase() + source.slice(1).replace(/_/g, ' ');
+}
+
+/**
+ * Render sentiment badge
+ */
+function renderSentimentBadge(sentiment) {
+    if (!sentiment) return '<span class="sentiment-badge unknown">—</span>';
+
+    const sentimentMap = {
+        'positive': { icon: '🟢', class: 'positive', label: 'Positive' },
+        'neutral': { icon: '🟡', class: 'neutral', label: 'Neutral' },
+        'negative': { icon: '🔴', class: 'negative', label: 'Negative' }
+    };
+
+    const s = sentimentMap[sentiment.toLowerCase()] || { icon: '⚪', class: 'unknown', label: sentiment };
+    return `<span class="sentiment-badge ${s.class}">${s.icon} ${s.label}</span>`;
+}
+
+/**
+ * Render event type badge
+ */
+function renderEventTypeBadge(eventType) {
+    if (!eventType) return '<span class="event-badge general">📄 General</span>';
+
+    const eventMap = {
+        'funding': { icon: '💰', label: 'Funding' },
+        'acquisition': { icon: '🤝', label: 'M&A' },
+        'product_launch': { icon: '🚀', label: 'Product' },
+        'partnership': { icon: '🔗', label: 'Partnership' },
+        'leadership': { icon: '👔', label: 'Leadership' },
+        'financial': { icon: '📊', label: 'Financial' },
+        'legal': { icon: '⚖️', label: 'Legal' },
+        'general': { icon: '📄', label: 'General' }
+    };
+
+    const e = eventMap[eventType.toLowerCase()] || { icon: '📄', label: eventType };
+    return `<span class="event-badge ${eventType.toLowerCase()}">${e.icon} ${e.label}</span>`;
+}
+
+/**
+ * Open news article in new tab
+ */
+function viewNewsArticle(url) {
+    if (url && url !== '#') {
+        window.open(url, '_blank');
+    }
+}
+
+/**
+ * Add news article to knowledge base
+ */
+async function addToKnowledgeBase(article) {
+    try {
+        const content = `News: ${article.title}\nSource: ${article.source}\nDate: ${article.published_at}\nURL: ${article.url}\nSummary: ${article.summary || article.description || ''}`;
+
+        const result = await fetchAPI('/api/knowledge-base', {
+            method: 'POST',
+            body: JSON.stringify({
+                content_text: content,
+                source_type: 'news_article',
+                source_url: article.url,
+                is_active: true
+            })
+        });
+
+        if (result) {
+            showToast('Article added to Knowledge Base', 'success');
+        } else {
+            showToast('Failed to add article to Knowledge Base', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding to KB:', error);
+        showToast('Error adding to Knowledge Base', 'error');
+    }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

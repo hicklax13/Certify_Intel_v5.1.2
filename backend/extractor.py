@@ -1,6 +1,8 @@
 """
-Certify Intel - GPT Data Extraction
-Uses OpenAI GPT to extract structured competitor data from scraped content.
+Certify Intel - AI Data Extraction (v5.0.2)
+Uses OpenAI GPT or Google Gemini to extract structured competitor data from scraped content.
+
+Supports hybrid mode with automatic routing based on task type and cost optimization.
 """
 import os
 import json
@@ -14,6 +16,15 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
     print("Warning: OpenAI not installed. Run: pip install openai")
+
+# Gemini support (v5.0.2)
+try:
+    from gemini_provider import GeminiExtractor, AIRouter, get_ai_router
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    GeminiExtractor = None
+    AIRouter = None
 
 
 @dataclass
@@ -750,11 +761,195 @@ CONTENT TO ANALYZE:
         return data_sources
 
 
-# Convenience function
-def extract_competitor_data(competitor_name: str, content: str, page_type: str = "homepage") -> ExtractedData:
-    """Extract competitor data from content."""
+# ============== PHASE 5.0.2: HYBRID EXTRACTOR ==============
+
+class HybridExtractor:
+    """
+    Hybrid AI extractor that routes requests to OpenAI or Gemini based on configuration.
+
+    Uses the AIRouter to determine the best provider for each task, with automatic
+    fallback if the primary provider fails.
+
+    v5.0.2 Implementation
+    """
+
+    def __init__(self, prefer_provider: Optional[str] = None):
+        """
+        Initialize hybrid extractor.
+
+        Args:
+            prefer_provider: Optional override ("openai" or "gemini")
+        """
+        self.prefer_provider = prefer_provider or os.getenv("AI_PROVIDER", "hybrid")
+
+        # Initialize providers
+        self.openai_extractor = None
+        self.gemini_extractor = None
+
+        if OPENAI_AVAILABLE and os.getenv("OPENAI_API_KEY"):
+            self.openai_extractor = GPTExtractor()
+
+        if GEMINI_AVAILABLE and GeminiExtractor and os.getenv("GOOGLE_AI_API_KEY"):
+            self.gemini_extractor = GeminiExtractor()
+
+    @property
+    def is_available(self) -> bool:
+        """Check if any AI provider is available."""
+        openai_ok = self.openai_extractor is not None
+        gemini_ok = self.gemini_extractor is not None and self.gemini_extractor.is_available
+        return openai_ok or gemini_ok
+
+    def get_provider(self, task_type: str = "data_extraction") -> str:
+        """Determine which provider to use."""
+        if self.prefer_provider == "openai" and self.openai_extractor:
+            return "openai"
+        elif self.prefer_provider == "gemini" and self.gemini_extractor and self.gemini_extractor.is_available:
+            return "gemini"
+        elif self.prefer_provider == "hybrid":
+            # Use Gemini for bulk/extraction tasks (cheaper), OpenAI for quality tasks
+            if task_type in ["bulk_extraction", "data_extraction", "news_analysis"]:
+                if self.gemini_extractor and self.gemini_extractor.is_available:
+                    return "gemini"
+                elif self.openai_extractor:
+                    return "openai"
+            else:
+                if self.openai_extractor:
+                    return "openai"
+                elif self.gemini_extractor and self.gemini_extractor.is_available:
+                    return "gemini"
+
+        # Fallback to whatever is available
+        if self.openai_extractor:
+            return "openai"
+        elif self.gemini_extractor and self.gemini_extractor.is_available:
+            return "gemini"
+
+        return "none"
+
+    def extract_from_content(
+        self,
+        competitor_name: str,
+        content: str,
+        page_type: str = "homepage"
+    ) -> ExtractedData:
+        """
+        Extract structured data using the best available AI provider.
+
+        Falls back to the secondary provider if the primary fails.
+        """
+        provider = self.get_provider("data_extraction")
+        fallback_enabled = os.getenv("AI_FALLBACK_ENABLED", "true").lower() == "true"
+
+        if provider == "gemini" and self.gemini_extractor:
+            try:
+                result = self.gemini_extractor.extract_from_content(
+                    competitor_name, content, page_type
+                )
+                # Convert dict to ExtractedData
+                if isinstance(result, dict):
+                    return self._dict_to_extracted_data(result)
+                return result
+            except Exception as e:
+                if fallback_enabled and self.openai_extractor:
+                    return self.openai_extractor.extract_from_content(
+                        competitor_name, content, page_type
+                    )
+                return ExtractedData(extraction_notes=f"Gemini extraction failed: {str(e)}")
+
+        elif provider == "openai" and self.openai_extractor:
+            try:
+                return self.openai_extractor.extract_from_content(
+                    competitor_name, content, page_type
+                )
+            except Exception as e:
+                if fallback_enabled and self.gemini_extractor and self.gemini_extractor.is_available:
+                    result = self.gemini_extractor.extract_from_content(
+                        competitor_name, content, page_type
+                    )
+                    if isinstance(result, dict):
+                        return self._dict_to_extracted_data(result)
+                    return result
+                return ExtractedData(extraction_notes=f"OpenAI extraction failed: {str(e)}")
+
+        return ExtractedData(
+            extraction_notes="No AI provider available. Set OPENAI_API_KEY or GOOGLE_AI_API_KEY."
+        )
+
+    def _dict_to_extracted_data(self, data: Dict[str, Any]) -> ExtractedData:
+        """Convert a dictionary to ExtractedData dataclass."""
+        # Filter to only valid ExtractedData fields
+        valid_fields = {f.name for f in ExtractedData.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in data.items() if k in valid_fields}
+        return ExtractedData(**filtered)
+
+    def extract_products_and_pricing(
+        self,
+        competitor_name: str,
+        content: str
+    ) -> Dict[str, Any]:
+        """
+        Extract product-level pricing using the best available provider.
+        """
+        provider = self.get_provider("data_extraction")
+
+        if provider == "openai" and self.openai_extractor:
+            return self.openai_extractor.extract_products_and_pricing(competitor_name, content)
+        elif provider == "gemini" and self.gemini_extractor:
+            # Gemini extractor doesn't have this method yet, use OpenAI if available
+            if self.openai_extractor:
+                return self.openai_extractor.extract_products_and_pricing(competitor_name, content)
+            return {"products": [], "error": "Gemini doesn't support product extraction yet"}
+
+        return {"products": [], "error": "No AI provider available"}
+
+
+# Convenience function (updated for v5.0.2)
+def extract_competitor_data(
+    competitor_name: str,
+    content: str,
+    page_type: str = "homepage",
+    use_hybrid: bool = True
+) -> ExtractedData:
+    """
+    Extract competitor data from content.
+
+    Args:
+        competitor_name: Name of the competitor
+        content: Page content to analyze
+        page_type: Type of page (homepage, pricing, about, features, customers)
+        use_hybrid: If True, uses hybrid AI routing (v5.0.2+)
+
+    Returns:
+        ExtractedData with extracted fields
+    """
+    if use_hybrid:
+        extractor = HybridExtractor()
+        if extractor.is_available:
+            return extractor.extract_from_content(competitor_name, content, page_type)
+
+    # Fallback to OpenAI-only
     extractor = GPTExtractor()
     return extractor.extract_from_content(competitor_name, content, page_type)
+
+
+def get_extractor(provider: Optional[str] = None) -> Any:
+    """
+    Get the appropriate extractor based on configuration.
+
+    Args:
+        provider: Override provider ("openai", "gemini", or "hybrid")
+
+    Returns:
+        GPTExtractor, GeminiExtractor, or HybridExtractor
+    """
+    provider = provider or os.getenv("AI_PROVIDER", "hybrid")
+
+    if provider == "hybrid":
+        return HybridExtractor()
+    elif provider == "gemini" and GEMINI_AVAILABLE and GeminiExtractor:
+        return GeminiExtractor()
+    else:
+        return GPTExtractor()
 
 
 # Test function

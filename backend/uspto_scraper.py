@@ -1,6 +1,8 @@
 """
-Certify Intel - USPTO Patent Scraper
+Certify Intel - USPTO Patent Scraper (v5.0.3)
 Fetches patent applications and IP intelligence.
+
+v5.0.3: Added get_patent_news() method for news feed integration.
 """
 import os
 import re
@@ -241,7 +243,7 @@ class USPTOScraper:
     def compare_innovation(self, company_names: List[str]) -> Dict[str, Any]:
         """Compare innovation across companies."""
         comparison = []
-        
+
         for name in company_names:
             data = self.get_patent_data(name)
             comparison.append({
@@ -252,26 +254,94 @@ class USPTOScraper:
                 "top_area": max(data.technology_areas.items(), key=lambda x: x[1])[0] if data.technology_areas else "N/A",
                 "recent_filings": sum(data.year_trend.get(y, 0) for y in [2022, 2023])
             })
-        
+
         comparison.sort(key=lambda x: x["innovation_score"], reverse=True)
-        
+
         return {
             "companies": comparison,
             "most_innovative": comparison[0]["name"] if comparison else None,
             "most_active_recent": max(comparison, key=lambda x: x["recent_filings"])["name"] if comparison else None
         }
 
+    # ============== News Feed Integration (v5.0.3) ==============
+
+    def get_patent_news(self, company_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get patent filings formatted as news articles for the news feed.
+
+        v5.0.3: News feed integration method.
+
+        Args:
+            company_name: Company name
+            limit: Maximum number of articles to return
+
+        Returns:
+            List of article dictionaries compatible with news feed
+        """
+        articles = []
+        data = self.get_patent_data(company_name)
+
+        if data.total_patents == 0:
+            return articles
+
+        # Add pending applications as "new" news
+        for patent in data.recent_filings[:limit]:
+            article = {
+                "title": f"{company_name} Files Patent Application: {patent.title}",
+                "url": patent.url,
+                "source": "USPTO Patents",
+                "source_type": "uspto_patents",
+                "published_at": patent.filing_date,
+                "snippet": f"Patent #{patent.patent_number} - Technology: {patent.technology_area}. Status: {patent.status}.",
+                "sentiment": "positive",  # Patents generally indicate positive R&D activity
+                "event_type": "product_launch",  # Patent filings often precede product launches
+                "is_major_event": True,
+                "patent_number": patent.patent_number,
+                "technology_area": patent.technology_area
+            }
+            articles.append(article)
+
+        # Add recently granted patents
+        granted = [p for p in data.patents if p.status == "Granted"]
+        remaining_slots = limit - len(articles)
+
+        for patent in granted[:remaining_slots]:
+            article = {
+                "title": f"{company_name} Granted Patent: {patent.title}",
+                "url": patent.url,
+                "source": "USPTO Patents",
+                "source_type": "uspto_patents",
+                "published_at": patent.grant_date,
+                "snippet": f"Patent #{patent.patent_number} granted - Technology: {patent.technology_area}.",
+                "sentiment": "positive",
+                "event_type": "product_launch",
+                "is_major_event": True,
+                "patent_number": patent.patent_number,
+                "technology_area": patent.technology_area
+            }
+            articles.append(article)
+
+        return articles
+
 
 def get_patent_data(company_name: str) -> Dict[str, Any]:
     """Get patent data for a company."""
     scraper = USPTOScraper()
     data = scraper.get_patent_data(company_name)
-    
+
     result = asdict(data)
     result["patents"] = [asdict(p) for p in data.patents]
     result["recent_filings"] = [asdict(p) for p in data.recent_filings]
-    
+
     return result
+
+
+# ============== News Feed Integration Functions (v5.0.3) ==============
+
+def get_patent_news(company_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Get patent filings as news articles for the news feed."""
+    scraper = USPTOScraper()
+    return scraper.get_patent_news(company_name, limit=limit)
 
 
 if __name__ == "__main__":

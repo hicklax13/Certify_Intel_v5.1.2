@@ -1,6 +1,8 @@
 """
-Certify Intel - Report Generator
+Certify Intel - Report Generator (v5.0.7)
 PDF executive briefings, battlecards, and comparison reports
+
+v5.0.7: Added dimension-aware battlecard generation with Sales & Marketing module integration.
 """
 import os
 import json
@@ -21,6 +23,22 @@ try:
 except ImportError:
     REPORTLAB_AVAILABLE = False
     print("Warning: reportlab not installed. Run: pip install reportlab")
+
+# v5.0.7: Import battlecard generator for dynamic battlecards
+try:
+    from battlecard_generator import BattlecardGenerator as DynamicBattlecardGenerator, BATTLECARD_TEMPLATES
+    DYNAMIC_BATTLECARD_AVAILABLE = True
+except ImportError:
+    DYNAMIC_BATTLECARD_AVAILABLE = False
+    print("Dynamic battlecard generator not available")
+
+# v5.0.7: Import dimension metadata
+try:
+    from sales_marketing_module import DIMENSION_METADATA, DimensionID, SCORE_LABELS
+    DIMENSION_METADATA_AVAILABLE = True
+except ImportError:
+    DIMENSION_METADATA_AVAILABLE = False
+    print("Dimension metadata not available")
 
 
 # ============== Executive Briefing PDF ==============
@@ -667,18 +685,260 @@ class ComparisonReportGenerator:
         return text_path
 
 
+# ============== Dimension Battlecard Generator (v5.0.7) ==============
+
+class DimensionBattlecardPDFGenerator:
+    """
+    v5.0.7: Generates dimension-aware battlecard PDFs.
+    Integrates with Sales & Marketing module for dimension scores.
+    """
+
+    def __init__(self):
+        self.styles = getSampleStyleSheet() if REPORTLAB_AVAILABLE else None
+        self._setup_styles()
+
+        # Score colors (1-5)
+        self.score_colors = {
+            1: colors.HexColor('#DC3545'),  # Red - Major Weakness
+            2: colors.HexColor('#FD7E14'),  # Orange - Weakness
+            3: colors.HexColor('#FFC107'),  # Yellow - Neutral
+            4: colors.HexColor('#28A745'),  # Green - Strength
+            5: colors.HexColor('#20C997'),  # Teal - Major Strength
+        }
+
+    def _setup_styles(self):
+        """Set up custom paragraph styles for dimension battlecards."""
+        if not REPORTLAB_AVAILABLE:
+            return
+
+        if 'DimensionHeader' not in [s.name for s in self.styles.byName.values()]:
+            self.styles.add(ParagraphStyle(
+                name='DimensionHeader',
+                parent=self.styles['Heading2'],
+                fontSize=14,
+                textColor=colors.HexColor('#1B2B65'),
+                spaceBefore=15,
+                spaceAfter=8
+            ))
+
+            self.styles.add(ParagraphStyle(
+                name='DimensionName',
+                parent=self.styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#333333'),
+                spaceBefore=4,
+                spaceAfter=2
+            ))
+
+            self.styles.add(ParagraphStyle(
+                name='Evidence',
+                parent=self.styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#666666'),
+                leftIndent=10
+            ))
+
+    def generate_dimension_battlecard(
+        self,
+        competitor: Dict[str, Any],
+        dimension_profile: Dict[str, Any],
+        battlecard_content: Dict[str, Any],
+        output_path: str
+    ) -> str:
+        """
+        Generate a dimension-aware battlecard PDF.
+
+        Args:
+            competitor: Competitor data dict
+            dimension_profile: Dict with dimension scores and evidence
+            battlecard_content: Generated battlecard content from BattlecardGenerator
+            output_path: Path to save the PDF
+
+        Returns:
+            Path to generated PDF
+        """
+        if not REPORTLAB_AVAILABLE:
+            return self._generate_text_dimension_battlecard(
+                competitor, dimension_profile, battlecard_content, output_path
+            )
+
+        doc = SimpleDocTemplate(
+            output_path,
+            pagesize=letter,
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+
+        story = []
+        name = competitor.get('name', 'Unknown')
+
+        # Header
+        story.append(Paragraph(
+            f"<font color='#1B2B65'><b>DIMENSION BATTLECARD: {name}</b></font>",
+            self.styles['Heading1']
+        ))
+
+        # Threat level
+        threat = competitor.get('threat_level', 'Medium')
+        threat_color = {'High': '#DC3545', 'Medium': '#FFC107', 'Low': '#28A745'}.get(threat, '#6C757D')
+        story.append(Paragraph(
+            f"<font color='{threat_color}'>Threat Level: {threat}</font>",
+            self.styles['Normal']
+        ))
+
+        # Overall dimension score
+        overall_score = dimension_profile.get('overall_score')
+        if overall_score:
+            story.append(Paragraph(
+                f"<b>Overall Dimension Score:</b> {overall_score:.1f}/5",
+                self.styles['Normal']
+            ))
+
+        story.append(Spacer(1, 15))
+
+        # Dimension Scorecard Section
+        story.append(Paragraph("📊 Competitive Dimension Scorecard", self.styles['DimensionHeader']))
+
+        # Build dimension scorecard table
+        dimensions = dimension_profile.get('dimensions', {})
+        if dimensions:
+            scorecard_data = [['Dimension', 'Score', 'Assessment']]
+
+            for dim_id, dim_data in dimensions.items():
+                score = dim_data.get('score', 0)
+                dim_name = dim_data.get('name', dim_id)
+
+                # Score label
+                score_label = SCORE_LABELS.get(score, 'Unknown') if DIMENSION_METADATA_AVAILABLE else str(score)
+
+                scorecard_data.append([
+                    dim_name[:30],
+                    str(score) if score else 'N/A',
+                    score_label
+                ])
+
+            scorecard_table = Table(scorecard_data, colWidths=[2.5*inch, 0.8*inch, 2*inch])
+
+            # Style the table with score colors
+            table_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B2B65')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+            ]
+
+            # Color code score cells
+            for i, (dim_id, dim_data) in enumerate(dimensions.items(), start=1):
+                score = dim_data.get('score', 0)
+                if score in self.score_colors:
+                    table_style.append(('BACKGROUND', (1, i), (1, i), self.score_colors[score]))
+                    table_style.append(('TEXTCOLOR', (1, i), (1, i), colors.white))
+
+            scorecard_table.setStyle(TableStyle(table_style))
+            story.append(scorecard_table)
+        else:
+            story.append(Paragraph("<i>No dimension scores available</i>", self.styles['Normal']))
+
+        story.append(Spacer(1, 15))
+
+        # Key Evidence Section
+        story.append(Paragraph("📋 Key Evidence by Dimension", self.styles['DimensionHeader']))
+
+        for dim_id, dim_data in dimensions.items():
+            evidence = dim_data.get('evidence')
+            if evidence:
+                dim_name = dim_data.get('name', dim_id)
+                story.append(Paragraph(f"<b>{dim_name}:</b>", self.styles['DimensionName']))
+                story.append(Paragraph(evidence[:300] + ('...' if len(evidence) > 300 else ''), self.styles['Evidence']))
+                story.append(Spacer(1, 5))
+
+        story.append(Spacer(1, 15))
+
+        # Battlecard Content Sections
+        if battlecard_content:
+            sections = battlecard_content.get('sections', [])
+
+            for section in sections:
+                section_title = section.get('title', '')
+                section_content = section.get('content', '')
+
+                if section_title:
+                    story.append(Paragraph(f"<b>{section_title}</b>", self.styles['Heading2']))
+
+                if section_content:
+                    # Handle bullet points
+                    if isinstance(section_content, list):
+                        for item in section_content[:10]:
+                            story.append(Paragraph(f"• {item}", self.styles['Normal']))
+                    else:
+                        story.append(Paragraph(section_content, self.styles['Normal']))
+
+                story.append(Spacer(1, 10))
+
+        # Build PDF
+        doc.build(story)
+        return output_path
+
+    def _generate_text_dimension_battlecard(
+        self,
+        competitor: Dict,
+        dimension_profile: Dict,
+        battlecard_content: Dict,
+        output_path: str
+    ) -> str:
+        """Text-based battlecard when ReportLab not available."""
+        text_path = output_path.replace('.pdf', '.txt')
+
+        name = competitor.get('name', 'Unknown')
+        content = f"""
+DIMENSION BATTLECARD: {name}
+{'=' * 50}
+
+THREAT LEVEL: {competitor.get('threat_level', 'Unknown')}
+OVERALL DIMENSION SCORE: {dimension_profile.get('overall_score', 'N/A')}
+
+COMPETITIVE DIMENSION SCORECARD
+{'-' * 30}
+"""
+        dimensions = dimension_profile.get('dimensions', {})
+        for dim_id, dim_data in dimensions.items():
+            score = dim_data.get('score', 'N/A')
+            dim_name = dim_data.get('name', dim_id)
+            content += f"{dim_name}: {score}/5\n"
+
+        content += f"""
+KEY EVIDENCE
+{'-' * 30}
+"""
+        for dim_id, dim_data in dimensions.items():
+            evidence = dim_data.get('evidence')
+            if evidence:
+                content += f"\n{dim_data.get('name', dim_id)}:\n{evidence[:200]}...\n"
+
+        with open(text_path, 'w') as f:
+            f.write(content)
+
+        return text_path
+
+
 # ============== Report Manager ==============
 
 class ReportManager:
     """Manages all report generation."""
-    
+
     def __init__(self, output_dir: str = "./reports"):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
-        
+
         self.briefing_gen = ExecutiveBriefingGenerator()
         self.battlecard_gen = BattlecardGenerator()
         self.comparison_gen = ComparisonReportGenerator()
+        self.dimension_battlecard_gen = DimensionBattlecardPDFGenerator()  # v5.0.7
     
     def generate_weekly_briefing(
         self,
@@ -711,6 +971,144 @@ class ReportManager:
             f"comparison_report_{datetime.now().strftime('%Y%m%d')}.pdf"
         )
         return self.comparison_gen.generate_comparison(competitors, path)
+
+    def generate_dimension_battlecard(
+        self,
+        competitor: Dict,
+        dimension_profile: Dict,
+        battlecard_content: Dict = None
+    ) -> str:
+        """
+        v5.0.7: Generate dimension-aware battlecard PDF.
+
+        Args:
+            competitor: Competitor data dict
+            dimension_profile: Dict with dimension scores and evidence
+            battlecard_content: Optional generated battlecard content
+
+        Returns:
+            Path to generated PDF
+        """
+        name = competitor.get('name', 'unknown').replace(' ', '_').lower()
+        path = os.path.join(self.output_dir, f"dimension_battlecard_{name}.pdf")
+        return self.dimension_battlecard_gen.generate_dimension_battlecard(
+            competitor, dimension_profile, battlecard_content or {}, path
+        )
+
+    def generate_dimension_battlecard_from_db(
+        self,
+        competitor_id: int,
+        db_session,
+        battlecard_type: str = "full"
+    ) -> str:
+        """
+        v5.0.7: Generate dimension battlecard from database data.
+
+        Args:
+            competitor_id: ID of the competitor
+            db_session: SQLAlchemy database session
+            battlecard_type: Type of battlecard (full, quick, objection_handler)
+
+        Returns:
+            Path to generated PDF
+        """
+        from database import Competitor
+
+        # Get competitor from database
+        competitor = db_session.query(Competitor).filter(
+            Competitor.id == competitor_id
+        ).first()
+
+        if not competitor:
+            raise ValueError(f"Competitor {competitor_id} not found")
+
+        # Build competitor dict
+        competitor_dict = {
+            "id": competitor.id,
+            "name": competitor.name,
+            "threat_level": competitor.threat_level,
+            "website": competitor.website,
+            "year_founded": competitor.year_founded,
+            "headquarters": competitor.headquarters,
+            "employee_count": competitor.employee_count,
+            "customer_count": competitor.customer_count,
+            "funding_total": competitor.funding_total,
+            "pricing_model": competitor.pricing_model,
+            "base_price": competitor.base_price,
+            "product_categories": competitor.product_categories,
+            "key_features": competitor.key_features,
+        }
+
+        # Build dimension profile from competitor fields
+        dimension_profile = self._build_dimension_profile_from_competitor(competitor)
+
+        # Generate battlecard content if dynamic generator available
+        battlecard_content = {}
+        if DYNAMIC_BATTLECARD_AVAILABLE:
+            try:
+                gen = DynamicBattlecardGenerator(db_session)
+                result = gen.generate_battlecard(
+                    competitor_id=competitor_id,
+                    battlecard_type=battlecard_type
+                )
+                battlecard_content = result
+            except Exception as e:
+                print(f"Error generating dynamic battlecard: {e}")
+
+        return self.generate_dimension_battlecard(
+            competitor_dict, dimension_profile, battlecard_content
+        )
+
+    def _build_dimension_profile_from_competitor(self, competitor) -> Dict[str, Any]:
+        """
+        v5.0.7: Build dimension profile dict from Competitor model.
+
+        Args:
+            competitor: Competitor SQLAlchemy model instance
+
+        Returns:
+            Dict with dimension scores and evidence
+        """
+        dimensions = {}
+        total_score = 0
+        scored_count = 0
+
+        # Dimension field mappings
+        dimension_fields = [
+            ("product_packaging", "Product Modules & Packaging"),
+            ("integration_depth", "Interoperability & Integration"),
+            ("support_service", "Customer Support & Service"),
+            ("retention_stickiness", "Retention & Stickiness"),
+            ("user_adoption", "User Adoption & Ease of Use"),
+            ("implementation_ttv", "Implementation & Time to Value"),
+            ("reliability_enterprise", "Reliability & Enterprise Readiness"),
+            ("pricing_flexibility", "Pricing & Commercial Flexibility"),
+            ("reporting_analytics", "Reporting & Analytics"),
+        ]
+
+        for dim_id, dim_name in dimension_fields:
+            score_field = f"dim_{dim_id}_score"
+            evidence_field = f"dim_{dim_id}_evidence"
+
+            score = getattr(competitor, score_field, None)
+            evidence = getattr(competitor, evidence_field, None)
+
+            dimensions[dim_id] = {
+                "name": dim_name,
+                "score": score,
+                "evidence": evidence
+            }
+
+            if score:
+                total_score += score
+                scored_count += 1
+
+        overall_score = (total_score / scored_count) if scored_count > 0 else None
+
+        return {
+            "overall_score": overall_score,
+            "dimensions": dimensions
+        }
 
 
 if __name__ == "__main__":

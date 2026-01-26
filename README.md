@@ -2,7 +2,7 @@
 
 **Competitive Intelligence Platform for Healthcare Technology**
 
-![Version](https://img.shields.io/badge/version-5.0.1-blue)
+![Version](https://img.shields.io/badge/version-5.0.6-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Web-lightgrey)
 ![License](https://img.shields.io/badge/license-Proprietary-red)
 ![Status](https://img.shields.io/badge/status-Production%20Ready-green)
@@ -299,7 +299,7 @@
 | Framework | FastAPI | High-performance async API |
 | Server | Uvicorn | ASGI server |
 | Database | SQLite + SQLAlchemy | Lightweight, zero-config storage |
-| AI/ML | OpenAI GPT-4, LangChain | Intelligence and summarization |
+| AI/ML | OpenAI GPT-4, Google Gemini, LangChain | Intelligence and summarization |
 | Web Scraping | Playwright, BeautifulSoup | Dynamic and static page scraping |
 | PDF Generation | ReportLab | Battlecard and report creation |
 | Excel Export | openpyxl | Data-validated spreadsheets |
@@ -399,8 +399,17 @@ npm start
 
 ```bash
 # Required
-OPENAI_API_KEY=sk-...              # OpenAI API key for GPT-4 features
 SECRET_KEY=your-secret-key         # JWT signing key (generate random string)
+
+# AI Providers (at least one required)
+OPENAI_API_KEY=sk-...              # OpenAI API key for GPT-4 features
+GOOGLE_AI_API_KEY=AIza...          # Google Gemini API key (get at aistudio.google.com)
+
+# AI Provider Mode (v5.0.6)
+AI_PROVIDER=hybrid                 # Options: "openai", "gemini", or "hybrid" (recommended)
+AI_BULK_TASKS=gemini               # Provider for bulk operations (cheaper with Gemini)
+AI_QUALITY_TASKS=openai            # Provider for quality-critical tasks
+AI_FALLBACK_ENABLED=true           # Auto-switch on failure
 
 # Database
 DATABASE_URL=sqlite:///./certify_intel.db  # SQLite (default) or PostgreSQL
@@ -499,6 +508,49 @@ GET /api/analytics/executive-summary
 POST /api/analytics/chat
 Body: { "question": "What are Epic's main weaknesses?" }
 → AI-powered competitive analysis
+```
+
+### Hybrid AI Features (v5.0.6)
+
+Certify Intel supports both OpenAI and Google Gemini for ~90% cost savings on bulk operations.
+
+**Model Options:**
+| Model | Best For | Cost (per 1M tokens) |
+|-------|----------|---------------------|
+| gemini-2.5-flash-lite | Bulk extraction, classification | $0.019 input / $0.075 output |
+| gemini-2.5-flash | Data extraction, summaries | $0.075 input / $0.30 output |
+| gemini-2.5-pro | Complex analysis | $1.25 input / $10.00 output |
+| gpt-4o-mini | Chat, conversations | $0.15 input / $0.60 output |
+| gpt-4o | Quality-critical tasks | $2.50 input / $10.00 output |
+
+**Multimodal Analysis (v5.0.6):**
+```
+POST /api/ai/analyze-screenshot
+→ Analyze competitor website screenshots
+
+POST /api/ai/analyze-pdf
+→ Extract intelligence from competitor PDFs
+
+POST /api/ai/analyze-video
+→ Analyze competitor demo videos and webinars
+```
+
+**Real-Time Intelligence (v5.0.6):**
+```
+POST /api/ai/search-grounded
+→ Get current information using Google Search
+
+POST /api/ai/research-competitor
+→ Comprehensive real-time competitor research
+```
+
+**Bulk Processing (v5.0.6):**
+```
+POST /api/ai/process-news-batch
+→ Process 100+ news articles efficiently
+
+POST /api/ai/analyze-news-trends
+→ Identify trends across news articles
 ```
 
 ---
@@ -811,5 +863,5 @@ Proprietary - Certify Health Internal Use Only
 
 ---
 
-*Last Updated: January 25, 2026*
-*Version: 5.0.1*
+*Last Updated: January 26, 2026*
+*Version: 5.0.6*

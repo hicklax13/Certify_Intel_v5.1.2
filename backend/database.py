@@ -87,7 +87,61 @@ class Competitor(Base):
     mobile_app_available = Column(Boolean, default=False)
     hipaa_compliant = Column(Boolean, default=True)
     ehr_integrations = Column(String, nullable=True)  # "Epic;Cerner;Athena"
-    
+
+    # ===========================================
+    # SALES & MARKETING MODULE: 9 COMPETITIVE DIMENSIONS (v5.0.7)
+    # ===========================================
+    # Each dimension has: score (1-5), evidence (text), updated (datetime)
+
+    # Dimension 1: Product Modules & Packaging
+    dim_product_packaging_score = Column(Integer, nullable=True)  # 1-5 (1=Major Weakness, 5=Major Strength)
+    dim_product_packaging_evidence = Column(Text, nullable=True)
+    dim_product_packaging_updated = Column(DateTime, nullable=True)
+
+    # Dimension 2: Interoperability & Integration Depth
+    dim_integration_depth_score = Column(Integer, nullable=True)  # 1-5
+    dim_integration_depth_evidence = Column(Text, nullable=True)
+    dim_integration_depth_updated = Column(DateTime, nullable=True)
+
+    # Dimension 3: Customer Support & Service Model
+    dim_support_service_score = Column(Integer, nullable=True)  # 1-5
+    dim_support_service_evidence = Column(Text, nullable=True)
+    dim_support_service_updated = Column(DateTime, nullable=True)
+
+    # Dimension 4: Retention & Product Stickiness
+    dim_retention_stickiness_score = Column(Integer, nullable=True)  # 1-5
+    dim_retention_stickiness_evidence = Column(Text, nullable=True)
+    dim_retention_stickiness_updated = Column(DateTime, nullable=True)
+
+    # Dimension 5: User Adoption & Ease of Use
+    dim_user_adoption_score = Column(Integer, nullable=True)  # 1-5
+    dim_user_adoption_evidence = Column(Text, nullable=True)
+    dim_user_adoption_updated = Column(DateTime, nullable=True)
+
+    # Dimension 6: Implementation Effort & Time to Value
+    dim_implementation_ttv_score = Column(Integer, nullable=True)  # 1-5
+    dim_implementation_ttv_evidence = Column(Text, nullable=True)
+    dim_implementation_ttv_updated = Column(DateTime, nullable=True)
+
+    # Dimension 7: Reliability & Enterprise Readiness
+    dim_reliability_enterprise_score = Column(Integer, nullable=True)  # 1-5
+    dim_reliability_enterprise_evidence = Column(Text, nullable=True)
+    dim_reliability_enterprise_updated = Column(DateTime, nullable=True)
+
+    # Dimension 8: Pricing Model & Commercial Flexibility
+    dim_pricing_flexibility_score = Column(Integer, nullable=True)  # 1-5
+    dim_pricing_flexibility_evidence = Column(Text, nullable=True)
+    dim_pricing_flexibility_updated = Column(DateTime, nullable=True)
+
+    # Dimension 9: Reporting & Analytics Capability
+    dim_reporting_analytics_score = Column(Integer, nullable=True)  # 1-5
+    dim_reporting_analytics_evidence = Column(Text, nullable=True)
+    dim_reporting_analytics_updated = Column(DateTime, nullable=True)
+
+    # Aggregate Dimension Scores
+    dim_overall_score = Column(Float, nullable=True)  # Average of all 9 dimensions
+    dim_sales_priority = Column(String, nullable=True)  # High/Medium/Low based on threat + dimensions
+
     # ===========================================
     # FREE API DATA SOURCES
     # ===========================================
@@ -464,6 +518,81 @@ class RefreshSession(Base):
     ai_summary = Column(Text, nullable=True)  # Store the AI-generated summary
     change_details = Column(Text, nullable=True)  # JSON-encoded change details
     status = Column(String, default="in_progress")  # in_progress, completed, failed
+
+
+# ===========================================
+# SALES & MARKETING MODULE TABLES (v5.0.7)
+# ===========================================
+
+class CompetitorDimensionHistory(Base):
+    """Track dimension score changes over time for audit trail and trend analysis."""
+    __tablename__ = "competitor_dimension_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    dimension_id = Column(String, index=True)  # e.g., "product_packaging", "integration_depth"
+    old_score = Column(Integer, nullable=True)  # Previous score (null if first entry)
+    new_score = Column(Integer)  # New score (1-5)
+    evidence = Column(Text, nullable=True)  # Supporting evidence for the score change
+    source = Column(String, default="manual")  # "manual", "ai", "news", "review"
+    confidence = Column(String, nullable=True)  # "low", "medium", "high"
+    changed_by = Column(String)  # User email or "system"
+    changed_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Battlecard(Base):
+    """Generated battlecards for competitors - stored for quick retrieval and versioning."""
+    __tablename__ = "battlecards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    title = Column(String)  # e.g., "Epic Systems Full Battlecard"
+    content = Column(Text)  # JSON or Markdown content
+    battlecard_type = Column(String)  # "full", "quick", "objection_handler"
+    focus_dimensions = Column(String, nullable=True)  # JSON array of dimension IDs
+    deal_context = Column(Text, nullable=True)  # Optional deal-specific context
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_by = Column(String)  # User email or "ai"
+    is_active = Column(Boolean, default=True)
+    version = Column(Integer, default=1)
+    pdf_path = Column(String, nullable=True)  # Path to exported PDF
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TalkingPoint(Base):
+    """Dimension-specific talking points for sales conversations."""
+    __tablename__ = "talking_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    dimension_id = Column(String, index=True)  # e.g., "product_packaging"
+    point_type = Column(String, index=True)  # "strength", "weakness", "objection", "counter"
+    content = Column(Text)  # The talking point text
+    context = Column(Text, nullable=True)  # When to use this talking point
+    effectiveness_score = Column(Integer, nullable=True)  # From win/loss feedback (1-5)
+    usage_count = Column(Integer, default=0)  # How many times this point was used
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)  # User email or "ai"
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+
+class DimensionNewsTag(Base):
+    """Link news articles to competitive dimensions for dimension-aware news filtering."""
+    __tablename__ = "dimension_news_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    news_url = Column(String, index=True)  # URL of the news article
+    news_title = Column(String)  # Title for display
+    news_snippet = Column(Text, nullable=True)  # Brief excerpt
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    dimension_id = Column(String, index=True)  # e.g., "product_packaging"
+    relevance_score = Column(Float)  # 0-1 confidence that article relates to dimension
+    sentiment = Column(String, nullable=True)  # "positive", "negative", "neutral"
+    tagged_at = Column(DateTime, default=datetime.utcnow, index=True)
+    tagged_by = Column(String)  # "ai" or user email
+    is_validated = Column(Boolean, default=False)  # User validated the tag
 
 
 # Create tables
