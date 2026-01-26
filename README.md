@@ -330,21 +330,98 @@
 
 ## Installation
 
-### Option 1: Web Browser (Recommended)
+> **Quick Start**: See [QUICK_INSTALL.md](QUICK_INSTALL.md) for detailed step-by-step instructions with screenshots.
 
-The web version is production-ready and recommended for most users.
+### Option 1: Automated Setup (Recommended)
+
+Download the ZIP from GitHub and use the included setup scripts.
+
+#### Step 1: Download
+
+1. Go to: https://github.com/hicklax13/Project_Intel_v5.0.1
+2. Click the green **"<> Code"** button
+3. Click **"Download ZIP"**
+4. Extract to your Desktop
+
+#### Step 2: Rename the Folder (IMPORTANT!)
+
+> **Why?** GitHub creates long folder names that can cause installation failures on Windows.
+
+Rename the extracted folder:
+- **From**: `Project_Intel_v5.0.1-master` (or similar)
+- **To**: `certify_intel`
+
+#### Step 3: Run Setup Script
+
+**Windows:**
+1. Open the `certify_intel` folder
+2. Double-click **`setup.bat`**
+3. Follow the prompts
+
+**Mac/Linux:**
+```bash
+cd ~/Desktop/certify_intel
+chmod +x setup.sh
+./setup.sh
+```
+
+#### Step 4: Access the Application
+
+- Open Chrome: **http://localhost:8000**
+- Login: `admin@certifyhealth.com` / `certifyintel2024`
+
+---
+
+### Option 2: Manual Setup
 
 ```bash
-cd backend
+# Navigate to project
+cd certify_intel/backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (Mac/Linux)
+source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Create config file
 cp .env.example .env
-# Edit .env with your configuration
+
+# Start server
 python main.py
 ```
 
 Then open: http://localhost:8000
 
-### Option 2: Desktop App
+---
+
+### Option 3: Git Clone (For Developers)
+
+```bash
+# Clone the repository
+git clone https://github.com/hicklax13/Project_Intel_v5.0.1.git
+cd Project_Intel_v5.0.1
+
+# Backend setup
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+cp .env.example .env
+python main.py  # Starts on http://localhost:8000
+```
+
+---
+
+### Option 4: Desktop App (Beta)
+
+> **Note**: Desktop app has a known issue with backend startup. Use web version for now.
 
 Download from [GitHub Releases](https://github.com/hicklax13/Project_Intel_v5.0.1/releases):
 
@@ -354,42 +431,18 @@ Download from [GitHub Releases](https://github.com/hicklax13/Project_Intel_v5.0.
 | macOS (Intel) | `Certify_Intel_x64.dmg` | macOS 11+ |
 | macOS (Apple Silicon) | `Certify_Intel_arm64.dmg` | macOS 11+ (M1/M2/M3) |
 
-**Note**: Desktop app backend startup has a known issue. Use web version for now.
+---
 
-**Windows Installation:**
-1. Download the `.exe` file
-2. Run the installer (click "More info" → "Run anyway" if SmartScreen appears)
-3. Follow the installation wizard
-4. Launch "Certify Intel" from desktop or Start Menu
+### Troubleshooting Installation
 
-**macOS Installation:**
-1. Download the appropriate `.dmg` for your Mac
-2. Open the DMG and drag "Certify Intel" to Applications
-3. Right-click the app and select "Open" on first launch
+| Issue | Solution |
+|-------|----------|
+| `pip install` fails with path error | Move folder to shorter path (e.g., `C:\certify_intel`) |
+| `python` not found | Install Python 3.9+ and add to PATH |
+| Port 8000 in use | Use `uvicorn main:app --port 8001` |
+| Login doesn't work | See [QUICK_INSTALL.md](QUICK_INSTALL.md#login-doesnt-work) |
 
-### Option 2: Web Browser Access
-
-Access the dashboard directly at `http://localhost:8000` after starting the backend server.
-
-### Option 3: Development Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/hicklax13/Project_Intel_v5.0.1.git
-cd Project_Intel_v5.0.1
-
-# Backend setup
-cd backend
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your API keys
-python main.py  # Starts on http://localhost:8000
-
-# Desktop app setup (optional)
-cd ../desktop-app
-npm install
-npm start
-```
+For detailed troubleshooting, see [QUICK_INSTALL.md](QUICK_INSTALL.md#troubleshooting).
 
 ---
 
