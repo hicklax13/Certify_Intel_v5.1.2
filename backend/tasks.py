@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from sqlalchemy import func
 
 from celery_app import celery_app
 
@@ -265,7 +266,7 @@ def check_high_priority(self) -> Dict[str, Any]:
         db = SessionLocal()
         high_threat = db.query(Competitor).filter(
             Competitor.is_deleted == False,
-            Competitor.threat_level == "High"
+            func.upper(Competitor.threat_level) == "HIGH"
         ).all()
         db.close()
         

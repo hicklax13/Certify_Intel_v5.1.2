@@ -428,9 +428,9 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
         
         # Calculate statistics
         total = len(competitors)
-        high_threat = sum(1 for c in competitors if c.threat_level == "High")
-        medium_threat = sum(1 for c in competitors if c.threat_level == "Medium")
-        low_threat = sum(1 for c in competitors if c.threat_level == "Low")
+        high_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH")
+        medium_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM")
+        low_threat = sum(1 for c in competitors if c.threat_level and c.threat_level.upper() == "LOW")
         public_companies = sum(1 for c in competitors if c.is_public)
         private_companies = total - public_companies
         
@@ -441,7 +441,7 @@ async def get_dashboard_summary(db: Session = Depends(get_db), current_user: dic
             pricing_models[model] = pricing_models.get(model, 0) + 1
         
         # Gather top threats
-        top_threats = [c.name for c in competitors if c.threat_level == "High"][:5]
+        top_threats = [c.name for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"][:5]
         
         # Build comprehensive data summary for AI
         data_summary = f"""
@@ -2550,7 +2550,7 @@ def get_data_quality_overview(db: Session = Depends(get_db)):
     from datetime import timedelta
 
     # Total active competitors
-    total_competitors = db.query(Competitor).filter(Competitor.is_active == True).count()
+    total_competitors = db.query(Competitor).filter(Competitor.is_deleted == False).count()
 
     # Get all data sources
     sources = db.query(DataSource).all()
@@ -2603,7 +2603,7 @@ def get_data_quality_overview(db: Session = Depends(get_db)):
 
     # Per-competitor quality scores
     competitor_scores = []
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
     for comp in competitors:
         comp_sources = [s for s in sources if s.competitor_id == comp.id]
         if comp_sources:
@@ -4996,9 +4996,9 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     stats = {
         "total_competitors": len(competitors),
         "active": len([c for c in competitors if c.status == "Active"]),
-        "high_threat": len([c for c in competitors if c.threat_level == "High"]),
-        "medium_threat": len([c for c in competitors if c.threat_level == "Medium"]),
-        "low_threat": len([c for c in competitors if c.threat_level == "Low"]),
+        "high_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"]),
+        "medium_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM"]),
+        "low_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "LOW"]),
         "last_updated": datetime.utcnow().isoformat()
     }
     
@@ -6050,9 +6050,9 @@ def generate_weekly_briefing(db: Session = Depends(get_db)):
         # Calculate stats
         stats = {
             "total_competitors": len(competitors),
-            "high_threat": len([c for c in competitors if c.threat_level == "High"]),
-            "medium_threat": len([c for c in competitors if c.threat_level == "Medium"]),
-            "low_threat": len([c for c in competitors if c.threat_level == "Low"])
+            "high_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "HIGH"]),
+            "medium_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "MEDIUM"]),
+            "low_threat": len([c for c in competitors if c.threat_level and c.threat_level.upper() == "LOW"])
         }
         
         manager = ReportManager("./exports")
