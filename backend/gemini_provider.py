@@ -399,7 +399,7 @@ class GeminiProvider:
             Dictionary with extracted competitive intelligence
         """
         prompts = {
-            "homepage": f"""Analyze this screenshot of {competitor_name}'s homepage for competitive intelligence.
+            "homepage": f"""Analyze this screenshot of the homepage for {competitor_name} for competitive intelligence.
 Extract and return as JSON:
 {{
     "value_proposition": "Main value proposition or tagline",
@@ -412,7 +412,7 @@ Extract and return as JSON:
     "competitive_positioning": "How they position vs competitors",
     "notable_elements": ["Any other notable UI/UX elements"]
 }}""",
-            "pricing": f"""Analyze this screenshot of {competitor_name}'s pricing page for competitive intelligence.
+            "pricing": f"""Analyze this screenshot of the pricing page for {competitor_name} for competitive intelligence.
 Extract and return as JSON:
 {{
     "pricing_tiers": [
@@ -427,7 +427,7 @@ Extract and return as JSON:
     "highest_price": "Highest price point visible",
     "notable_elements": ["Any other notable pricing elements"]
 }}""",
-            "features": f"""Analyze this screenshot of {competitor_name}'s features/product page for competitive intelligence.
+            "features": f"""Analyze this screenshot of the features/product page for {competitor_name} for competitive intelligence.
 Extract and return as JSON:
 {{
     "product_categories": ["Main product/feature categories"],
@@ -439,7 +439,7 @@ Extract and return as JSON:
     "certifications": ["Security or compliance certifications"],
     "notable_elements": ["Any other notable elements"]
 }}""",
-            "about": f"""Analyze this screenshot of {competitor_name}'s about/company page for competitive intelligence.
+            "about": f"""Analyze this screenshot of the about/company page for {competitor_name} for competitive intelligence.
 Extract and return as JSON:
 {{
     "company_description": "Brief company description",
@@ -900,7 +900,7 @@ Watch and extract:
     "competitive_claims": ["Claims about being better than alternatives"],
     "estimated_budget": "Assessment of production budget (low/medium/high)",
     "summary": "2-3 sentence summary for competitive analysis"
-}}"",
+}}""",
             "general": f"""Analyze this video {company_ref} for competitive intelligence.
 Watch and extract all relevant information:
 {{
@@ -1046,14 +1046,14 @@ Watch and extract all relevant information:
         queries = {
             "overview": f"What is {competitor_name}? Provide company overview including founding, headquarters, and market position.",
             "products": f"What products and services does {competitor_name} offer? List main products with descriptions.",
-            "pricing": f"What is {competitor_name}'s pricing model? Include specific prices if available.",
+            "pricing": f"What is the pricing model for {competitor_name}? Include specific prices if available.",
             "news": f"What is the latest news about {competitor_name}? Focus on recent announcements.",
-            "financials": f"What is {competitor_name}'s financial status? Include funding, revenue, and growth metrics.",
-            "customers": f"Who are {competitor_name}'s customers? Include notable clients and target market.",
+            "financials": f"What is the financial status of {competitor_name}? Include funding, revenue, and growth metrics.",
+            "customers": f"Who are the customers of {competitor_name}? Include notable clients and target market.",
             "technology": f"What technology does {competitor_name} use? Include tech stack and innovations.",
             "leadership": f"Who leads {competitor_name}? Include key executives and their backgrounds.",
             "partnerships": f"What partnerships does {competitor_name} have? Include integrations and alliances.",
-            "competitors": f"Who are {competitor_name}'s main competitors? Include market comparison.",
+            "competitors": f"Who are the main competitors of {competitor_name}? Include market comparison.",
         }
 
         for area in research_areas:
@@ -1462,7 +1462,7 @@ CONTENT:
 {content}"""
 
         else:
-            return f"""Analyze this GENERAL content from {competitor_name}'s {page_type} page.
+            return f"""Analyze this GENERAL content from the {page_type} page of {competitor_name}.
 Extract as much structured data as possible. Use null if not found.
 Return JSON:
 {{
