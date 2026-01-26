@@ -449,6 +449,23 @@ class UserSavedPrompt(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class RefreshSession(Base):
+    """Phase 4: Task 5.0.1-031 - Tracks each data refresh session with results for audit trail."""
+    __tablename__ = "refresh_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+    completed_at = Column(DateTime, nullable=True)
+    competitors_scanned = Column(Integer, default=0)
+    changes_detected = Column(Integer, default=0)
+    new_values_added = Column(Integer, default=0)
+    errors_count = Column(Integer, default=0)
+    ai_summary = Column(Text, nullable=True)  # Store the AI-generated summary
+    change_details = Column(Text, nullable=True)  # JSON-encoded change details
+    status = Column(String, default="in_progress")  # in_progress, completed, failed
+
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 

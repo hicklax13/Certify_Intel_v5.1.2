@@ -70,7 +70,8 @@ import himss_scraper
 from database import (
     engine, SessionLocal, Base, get_db, Competitor, ChangeLog, DataSource,
     DataChangeHistory, User, SystemPrompt, KnowledgeBaseItem, UserSettings, ActivityLog,
-    CompetitorProduct, ProductPricingTier, ProductFeatureMatrix, CustomerCountEstimate
+    CompetitorProduct, ProductPricingTier, ProductFeatureMatrix, CustomerCountEstimate,
+    RefreshSession  # Phase 4: Task 5.0.1-031
 )
 from confidence_scoring import (
     calculate_confidence_score, get_source_defaults, calculate_data_staleness,
@@ -127,7 +128,12 @@ scrape_progress = {
     "current_competitor": None,
     "competitors_done": [],
     "changes_detected": 0,
-    "new_values_added": 0
+    "new_values_added": 0,
+    # Phase 2: Enhanced tracking (Task 5.0.1-026)
+    "started_at": None,
+    "recent_changes": [],    # Last 10 changes for live display
+    "change_details": [],    # All changes for AI summary
+    "errors": []             # Any errors encountered
 }
 
 
@@ -1650,6 +1656,117 @@ def recalculate_all_confidence_scores(db: Session = Depends(get_db)):
         "success": True,
         "message": f"Recalculated confidence for {updated_count} data sources",
         "updated_count": updated_count
+    }
+
+
+@app.get("/api/data-quality/overview")
+def get_data_quality_overview(db: Session = Depends(get_db)):
+    """
+    Get comprehensive data quality overview with confidence metrics.
+    Phase 7: Data Quality Dashboard
+    """
+    from datetime import timedelta
+
+    # Total active competitors
+    total_competitors = db.query(Competitor).filter(Competitor.is_active == True).count()
+
+    # Get all data sources
+    sources = db.query(DataSource).all()
+    total_data_points = len(sources)
+
+    # Confidence distribution
+    high_confidence = len([s for s in sources if (s.confidence_score or 0) >= 70])
+    moderate_confidence = len([s for s in sources if 40 <= (s.confidence_score or 0) < 70])
+    low_confidence = len([s for s in sources if (s.confidence_score or 0) < 40 and s.confidence_score is not None])
+    unscored = len([s for s in sources if s.confidence_score is None])
+
+    # Verification stats
+    verified_count = len([s for s in sources if s.is_verified])
+    verification_rate = round((verified_count / total_data_points) * 100, 1) if total_data_points > 0 else 0
+
+    # Staleness analysis (90 days threshold)
+    stale_threshold = datetime.utcnow() - timedelta(days=90)
+    stale_sources = [s for s in sources if s.extracted_at and s.extracted_at < stale_threshold]
+    stale_count = len(stale_sources)
+    staleness_rate = round((stale_count / total_data_points) * 100, 1) if total_data_points > 0 else 0
+
+    # Key field coverage
+    key_fields = ["customer_count", "base_price", "pricing_model", "employee_count", "year_founded", "key_features"]
+    field_coverage = {}
+    for field in key_fields:
+        field_sources = [s for s in sources if s.field_name == field]
+        populated = len([s for s in field_sources if s.current_value and s.current_value not in ['N/A', 'Unknown', '']])
+        avg_confidence = sum([s.confidence_score or 0 for s in field_sources]) / len(field_sources) if field_sources else 0
+        field_coverage[field] = {
+            "populated": populated,
+            "total": total_competitors,
+            "percentage": round((populated / total_competitors) * 100, 1) if total_competitors > 0 else 0,
+            "avg_confidence": round(avg_confidence, 1)
+        }
+
+    # Source type breakdown
+    source_type_counts = {}
+    for s in sources:
+        st = s.source_type or 'unknown'
+        if st not in source_type_counts:
+            source_type_counts[st] = {"count": 0, "avg_confidence": 0, "scores": []}
+        source_type_counts[st]["count"] += 1
+        if s.confidence_score is not None:
+            source_type_counts[st]["scores"].append(s.confidence_score)
+
+    for st, data in source_type_counts.items():
+        if data["scores"]:
+            data["avg_confidence"] = round(sum(data["scores"]) / len(data["scores"]), 1)
+        del data["scores"]  # Clean up internal data
+
+    # Per-competitor quality scores
+    competitor_scores = []
+    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    for comp in competitors:
+        comp_sources = [s for s in sources if s.competitor_id == comp.id]
+        if comp_sources:
+            avg_conf = sum([s.confidence_score or 0 for s in comp_sources]) / len(comp_sources)
+            verified = len([s for s in comp_sources if s.is_verified])
+            high_conf = len([s for s in comp_sources if (s.confidence_score or 0) >= 70])
+            low_conf = len([s for s in comp_sources if (s.confidence_score or 0) < 40])
+            competitor_scores.append({
+                "id": comp.id,
+                "name": comp.name,
+                "total_fields": len(comp_sources),
+                "avg_confidence": round(avg_conf, 1),
+                "verified_count": verified,
+                "high_confidence_count": high_conf,
+                "low_confidence_count": low_conf,
+                "quality_tier": "Excellent" if avg_conf >= 70 else "Good" if avg_conf >= 50 else "Fair" if avg_conf >= 30 else "Poor"
+            })
+
+    # Sort by average confidence (descending)
+    competitor_scores.sort(key=lambda x: x["avg_confidence"], reverse=True)
+
+    # Needs attention summary
+    needs_attention = {
+        "low_confidence_count": low_confidence,
+        "stale_count": stale_count,
+        "unverified_count": total_data_points - verified_count,
+        "unscored_count": unscored
+    }
+
+    return {
+        "total_competitors": total_competitors,
+        "total_data_points": total_data_points,
+        "confidence_distribution": {
+            "high": {"count": high_confidence, "percentage": round(high_confidence / total_data_points * 100, 1) if total_data_points else 0},
+            "moderate": {"count": moderate_confidence, "percentage": round(moderate_confidence / total_data_points * 100, 1) if total_data_points else 0},
+            "low": {"count": low_confidence, "percentage": round(low_confidence / total_data_points * 100, 1) if total_data_points else 0},
+            "unscored": {"count": unscored, "percentage": round(unscored / total_data_points * 100, 1) if total_data_points else 0}
+        },
+        "verification_rate": verification_rate,
+        "staleness_rate": staleness_rate,
+        "field_coverage": field_coverage,
+        "source_type_breakdown": source_type_counts,
+        "competitor_scores": competitor_scores[:15],  # Top 15 for dashboard display
+        "needs_attention": needs_attention,
+        "generated_at": datetime.utcnow().isoformat()
     }
 
 
@@ -4019,7 +4136,16 @@ async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = De
     competitor_ids = [c.id for c in competitors]
     competitor_names = {c.id: c.name for c in competitors}
 
-    # Reset progress tracker
+    # Phase 4: Create RefreshSession for audit trail (Task 5.0.1-031)
+    refresh_session = RefreshSession(
+        competitors_scanned=len(competitor_ids),
+        status="in_progress"
+    )
+    db.add(refresh_session)
+    db.commit()
+    db.refresh(refresh_session)
+
+    # Reset progress tracker with enhanced tracking (Phase 2: Task 5.0.1-026)
     scrape_progress = {
         "active": True,
         "total": len(competitor_ids),
@@ -4027,7 +4153,12 @@ async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = De
         "current_competitor": None,
         "competitors_done": [],
         "changes_detected": 0,
-        "new_values_added": 0
+        "new_values_added": 0,
+        "started_at": datetime.utcnow().isoformat(),
+        "recent_changes": [],
+        "change_details": [],
+        "errors": [],
+        "session_id": refresh_session.id  # Track session ID for persistence
     }
 
     # Add to background tasks with progress tracking
@@ -4037,7 +4168,8 @@ async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = De
     return {
         "message": f"Scrape jobs queued for {len(competitor_ids)} competitors",
         "competitor_ids": competitor_ids,
-        "total": len(competitor_ids)
+        "total": len(competitor_ids),
+        "session_id": refresh_session.id
     }
 
 
@@ -4045,6 +4177,145 @@ async def trigger_scrape_all(background_tasks: BackgroundTasks, db: Session = De
 async def get_scrape_progress():
     """Get the current progress of a scrape operation."""
     return scrape_progress
+
+
+# Phase 2: Task 5.0.1-028 - Get detailed session information
+@app.get("/api/scrape/session")
+async def get_scrape_session_details():
+    """Get detailed information about the current or last refresh session."""
+    return {
+        "active": scrape_progress["active"],
+        "total_competitors": scrape_progress["total"],
+        "completed": scrape_progress["completed"],
+        "current_competitor": scrape_progress.get("current_competitor"),
+        "changes_detected": scrape_progress["changes_detected"],
+        "new_values_added": scrape_progress["new_values_added"],
+        "change_details": scrape_progress.get("change_details", []),
+        "recent_changes": scrape_progress.get("recent_changes", []),
+        "errors": scrape_progress.get("errors", []),
+        "started_at": scrape_progress.get("started_at"),
+        "competitors_processed": scrape_progress["competitors_done"]
+    }
+
+
+# Phase 3: Task 5.0.1-029 - Generate AI summary of refresh results
+@app.post("/api/scrape/generate-summary")
+async def generate_refresh_summary(db: Session = Depends(get_db)):
+    """Use AI to generate a summary of the data refresh results."""
+    import os
+
+    if scrape_progress["active"]:
+        return {"error": "Refresh still in progress", "type": "error"}
+
+    if not scrape_progress.get("change_details"):
+        return {
+            "summary": "No changes detected during the last refresh. All competitor data remains the same.",
+            "type": "static",
+            "stats": {
+                "competitors_scanned": scrape_progress.get("total", 0),
+                "changes_detected": 0,
+                "new_values": 0
+            }
+        }
+
+    # Check for OpenAI client
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        return {
+            "summary": f"Refreshed {scrape_progress.get('total', 0)} competitors. Found {scrape_progress.get('changes_detected', 0)} changes and {scrape_progress.get('new_values_added', 0)} new data points.",
+            "type": "static",
+            "error": "OpenAI API key not configured"
+        }
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_key)
+
+        # Prepare change data for AI
+        changes_text = ""
+        change_details = scrape_progress.get("change_details", [])
+
+        for change in change_details[:30]:  # Limit to prevent token overflow
+            if change.get("type") == "new":
+                changes_text += f"- NEW: {change.get('competitor', 'Unknown')} - {change.get('field', 'Unknown')}: {change.get('new_value', 'N/A')}\n"
+            else:
+                changes_text += f"- CHANGED: {change.get('competitor', 'Unknown')} - {change.get('field', 'Unknown')}: '{change.get('old_value', 'N/A')}' → '{change.get('new_value', 'N/A')}'\n"
+
+        # Generate AI summary
+        prompt = f"""You are a competitive intelligence analyst. Summarize the following data refresh results in 3-4 sentences.
+Focus on:
+1. Most significant changes (pricing, threat levels, new features)
+2. Any concerning trends
+3. Recommended actions for the sales team
+
+Data Refresh Results:
+- Competitors scanned: {scrape_progress.get('total', 0)}
+- Changes detected: {scrape_progress.get('changes_detected', 0)}
+- New data points: {scrape_progress.get('new_values_added', 0)}
+- Errors encountered: {len(scrape_progress.get('errors', []))}
+
+Detailed Changes:
+{changes_text}
+
+Provide a concise executive summary. Be specific about which competitors changed."""
+
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            messages=[
+                {"role": "system", "content": "You are a competitive intelligence analyst providing brief, actionable summaries for sales and product teams."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=300
+        )
+
+        summary = response.choices[0].message.content
+
+        return {
+            "summary": summary,
+            "type": "ai",
+            "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            "stats": {
+                "competitors_scanned": scrape_progress.get("total", 0),
+                "changes_detected": scrape_progress.get("changes_detected", 0),
+                "new_values": scrape_progress.get("new_values_added", 0),
+                "errors": len(scrape_progress.get("errors", []))
+            }
+        }
+
+    except ImportError:
+        return {
+            "summary": f"Refreshed {scrape_progress.get('total', 0)} competitors. Found {scrape_progress.get('changes_detected', 0)} changes and {scrape_progress.get('new_values_added', 0)} new data points.",
+            "type": "static",
+            "error": "OpenAI library not installed"
+        }
+    except Exception as e:
+        return {
+            "summary": f"Refreshed {scrape_progress.get('total', 0)} competitors. Found {scrape_progress.get('changes_detected', 0)} changes and {scrape_progress.get('new_values_added', 0)} new data points.",
+            "type": "static",
+            "error": str(e)
+        }
+
+
+# Phase 4: Task 5.0.1-031 - Refresh history endpoint
+@app.get("/api/refresh-history")
+async def get_refresh_history(limit: int = 10, db: Session = Depends(get_db)):
+    """Get history of data refresh sessions."""
+    sessions = db.query(RefreshSession).order_by(
+        RefreshSession.started_at.desc()
+    ).limit(limit).all()
+
+    return [{
+        "id": s.id,
+        "started_at": s.started_at.isoformat() if s.started_at else None,
+        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+        "competitors_scanned": s.competitors_scanned,
+        "changes_detected": s.changes_detected,
+        "new_values_added": s.new_values_added,
+        "errors_count": s.errors_count,
+        "status": s.status,
+        "ai_summary": s.ai_summary
+    } for s in sessions]
 
 
 @app.post("/api/scrape/{competitor_id}")
@@ -4298,6 +4569,10 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
 
                             # Check if this is a new value or a change
                             if old_str != new_str:
+                                # Determine change type
+                                is_new_value = old_value is None or old_str == "" or old_str == "None"
+                                change_type = "new" if is_new_value else "change"
+
                                 # Log to DataChangeHistory (unified change log)
                                 change_record = DataChangeHistory(
                                     competitor_id=comp.id,
@@ -4311,7 +4586,23 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
                                 db.add(change_record)
                                 setattr(comp, key, value)
 
-                                if old_value is None or old_str == "" or old_str == "None":
+                                # Phase 2: Track field-level changes (Task 5.0.1-027)
+                                change_entry = {
+                                    "competitor": comp.name,
+                                    "field": key,
+                                    "old_value": old_str[:50] if old_str else None,
+                                    "new_value": new_str[:50] if new_str else None,
+                                    "type": change_type,
+                                    "timestamp": datetime.utcnow().isoformat()
+                                }
+                                scrape_progress["change_details"].append(change_entry)
+                                scrape_progress["recent_changes"].append(change_entry)
+
+                                # Keep only last 10 in recent_changes for live display
+                                if len(scrape_progress["recent_changes"]) > 10:
+                                    scrape_progress["recent_changes"] = scrape_progress["recent_changes"][-10:]
+
+                                if is_new_value:
                                     new_values_count += 1
                                 else:
                                     changes_count += 1
@@ -4362,8 +4653,20 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
 
         except ImportError as e:
             print(f"Scraper not available: {e}")
+            # Track error for display
+            scrape_progress["errors"].append({
+                "competitor": competitor_name,
+                "error": f"Scraper not available: {str(e)[:100]}",
+                "timestamp": datetime.utcnow().isoformat()
+            })
         except Exception as e:
             print(f"Scrape error for {comp.name}: {e}")
+            # Track error for display
+            scrape_progress["errors"].append({
+                "competitor": competitor_name,
+                "error": str(e)[:100],
+                "timestamp": datetime.utcnow().isoformat()
+            })
 
         # Fallback: Just update the timestamp to show we tried
         if not changes_count and not new_values_count:
@@ -4374,6 +4677,12 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
     except Exception as e:
         print(f"Scrape job failed for competitor {competitor_id}: {e}")
         db.rollback()
+        # Track critical error
+        scrape_progress["errors"].append({
+            "competitor": competitor_name,
+            "error": f"Job failed: {str(e)[:100]}",
+            "timestamp": datetime.utcnow().isoformat()
+        })
     finally:
         db.close()
 
@@ -4388,6 +4697,29 @@ async def run_scrape_job_with_progress(competitor_id: int, competitor_name: str)
             scrape_progress["active"] = False
             scrape_progress["current_competitor"] = None
             print(f"All scrapes complete! {scrape_progress['changes_detected']} changes, {scrape_progress['new_values_added']} new values")
+
+            # Phase 4: Persist RefreshSession results (Task 5.0.1-031)
+            try:
+                session_id = scrape_progress.get("session_id")
+                if session_id:
+                    session_db = SessionLocal()
+                    refresh_session = session_db.query(RefreshSession).filter(
+                        RefreshSession.id == session_id
+                    ).first()
+                    if refresh_session:
+                        refresh_session.completed_at = datetime.utcnow()
+                        refresh_session.changes_detected = scrape_progress["changes_detected"]
+                        refresh_session.new_values_added = scrape_progress["new_values_added"]
+                        refresh_session.errors_count = len(scrape_progress.get("errors", []))
+                        refresh_session.status = "completed"
+                        # Store change details as JSON
+                        import json
+                        refresh_session.change_details = json.dumps(scrape_progress.get("change_details", []))
+                        session_db.commit()
+                        print(f"RefreshSession {session_id} persisted to database")
+                    session_db.close()
+            except Exception as persist_err:
+                print(f"Error persisting RefreshSession: {persist_err}")
 
 
 # --- News Feed Endpoint ---

@@ -151,6 +151,27 @@
                     <p class="refresh-description">Data is automatically refreshed from all connected sources. Click "Refresh Data" to manually update.</p>
                 </div>
 
+                <!-- Data Refresh Progress (Inline) - Phase 1: Task 5.0.1-023 -->
+                <div id="inlineRefreshProgress" class="inline-refresh-progress" style="display: none;">
+                    <div class="refresh-progress-header">
+                        <div class="refresh-progress-title">
+                            <span class="refresh-icon spinning">🔄</span>
+                            <span>Refreshing Competitor Data...</span>
+                        </div>
+                        <span id="inlineProgressPercent" class="progress-percent">0%</span>
+                    </div>
+                    <div class="inline-progress-bar-container">
+                        <div id="inlineProgressBar" class="inline-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="refresh-progress-details">
+                        <span id="inlineProgressText">Starting...</span>
+                        <span id="inlineProgressCount">0 / 0 competitors</span>
+                    </div>
+                    <div id="inlineProgressLive" class="refresh-live-updates">
+                        <!-- Live updates will appear here -->
+                    </div>
+                </div>
+
                 <!-- AI-Generated Executive Summary -->
                 <!-- AI-Generated Executive Summary -->
                 <div id="aiSummaryCard" class="ai-summary-card">
@@ -636,16 +657,17 @@
                 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <h2>Data Quality Dashboard</h2>
-                        <p>Monitor data completeness, quality scores, and freshness across all competitors</p>
+                        <p>Monitor data completeness, confidence scores, and source attribution across all competitors</p>
                     </div>
                     <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="recalculateAllConfidence()">🔄 Recalculate Scores</button>
                         <button class="btn btn-primary" onclick="verifyAllRecords()">✅ Mark All Verified</button>
                         <button class="btn btn-secondary" onclick="exportQualityReport()">📊 Export Report</button>
                     </div>
                 </div>
 
-                <!-- Quality Summary Cards -->
-                <div class="stats-grid" style="margin-bottom: 2rem;">
+                <!-- Quality Summary Cards - Row 1: Core Metrics -->
+                <div class="stats-grid" style="margin-bottom: 1rem;">
                     <div class="stat-card stat-card-clickable" onclick="showQualityDetails('completeness')">
                         <div class="stat-value" id="overallCompleteness">--</div>
                         <div class="stat-label">Overall Completeness</div>
@@ -666,15 +688,89 @@
                     </div>
                 </div>
 
-                <!-- Charts Row -->
+                <!-- Confidence Distribution Cards - Row 2 -->
+                <div class="stats-grid confidence-stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('high')" style="border-left: 4px solid #10b981;">
+                        <div class="stat-value confidence-high-value" id="highConfidenceCount">--</div>
+                        <div class="stat-label">High Confidence</div>
+                        <div class="stat-sub" id="highConfidencePercent" style="color: #10b981; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('moderate')" style="border-left: 4px solid #f59e0b;">
+                        <div class="stat-value confidence-moderate-value" id="moderateConfidenceCount">--</div>
+                        <div class="stat-label">Moderate Confidence</div>
+                        <div class="stat-sub" id="moderateConfidencePercent" style="color: #f59e0b; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('low')" style="border-left: 4px solid #ef4444;">
+                        <div class="stat-value confidence-low-value" id="lowConfidenceCount">--</div>
+                        <div class="stat-label">Low Confidence</div>
+                        <div class="stat-sub" id="lowConfidencePercent" style="color: #ef4444; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="showQualityDetails('verified')">
+                        <div class="stat-value" id="verificationRate">--</div>
+                        <div class="stat-label">Verification Rate</div>
+                        <div class="stat-sub" id="verifiedCount" style="color: #64748b; font-size: 12px;">-- verified</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row - Enhanced with Confidence Distribution -->
                 <div class="charts-row" style="margin-bottom: 2rem;">
                     <div class="chart-card">
                         <h3>Quality Tier Distribution</h3>
                         <canvas id="qualityTierChart"></canvas>
                     </div>
                     <div class="chart-card">
+                        <h3>Confidence Distribution</h3>
+                        <canvas id="confidenceDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
                         <h3>Field Coverage Overview</h3>
                         <canvas id="fieldCoverageChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Source Type Breakdown -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>📊 Source Type Breakdown</h3>
+                            <p style="color: var(--text-secondary);">Data points by source type with average confidence scores</p>
+                        </div>
+                    </div>
+                    <div id="sourceTypeBreakdown" class="source-type-grid">
+                        <div class="loading">Loading source breakdown...</div>
+                    </div>
+                </div>
+
+                <!-- Field Confidence Analysis -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>📋 Field Coverage with Confidence</h3>
+                            <p style="color: var(--text-secondary);">Key fields tracked with coverage percentage and average confidence</p>
+                        </div>
+                    </div>
+                    <div id="fieldConfidenceAnalysis" class="field-confidence-grid">
+                        <div class="loading">Loading field analysis...</div>
+                    </div>
+                </div>
+
+                <!-- Competitor Quality Ranking -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>🏆 Competitor Data Quality Ranking</h3>
+                            <p style="color: var(--text-secondary);">Competitors ranked by average confidence score</p>
+                        </div>
+                        <select id="qualityRankingFilter" onchange="filterQualityRanking()" style="padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            <option value="all">All Tiers</option>
+                            <option value="Excellent">Excellent (70+)</option>
+                            <option value="Good">Good (50-69)</option>
+                            <option value="Fair">Fair (30-49)</option>
+                            <option value="Poor">Poor (&lt;30)</option>
+                        </select>
+                    </div>
+                    <div id="competitorQualityRanking" style="max-height: 400px; overflow-y: auto;">
+                        <div class="loading">Loading competitor rankings...</div>
                     </div>
                 </div>
 
@@ -1076,9 +1172,9 @@
             </div>
         </div>
 
-        <!-- Data Refresh Complete Modal -->
+        <!-- Data Refresh Complete Modal (Enhanced - Phase 3: Task 5.0.1-030) -->
         <div id="refreshCompleteModal" class="modal-overlay" style="display: none;">
-            <div class="modal complete-modal">
+            <div class="modal complete-modal" style="max-width: 600px;">
                 <div class="modal-header success-header">
                     <span class="success-icon">&#10003;</span>
                     <h3>Data Refresh Complete!</h3>
@@ -1098,7 +1194,28 @@
                             <span class="stat-value" id="completeNewValues">0</span>
                         </div>
                     </div>
-                    <p class="complete-hint">View details in the Change Log page</p>
+
+                    <!-- AI Summary Section -->
+                    <div id="refreshAISummarySection" class="refresh-ai-summary">
+                        <div class="ai-summary-header-mini">
+                            <span class="ai-icon">🤖</span>
+                            <span>AI Analysis of Changes</span>
+                        </div>
+                        <div id="refreshAISummaryContent" class="ai-summary-content-mini">
+                            <span class="loading-text">Generating summary...</span>
+                        </div>
+                    </div>
+
+                    <!-- Change Details Accordion -->
+                    <div class="change-details-section">
+                        <button class="accordion-toggle" onclick="toggleChangeDetails()">
+                            <span>📋 View Detailed Changes</span>
+                            <span class="toggle-arrow">▼</span>
+                        </button>
+                        <div id="changeDetailsContent" class="change-details-content" style="display: none;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeRefreshCompleteModal()">OK</button>
@@ -1108,10 +1225,45 @@
         </div>
     </div>
 
+    <!-- Data Sources Modal -->
+    <div id="dataSourcesModal" class="data-sources-modal" onclick="closeDataSourcesModal(event)">
+        <div class="data-sources-content" onclick="event.stopPropagation()">
+            <div class="data-sources-header">
+                <h3>📋 Data Source Attribution</h3>
+                <button class="close-btn" onclick="closeDataSourcesModal()">&times;</button>
+            </div>
+            <div class="data-sources-body">
+                <div class="sources-description">
+                    Every data point is tracked with its source and confidence level based on the Admiralty Code framework.
+                </div>
+                <div id="dataSourcesTableContainer">
+                    <p class="loading">Loading data sources...</p>
+                </div>
+                <div class="sources-legend">
+                    <h4>Confidence Levels</h4>
+                    <div class="legend-items">
+                        <span class="legend-item">
+                            <span class="dot confidence-high"></span>
+                            High (70-100): Verified from authoritative sources
+                        </span>
+                        <span class="legend-item">
+                            <span class="dot confidence-moderate"></span>
+                            Moderate (40-69): Credible but not fully verified
+                        </span>
+                        <span class="legend-item">
+                            <span class="dot confidence-low"></span>
+                            Low (0-39): Unverified marketing claims
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="visualizations.js?v=2"></script>
     <script src="enhanced_analytics.js?v=2"></script>
-    <script src="app_v2.js?v=4"></script>
+    <script src="app_v2.js?v=6"></script>
     <script src="prompt_manager.js?v=3"></script>
 </body>
 
