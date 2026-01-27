@@ -20,6 +20,12 @@ tiktoken>=0.5.2
 langchain
 google-generativeai>=0.8.0  # Gemini API (v5.0.2)
 
+# Vertex AI (v5.3.0 - Enterprise AI)
+google-cloud-aiplatform>=1.45.0  # Core Vertex AI SDK
+google-auth>=2.27.0  # GCP authentication
+# google-cloud-discoveryengine>=0.11.0  # RAG Engine (Phase 2)
+# google-cloud-aiplatform[vectorsearch]>=1.45.0  # Vector Search (Phase 3)
+
 # ML Sentiment Analysis (v5.0.5 - Phase 4)
 transformers>=4.36.0  # Hugging Face transformers
 torch>=2.1.0  # PyTorch backend
