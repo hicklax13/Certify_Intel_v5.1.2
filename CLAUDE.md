@@ -2,21 +2,21 @@
 
 ---
 
-## 🚨 CRITICAL: Authentication Bug Must Be Fixed First
+## ✅ Authentication Bug FIXED (January 26, 2026)
 
-> **READ THIS BEFORE DOING ANYTHING ELSE**
+> **STATUS: RESOLVED**
 
-The application has a **critical authentication bug** that makes it completely unusable. After successful login, the frontend does NOT send the Authorization header with API requests, causing all protected endpoints to return 401 Unauthorized.
+The critical authentication bug has been **FIXED**. The application now works correctly.
 
-**See**: `TODO_LIST.md` → "CRITICAL BUG: Authentication Failure After Login" section for full details and fix plan.
+**Root Cause**: Wrong localStorage key (`'token'` instead of `'access_token'`) in:
+- `frontend/app_v2.js` line 4090
+- `frontend/sales_marketing.js` line 973
 
-**Quick Summary**:
-- Login succeeds (POST /token → 200 OK)
-- Dashboard briefly flashes, then redirects back to login
-- Cause: Authorization header not being sent with fetch() calls
-- Fix plan: 3 phases with 8 tasks documented in TODO_LIST.md
-
-**Do NOT work on any other tasks until this bug is fixed.**
+**Fixes Applied**:
+- Fixed localStorage key references
+- Updated API_BASE to use `window.location.origin`
+- Updated admin credentials to `admin@certifyintel.com` / `MSFWINTERCLINIC2026`
+- Added password visibility toggle on login page
 
 ---
 
@@ -46,6 +46,8 @@ The application has a **critical authentication bug** that makes it completely u
 
 ## Quick Start
 
+> **For detailed setup instructions, see [`SETUP_GUIDE.md`](SETUP_GUIDE.md)**
+
 ```bash
 cd backend
 python main.py
@@ -53,7 +55,7 @@ python main.py
 
 Then open: http://localhost:8000
 
-**Default Login:** `admin@certifyhealth.com` / `certifyintel2024`
+**Default Login:** `admin@certifyintel.com` / `MSFWINTERCLINIC2026`
 
 **Password Reset (if needed):**
 ```bash
@@ -64,9 +66,9 @@ from dotenv import load_dotenv
 from database import SessionLocal, User
 load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY', '')
-new_hash = hashlib.sha256(f'{SECRET_KEY}certifyintel2024'.encode()).hexdigest()
+new_hash = hashlib.sha256(f'{SECRET_KEY}MSFWINTERCLINIC2026'.encode()).hexdigest()
 db = SessionLocal()
-user = db.query(User).filter(User.email == 'admin@certifyhealth.com').first()
+user = db.query(User).filter(User.email == 'admin@certifyintel.com').first()
 if user: user.hashed_password = new_hash; db.commit(); print('Password reset!')
 db.close()
 "
@@ -91,7 +93,7 @@ db.close()
 ### Pending/Blocked Features
 | Module | Status | Reason |
 |--------|--------|--------|
-| **Authentication Bug** | 🔴 **CRITICAL** | Frontend not sending Authorization header - app unusable |
+| **Authentication Bug** | ✅ **FIXED** | Fixed Jan 26, 2026 - Wrong localStorage key was root cause |
 | Desktop App (v5.0.3) | 🔴 BLOCKED | PyInstaller .env path issue |
 | Vertex AI Integration (v5.3.0) | ⏳ PROPOSED | Pending approval - 30 tasks, 6-8 weeks |
 
@@ -101,11 +103,11 @@ db.close()
 
 | # | Task ID | Description | Date |
 |---|---------|-------------|------|
-| 1 | 5.2.0-003 | Shared annotations - Team notes on competitors | Jan 26, 2026 |
-| 2 | 5.2.0-002 | Role-based dashboards - Custom views per role | Jan 26, 2026 |
-| 3 | 5.2.0-001 | Multi-user improvements - Team collaboration | Jan 26, 2026 |
-| 4 | 5.1.0-003 | CI/CD pipeline - GitHub Actions & GitLab CI | Jan 26, 2026 |
-| 5 | 5.1.0-002 | Cloud deployment guide (AWS/GCP/Azure) | Jan 26, 2026 |
+| 1 | SETUP-GUIDE | Created cross-platform setup guide (Windows/Mac) | Jan 26, 2026 |
+| 2 | AUTH-FIX | Fixed critical authentication bug (wrong localStorage key) | Jan 26, 2026 |
+| 3 | CREDS-UPDATE | Updated admin credentials and added password toggle | Jan 26, 2026 |
+| 4 | 5.2.0-003 | Shared annotations - Team notes on competitors | Jan 26, 2026 |
+| 5 | 5.2.0-002 | Role-based dashboards - Custom views per role | Jan 26, 2026 |
 
 ---
 
@@ -113,11 +115,11 @@ db.close()
 
 | # | Task ID | Description | Priority | Blocker |
 |---|---------|-------------|----------|---------|
-| 1 | **AUTH-1.1** | **Fix authentication bug - Phase 1 debugging** | **CRITICAL** | None - Start here |
-| 2 | **AUTH-2.1** | **Fix authentication bug - Phase 2 storage fix** | **CRITICAL** | Depends on AUTH-1 |
-| 3 | **AUTH-3.1** | **Fix authentication bug - Phase 3 cache bust** | **CRITICAL** | Depends on AUTH-2 |
-| 4 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | Auth bug must be fixed first |
-| 5 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
+| 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | None |
+| 2 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
+| 3 | VERTEX-1.2 | Configure Vertex AI APIs | MEDIUM | Depends on VERTEX-1.1 |
+| 4 | VERTEX-2.1 | Implement RAG Engine | MEDIUM | Depends on VERTEX-1 |
+| 5 | VERTEX-2.2 | Set up Vector Search | MEDIUM | Depends on VERTEX-1 |
 
 ---
 
@@ -724,6 +726,7 @@ Dimension Metadata → DimensionAnalyzer → SalesMarketingModule
 
 | File | Purpose |
 |------|---------|
+| `SETUP_GUIDE.md` | **Quick start for new users (Windows/Mac)** |
 | `TODO_LIST.md` | Master task tracking (check first!) |
 | `CLAUDE.md` | This file - development documentation |
 | `docs/SALES_MARKETING_MODULE_PLAN.md` | Sales module design |
