@@ -562,11 +562,57 @@ The bug was **NOT** any of the initially suspected causes. The actual root cause
 
 ### Notifications - Optional
 
-| ID | Task | Status | Priority | Instructions |
-|----|------|--------|----------|--------------|
-| NOTIF-001 | Configure Email (SMTP) | PENDING | MEDIUM | Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD to `.env` |
-| NOTIF-002 | Configure Slack Webhook | PENDING | LOW | https://api.slack.com/messaging/webhooks → Create webhook → Add to `.env` as `SLACK_WEBHOOK_URL=` |
-| NOTIF-003 | Configure Teams Webhook | PENDING | LOW | Create incoming webhook in Teams → Add to `.env` as `TEAMS_WEBHOOK_URL=` |
+| ID | Task | Status | Priority | Due Date | Instructions |
+|----|------|--------|----------|----------|--------------|
+| NOTIF-001 | Configure Email (SMTP) | PENDING | **HIGH** | **02/02/2026** | See detailed steps below |
+| NOTIF-002 | Configure Slack Webhook | PENDING | LOW | - | https://api.slack.com/messaging/webhooks → Create webhook → Add to `.env` as `SLACK_WEBHOOK_URL=` |
+| NOTIF-003 | Configure Teams Webhook | PENDING | LOW | - | Create incoming webhook in Teams → Add to `.env` as `TEAMS_WEBHOOK_URL=` |
+
+---
+
+### 📧 NOTIF-001: Gmail SMTP Email Setup (DUE: 02/02/2026)
+
+> **Status**: PENDING
+> **Priority**: HIGH
+> **Purpose**: Enable real email invites when using "Send Invite" feature
+
+#### Step 1: Create Gmail App Password
+
+1. Go to: https://myaccount.google.com/apppasswords
+2. Sign in to your Google account
+3. If prompted, enable 2-Step Verification first at https://myaccount.google.com/signinoptions/twosv
+4. Select **App**: Mail
+5. Select **Device**: Windows Computer
+6. Click **"Generate"**
+7. Copy the 16-character password (e.g., `abcd efgh ijkl mnop`)
+
+#### Step 2: Edit `.env` File
+
+Open: `c:\Users\conno\Downloads\Project_Intel_v5.0.1\backend\.env`
+
+Find these lines at the bottom and replace with your actual values:
+
+```env
+SMTP_USER=YOUR_GMAIL@gmail.com        ← Replace with your Gmail address
+SMTP_PASSWORD=YOUR_APP_PASSWORD_HERE  ← Replace with App Password (no spaces)
+ALERT_FROM_EMAIL=YOUR_GMAIL@gmail.com ← Replace with your Gmail address
+```
+
+#### Step 3: Restart the Server
+
+```bash
+cd c:\Users\conno\Downloads\Project_Intel_v5.0.1\backend
+python main.py
+```
+
+#### Step 4: Test the Invite
+
+1. Click "Send Invite" in the app
+2. Enter email: `cbh76@georgetown.edu`
+3. Check inbox for welcome email with:
+   - Temporary password: `Welcome123!`
+   - Link to http://localhost:8000
+   - Instructions to change password after first login
 
 ---
 
@@ -1273,5 +1319,5 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 
 ---
 
-**Last Session Update**: January 26, 2026, 4:15 PM EST
-**Updated By**: Claude Opus 4.5 (Vertex AI Planning Session)
+**Last Session Update**: January 26, 2026, 10:30 PM EST
+**Updated By**: Claude Opus 4.5 (Bug Fixes & Email Setup Session)

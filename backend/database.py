@@ -713,6 +713,42 @@ class TeamActivity(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class NewsArticleCache(Base):
+    """
+    Cache for fetched news articles (v5.0.8).
+
+    Stores news articles to reduce API calls and improve load times.
+    Articles are automatically refreshed by the background scheduler.
+    """
+    __tablename__ = "news_article_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    competitor_name = Column(String, index=True)
+
+    # Article data
+    title = Column(String)
+    url = Column(String, index=True)  # Dedupe key
+    source = Column(String)  # e.g., "TechCrunch", "Reuters"
+    source_type = Column(String)  # google_news, sec_edgar, gnews, mediastack, newsdata
+    published_at = Column(DateTime, index=True)
+    snippet = Column(Text, nullable=True)
+
+    # Analysis
+    sentiment = Column(String)  # positive, neutral, negative
+    event_type = Column(String, nullable=True)  # funding, acquisition, product_launch, partnership, leadership
+    is_major_event = Column(Boolean, default=False)
+
+    # Dimension tags (v5.0.8)
+    dimension_tags = Column(Text, nullable=True)  # JSON: [{"dimension": "pricing_flexibility", "confidence": 0.8}]
+
+    # Metadata
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+    cache_expires_at = Column(DateTime, index=True)  # Auto-refresh after this time
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 

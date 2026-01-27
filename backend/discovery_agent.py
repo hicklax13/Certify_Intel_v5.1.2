@@ -50,20 +50,25 @@ class DiscoveryAgent:
     Gemini is ~90% cheaper for bulk qualification tasks.
     """
 
-    def __init__(self, use_live_search: bool = True, use_ai: bool = False, prefer_provider: str = None):
+    def __init__(self, use_live_search: bool = True, use_ai: bool = False, use_openai: bool = None, prefer_provider: str = None):
         """
         Initialize the Discovery Agent.
 
         Args:
             use_live_search: If True, use real DuckDuckGo search. If False, use seed list.
             use_ai: If True, use AI for advanced qualification (Gemini or OpenAI).
+            use_openai: Alias for use_ai (backwards compatibility).
             prefer_provider: "gemini", "openai", or None (auto-select based on config/availability).
         """
         self.use_live_search = use_live_search and DDGS_AVAILABLE
 
+        # Support both use_ai and use_openai for backwards compatibility
+        effective_use_ai = use_ai or (use_openai if use_openai is not None else False)
+
         # v5.0.2: Determine AI provider
         self.prefer_provider = prefer_provider or os.getenv("AI_PROVIDER", "hybrid")
-        self.use_ai = use_ai and (OPENAI_AVAILABLE or GEMINI_AVAILABLE)
+        self.use_ai = effective_use_ai and (OPENAI_AVAILABLE or GEMINI_AVAILABLE)
+        self.use_openai = self.use_ai  # Backwards compatibility
 
         # Initialize Gemini provider if available
         self.gemini_provider = None

@@ -304,6 +304,10 @@ function showPage(pageName) {
             break;
         case 'settings':
             loadSettings();
+            initKnowledgeBaseStatus();  // v5.0.8: Init KB import status
+            break;
+        case 'verification':
+            loadVerificationQueue();  // v5.0.8: Verification queue page
             break;
     }
 }
@@ -664,7 +668,7 @@ async function triggerScrapeAll() {
     showInlineRefreshProgress();
 
     try {
-        const result = await fetchAPI('/api/scrape/all');
+        const result = await fetchAPI('/api/scrape/all', { method: 'POST' });
 
         if (result && result.total) {
             // Start polling for inline progress
@@ -5110,6 +5114,409 @@ const promptCache = {
     ...storedPrompts     // Override with any stored values
 };
 
+// ============== Knowledge Base Import (v5.0.8) ==============
+
+/**
+ * Initialize Knowledge Base Import status on Settings page load
+ */
+async function initKnowledgeBaseStatus() {
+    try {
+        // Scan folder to get file count
+        const scanRes = await fetchAPI('/api/knowledge-base/scan');
+        if (scanRes && Array.isArray(scanRes)) {
+            document.getElementById('kbFilesCount').textContent = scanRes.length;
+        }
+
+        // Get verification queue count
+        const queueRes = await fetchAPI('/api/knowledge-base/verification-queue');
+        if (queueRes && Array.isArray(queueRes)) {
+            document.getElementById('kbPendingCount').textContent = queueRes.length;
+        }
+
+        // Get competitor count
+        const competitorsRes = await fetchAPI('/api/knowledge-base/competitor-names');
+        if (competitorsRes && competitorsRes.count) {
+            document.getElementById('kbCompetitorsCount').textContent = competitorsRes.count;
+        }
+    } catch (error) {
+        console.error('Error initializing KB status:', error);
+    }
+}
+
+/**
+ * Preview what would be imported from the knowledge base
+ */
+async function previewKBImport() {
+    const resultsDiv = document.getElementById('kbImportResults');
+    const contentDiv = document.getElementById('kbImportResultsContent');
+
+    resultsDiv.style.display = 'block';
+    contentDiv.innerHTML = '<div class="loading">Scanning knowledge base files...</div>';
+
+    try {
+        const result = await fetchAPI('/api/knowledge-base/preview');
+
+        if (result) {
+            let html = `
+                <div style="background: var(--glass-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center;">
+                        <div>
+                            <strong>${result.total_files}</strong><br>
+                            <span style="font-size: 0.85em; color: var(--text-secondary);">Files Scanned</span>
+                        </div>
+                        <div>
+                            <strong>${result.files_parsed}</strong><br>
+                            <span style="font-size: 0.85em; color: var(--text-secondary);">Files Parsed</span>
+                        </div>
+                        <div>
+                            <strong>${result.competitors_found}</strong><br>
+                            <span style="font-size: 0.85em; color: var(--text-secondary);">Records Found</span>
+                        </div>
+                        <div>
+                            <strong style="color: #4CAF50;">${result.unique_competitors}</strong><br>
+                            <span style="font-size: 0.85em; color: var(--text-secondary);">Unique Competitors</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (result.competitors && result.competitors.length > 0) {
+                html += '<h5>Competitors to Import:</h5>';
+                html += '<div style="max-height: 300px; overflow-y: auto; background: var(--card-bg); border-radius: 8px; padding: 10px;">';
+                html += '<table style="width: 100%; font-size: 0.85em;">';
+                html += '<thead><tr><th>Name</th><th>Website</th><th>Fields</th></tr></thead><tbody>';
+
+                for (const comp of result.competitors.slice(0, 50)) {
+                    html += `<tr>
+                        <td><strong>${comp.canonical_name}</strong></td>
+                        <td>${comp.website || '-'}</td>
+                        <td>${comp.fields_populated} fields</td>
+                    </tr>`;
+                }
+
+                if (result.competitors.length > 50) {
+                    html += `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">... and ${result.competitors.length - 50} more</td></tr>`;
+                }
+
+                html += '</tbody></table></div>';
+            }
+
+            if (result.errors && result.errors.length > 0) {
+                html += `<div style="margin-top: 10px; color: #F44336;"><strong>Errors (${result.errors.length}):</strong> ${result.errors[0]}</div>`;
+            }
+
+            contentDiv.innerHTML = html;
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div style="color: #F44336;">Error: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Run the actual import from knowledge base
+ */
+async function runKBImport() {
+    if (!confirm('This will import all competitor data from the Certify Health knowledge base. Continue?')) {
+        return;
+    }
+
+    const resultsDiv = document.getElementById('kbImportResults');
+    const contentDiv = document.getElementById('kbImportResultsContent');
+
+    resultsDiv.style.display = 'block';
+    contentDiv.innerHTML = '<div class="loading">Importing competitors...</div>';
+
+    try {
+        const result = await fetchAPI('/api/knowledge-base/import', {
+            method: 'POST',
+            body: JSON.stringify({ dry_run: false, overwrite_existing: false })
+        });
+
+        if (result && result.success) {
+            let html = `
+                <div style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0;">✓ Import Complete!</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;">
+                        <div>
+                            <strong style="font-size: 1.5em;">${result.competitors_imported}</strong><br>
+                            New Competitors
+                        </div>
+                        <div>
+                            <strong style="font-size: 1.5em;">${result.competitors_updated}</strong><br>
+                            Updated
+                        </div>
+                        <div>
+                            <strong style="font-size: 1.5em;">${result.competitors_skipped}</strong><br>
+                            Skipped
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (result.imported && result.imported.length > 0) {
+                html += '<h5>Imported Competitors:</h5>';
+                html += '<div style="max-height: 200px; overflow-y: auto;">';
+
+                for (const comp of result.imported.slice(0, 20)) {
+                    const badge = comp.is_new
+                        ? '<span class="source-badge-client">NEW</span>'
+                        : '<span class="source-badge-client verified">UPDATED</span>';
+                    html += `<div style="padding: 5px 0; border-bottom: 1px solid var(--border-color);">
+                        ${badge} ${comp.name}
+                    </div>`;
+                }
+
+                if (result.imported.length > 20) {
+                    html += `<div style="padding: 10px; text-align: center; color: var(--text-secondary);">... and ${result.imported.length - 20} more</div>`;
+                }
+
+                html += '</div>';
+            }
+
+            contentDiv.innerHTML = html;
+
+            // Refresh competitor list
+            await loadCompetitors();
+
+            // Update KB status
+            await initKnowledgeBaseStatus();
+
+            showNotification('Knowledge base import complete!', 'success');
+        } else {
+            contentDiv.innerHTML = `<div style="color: #F44336;">Import failed: ${result?.errors?.join(', ') || 'Unknown error'}</div>`;
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div style="color: #F44336;">Error: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Render source badge for data from Certify Health
+ */
+function renderSourceBadge(source) {
+    if (!source) return '';
+
+    if (source.source_type === 'client_provided') {
+        const verifiedClass = source.is_verified ? 'verified' : 'unverified';
+        const tooltip = source.is_verified
+            ? `Verified by ${source.verified_by || 'admin'}`
+            : 'Pending verification';
+        return `<span class="source-badge-client ${verifiedClass}" title="${tooltip}">Certify Health</span>`;
+    }
+
+    // Default source icons for other types
+    const icons = {
+        'sec_filing': '📊',
+        'api': '🔗',
+        'website_scrape': '🌐',
+        'manual': '✏️',
+        'news': '📰'
+    };
+
+    return `<span class="source-icon ${source.source_type}" title="${source.source_name || source.source_type}">${icons[source.source_type] || '📄'}</span>`;
+}
+
+// ============== Verification Queue (v5.0.8) ==============
+
+let verificationQueueData = [];
+
+/**
+ * Load and display the verification queue
+ */
+async function loadVerificationQueue() {
+    const queueDiv = document.getElementById('verificationQueue');
+    const pendingCount = document.getElementById('verifyPendingCount');
+
+    queueDiv.innerHTML = '<div class="loading">Loading verification queue...</div>';
+
+    try {
+        const result = await fetchAPI('/api/knowledge-base/verification-queue');
+        verificationQueueData = result || [];
+
+        if (pendingCount) {
+            pendingCount.textContent = verificationQueueData.length;
+        }
+
+        if (!verificationQueueData.length) {
+            queueDiv.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <div style="font-size: 3em; margin-bottom: 10px;">✓</div>
+                    <h3>All Clear!</h3>
+                    <p>No data pending verification.</p>
+                    <button class="btn btn-secondary" onclick="navigateTo('settings')">← Back to Settings</button>
+                </div>
+            `;
+            return;
+        }
+
+        // Group by competitor
+        const byCompetitor = {};
+        for (const item of verificationQueueData) {
+            if (!byCompetitor[item.competitor_name]) {
+                byCompetitor[item.competitor_name] = [];
+            }
+            byCompetitor[item.competitor_name].push(item);
+        }
+
+        let html = '';
+        for (const [compName, items] of Object.entries(byCompetitor)) {
+            html += `
+                <div class="verification-competitor" style="background: var(--card-bg); border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
+                    <div style="background: var(--glass-bg); padding: 12px 15px; border-bottom: 1px solid var(--border-color);">
+                        <strong>${compName}</strong>
+                        <span style="color: var(--text-secondary); font-size: 0.85em; margin-left: 10px;">${items.length} fields</span>
+                    </div>
+                    <div style="padding: 15px;">
+            `;
+
+            for (const item of items) {
+                html += `
+                    <div class="verification-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color);" data-source-id="${item.source_id}">
+                        <div>
+                            <div style="font-weight: 500;">${item.field_name.replace(/_/g, ' ')}</div>
+                            <div style="color: var(--primary-color); font-size: 0.95em;">${item.value}</div>
+                            <div style="font-size: 0.8em; color: var(--text-secondary);">
+                                <span class="source-badge-client unverified">Certify Health</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn btn-sm btn-primary" onclick="approveVerification(${item.source_id})" title="Approve">✓</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editVerification(${item.source_id}, '${item.value.replace(/'/g, "\\'")}')" title="Edit">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="rejectVerification(${item.source_id})" title="Reject">✗</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div></div>';
+        }
+
+        queueDiv.innerHTML = html;
+
+    } catch (error) {
+        queueDiv.innerHTML = `<div style="color: #F44336; padding: 20px;">Error loading queue: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Approve a single verification item
+ */
+async function approveVerification(sourceId) {
+    try {
+        await fetchAPI(`/api/knowledge-base/verification/approve/${sourceId}`, { method: 'POST' });
+
+        // Remove from UI
+        const itemDiv = document.querySelector(`[data-source-id="${sourceId}"]`);
+        if (itemDiv) {
+            itemDiv.style.background = '#4CAF5020';
+            itemDiv.innerHTML = '<div style="padding: 10px; color: #4CAF50;">✓ Approved</div>';
+            setTimeout(() => itemDiv.remove(), 1000);
+        }
+
+        // Update count
+        const pendingCount = document.getElementById('verifyPendingCount');
+        if (pendingCount) {
+            pendingCount.textContent = Math.max(0, parseInt(pendingCount.textContent) - 1);
+        }
+
+        showNotification('Data point approved', 'success');
+
+    } catch (error) {
+        showNotification('Failed to approve: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Edit a verification item value
+ */
+async function editVerification(sourceId, currentValue) {
+    const newValue = prompt('Edit value:', currentValue);
+
+    if (newValue !== null && newValue !== currentValue) {
+        try {
+            await fetchAPI(`/api/knowledge-base/verification/approve/${sourceId}?corrected_value=${encodeURIComponent(newValue)}`, {
+                method: 'POST'
+            });
+
+            // Remove from UI
+            const itemDiv = document.querySelector(`[data-source-id="${sourceId}"]`);
+            if (itemDiv) {
+                itemDiv.style.background = '#4CAF5020';
+                itemDiv.innerHTML = `<div style="padding: 10px; color: #4CAF50;">✓ Updated to "${newValue}"</div>`;
+                setTimeout(() => itemDiv.remove(), 1500);
+            }
+
+            showNotification('Data point updated and approved', 'success');
+
+        } catch (error) {
+            showNotification('Failed to update: ' + error.message, 'error');
+        }
+    }
+}
+
+/**
+ * Reject a verification item
+ */
+async function rejectVerification(sourceId) {
+    if (!confirm('Reject this data point? It will be removed from the competitor record.')) {
+        return;
+    }
+
+    try {
+        await fetchAPI(`/api/knowledge-base/verification/reject/${sourceId}`, { method: 'POST' });
+
+        // Remove from UI
+        const itemDiv = document.querySelector(`[data-source-id="${sourceId}"]`);
+        if (itemDiv) {
+            itemDiv.style.background = '#F4433620';
+            itemDiv.innerHTML = '<div style="padding: 10px; color: #F44336;">✗ Rejected</div>';
+            setTimeout(() => itemDiv.remove(), 1000);
+        }
+
+        // Update count
+        const pendingCount = document.getElementById('verifyPendingCount');
+        if (pendingCount) {
+            pendingCount.textContent = Math.max(0, parseInt(pendingCount.textContent) - 1);
+        }
+
+        showNotification('Data point rejected', 'info');
+
+    } catch (error) {
+        showNotification('Failed to reject: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Bulk approve all visible verification items
+ */
+async function bulkApproveVerification() {
+    if (!verificationQueueData.length) {
+        showNotification('No items to approve', 'info');
+        return;
+    }
+
+    if (!confirm(`Approve all ${verificationQueueData.length} data points?`)) {
+        return;
+    }
+
+    try {
+        const sourceIds = verificationQueueData.map(item => item.source_id);
+
+        await fetchAPI('/api/knowledge-base/verification/bulk-approve', {
+            method: 'POST',
+            body: JSON.stringify(sourceIds)
+        });
+
+        showNotification(`Approved ${sourceIds.length} data points`, 'success');
+
+        // Reload queue
+        await loadVerificationQueue();
+
+    } catch (error) {
+        showNotification('Bulk approve failed: ' + error.message, 'error');
+    }
+}
+
 function openPromptEditor() {
     const modal = document.getElementById('promptModal');
     if (modal) modal.classList.add('active');
@@ -5301,15 +5708,18 @@ async function submitCorrection(event, id, field) {
     const sourceUrl = formData.get('source_url');
     const notes = formData.get('notes');
 
-    // Create partial update payload
-    const payload = {};
-    payload[field] = value;
-    if (notes) payload.notes = notes;
+    // Use the correction endpoint with proper payload structure
+    const payload = {
+        field: field,
+        new_value: value,
+        source_url: sourceUrl || null,
+        reason: notes || "Manual Correction"
+    };
 
     try {
-        // Try PUT (assuming backend supports partial update)
-        const res = await fetchAPI(`/api/competitors/${id}`, {
-            method: 'PUT',
+        // Use POST to /correct endpoint (designed for partial updates)
+        const res = await fetchAPI(`/api/competitors/${id}/correct`, {
+            method: 'POST',
             body: JSON.stringify(payload)
         });
 

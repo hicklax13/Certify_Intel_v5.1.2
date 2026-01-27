@@ -1388,6 +1388,40 @@
                     </div>
                 </div>
 
+                <!-- Knowledge Base Import (v5.0.8) -->
+                <div class="settings-card full-width icon-card" id="knowledgeBaseImport" style="border: 1px solid #4CAF50;">
+                    <h3>📁 Knowledge Base Import</h3>
+                    <p style="margin-bottom: 15px;">Import competitor data from Certify Health's knowledge base files. All imported data will be labeled as "Source: Certify Health".</p>
+
+                    <div id="kbImportStatus" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: var(--primary-color);" id="kbFilesCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Files Found</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: #4CAF50;" id="kbCompetitorsCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Competitors</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: #FFA726;" id="kbPendingCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Pending Verification</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="previewKBImport()">👁️ Preview Import</button>
+                        <button class="btn btn-primary" onclick="runKBImport()">📥 Import All</button>
+                        <button class="btn btn-secondary" onclick="navigateTo('verification')">✓ Verification Queue</button>
+                    </div>
+
+                    <div id="kbImportResults" style="margin-top: 15px; display: none;">
+                        <h4>Import Results</h4>
+                        <div id="kbImportResultsContent"></div>
+                    </div>
+                </div>
+
                 <div class="settings-card full-width icon-card" style="border: 1px solid var(--primary-color);">
                     <h3>🤖 AI Admin & Knowledge Base</h3>
                     <p>Manage AI personas, prompts, and internal knowledge sources (RAG).</p>
@@ -1398,6 +1432,35 @@
                     </div>
                 </div>
     </div>
+    </section>
+
+    <!-- Verification Queue Page (v5.0.8) -->
+    <section id="verificationPage" class="page">
+        <div class="page-header">
+            <h2>✓ Data Verification Queue</h2>
+            <p style="color: var(--text-secondary);">Review and verify data imported from Certify Health knowledge base.</p>
+        </div>
+
+        <div class="verification-controls" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="bulkApproveVerification()">✓ Approve All Visible</button>
+            <button class="btn btn-secondary" onclick="loadVerificationQueue()">↺ Refresh</button>
+            <button class="btn btn-secondary" onclick="navigateTo('settings')">← Back to Settings</button>
+        </div>
+
+        <div class="verification-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="stat-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: 600; color: #FFA726;" id="verifyPendingCount">0</div>
+                <div style="font-size: 0.85em; color: var(--text-secondary);">Pending Review</div>
+            </div>
+            <div class="stat-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: 600; color: #4CAF50;" id="verifyApprovedCount">0</div>
+                <div style="font-size: 0.85em; color: var(--text-secondary);">Approved</div>
+            </div>
+        </div>
+
+        <div id="verificationQueue" class="verification-list">
+            <div class="loading">Loading verification queue...</div>
+        </div>
     </section>
     </main>
 

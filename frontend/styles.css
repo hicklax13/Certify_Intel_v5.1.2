@@ -2751,6 +2751,47 @@ h4::after,
     background: var(--bg-tertiary);
 }
 
+/* Client Provided - Certify Health (v5.0.8) */
+.source-icon.client-provided {
+    color: #fff;
+    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+}
+
+.source-icon.client-provided:hover {
+    background: linear-gradient(135deg, #66BB6A 0%, #388E3C 100%);
+}
+
+.source-badge-client {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.source-badge-client.unverified {
+    background: linear-gradient(135deg, #FFA726 0%, #F57C00 100%);
+}
+
+.source-badge-client.verified {
+    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+}
+
+.source-badge-client::before {
+    content: "CH";
+    font-weight: 700;
+    margin-right: 2px;
+}
+
+.source-badge-client.verified::after {
+    content: " ✓";
+}
+
 /* Source tooltip on hover */
 .source-tooltip {
     position: absolute;

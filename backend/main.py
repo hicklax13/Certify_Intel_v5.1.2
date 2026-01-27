@@ -142,6 +142,7 @@ WHITE_FILL = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="so
 
 # Known healthcare IT public companies with tickers
 KNOWN_TICKERS = {
+    # Healthcare IT
     "phreesia": {"symbol": "PHR", "exchange": "NYSE", "name": "Phreesia Inc"},
     "health catalyst": {"symbol": "HCAT", "exchange": "NASDAQ", "name": "Health Catalyst Inc"},
     "veeva": {"symbol": "VEEV", "exchange": "NYSE", "name": "Veeva Systems Inc"},
@@ -150,7 +151,71 @@ KNOWN_TICKERS = {
     "hims & hers": {"symbol": "HIMS", "exchange": "NYSE", "name": "Hims & Hers Health Inc"},
     "definitive healthcare": {"symbol": "DH", "exchange": "NASDAQ", "name": "Definitive Healthcare Corp"},
     "carecloud": {"symbol": "CCLD", "exchange": "NASDAQ", "name": "CareCloud Inc"},
+    # Major Tech Companies
+    "apple": {"symbol": "AAPL", "exchange": "NASDAQ", "name": "Apple Inc"},
+    "microsoft": {"symbol": "MSFT", "exchange": "NASDAQ", "name": "Microsoft Corporation"},
+    "google": {"symbol": "GOOGL", "exchange": "NASDAQ", "name": "Alphabet Inc"},
+    "alphabet": {"symbol": "GOOGL", "exchange": "NASDAQ", "name": "Alphabet Inc"},
+    "amazon": {"symbol": "AMZN", "exchange": "NASDAQ", "name": "Amazon.com Inc"},
+    "meta": {"symbol": "META", "exchange": "NASDAQ", "name": "Meta Platforms Inc"},
+    "facebook": {"symbol": "META", "exchange": "NASDAQ", "name": "Meta Platforms Inc"},
+    "nvidia": {"symbol": "NVDA", "exchange": "NASDAQ", "name": "NVIDIA Corporation"},
+    "tesla": {"symbol": "TSLA", "exchange": "NASDAQ", "name": "Tesla Inc"},
+    "oracle": {"symbol": "ORCL", "exchange": "NYSE", "name": "Oracle Corporation"},
+    "salesforce": {"symbol": "CRM", "exchange": "NYSE", "name": "Salesforce Inc"},
+    "adobe": {"symbol": "ADBE", "exchange": "NASDAQ", "name": "Adobe Inc"},
+    "ibm": {"symbol": "IBM", "exchange": "NYSE", "name": "International Business Machines"},
+    "intel": {"symbol": "INTC", "exchange": "NASDAQ", "name": "Intel Corporation"},
+    "cisco": {"symbol": "CSCO", "exchange": "NASDAQ", "name": "Cisco Systems Inc"},
+    # Healthcare/Insurance
+    "unitedhealth": {"symbol": "UNH", "exchange": "NYSE", "name": "UnitedHealth Group Inc"},
+    "cvs health": {"symbol": "CVS", "exchange": "NYSE", "name": "CVS Health Corporation"},
+    "cigna": {"symbol": "CI", "exchange": "NYSE", "name": "The Cigna Group"},
+    "anthem": {"symbol": "ELV", "exchange": "NYSE", "name": "Elevance Health Inc"},
+    "elevance": {"symbol": "ELV", "exchange": "NYSE", "name": "Elevance Health Inc"},
+    "humana": {"symbol": "HUM", "exchange": "NYSE", "name": "Humana Inc"},
+    "epic systems": {"symbol": None, "exchange": None, "name": "Epic Systems Corporation"},  # Private
+    "cerner": {"symbol": "ORCL", "exchange": "NYSE", "name": "Cerner (Oracle Health)"},  # Acquired by Oracle
+    "athenahealth": {"symbol": None, "exchange": None, "name": "athenahealth"},  # Private (PE owned)
 }
+
+
+def lookup_ticker_dynamically(company_name: str) -> dict:
+    """
+    Try to find ticker symbol for a company using yfinance.
+    Returns dict with symbol, exchange, name or None values if not found.
+    """
+    try:
+        import yfinance as yf
+        # Common patterns to try
+        search_terms = [
+            company_name,
+            company_name.replace(" ", ""),
+            company_name.split()[0] if " " in company_name else company_name
+        ]
+
+        for term in search_terms:
+            try:
+                ticker = yf.Ticker(term)
+                info = ticker.info
+                if info and info.get('symbol') and info.get('shortName'):
+                    exchange = info.get('exchange', 'UNKNOWN')
+                    # Map exchange codes to readable names
+                    exchange_map = {
+                        'NMS': 'NASDAQ', 'NGM': 'NASDAQ', 'NCM': 'NASDAQ',
+                        'NYQ': 'NYSE', 'NYSE': 'NYSE', 'PCX': 'NYSE ARCA'
+                    }
+                    return {
+                        "symbol": info.get('symbol'),
+                        "exchange": exchange_map.get(exchange, exchange),
+                        "name": info.get('shortName') or info.get('longName')
+                    }
+            except:
+                continue
+        return None
+    except Exception as e:
+        print(f"Dynamic ticker lookup failed for {company_name}: {e}")
+        return None
 
 # Database Models imported from database.py
 
@@ -4612,7 +4677,7 @@ async def bulk_update_competitors(
 
 
 # Import routers
-from routers import reports, discovery, sales_marketing, teams
+from routers import reports, discovery, sales_marketing, teams, knowledge_base
 import api_routes
 
 # Include routers
@@ -4621,6 +4686,7 @@ app.include_router(api_routes.router)  # Covers analytics, winloss, external, et
 app.include_router(teams.router)  # Team Features (v5.2.0)
 app.include_router(reports.router)
 app.include_router(sales_marketing.router)  # Sales & Marketing Module (v5.0.7)
+app.include_router(knowledge_base.router)  # Knowledge Base Import (v5.0.8)
 
 app.add_middleware(
     CORSMiddleware,
@@ -4674,13 +4740,27 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db), curr
 async def create_competitor(competitor: CompetitorCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     db_competitor = Competitor(**competitor.model_dump())
 
-    # Auto-classify Public/Private
+    # Auto-classify Public/Private - Check known tickers first, then try dynamic lookup
     comp_lower = db_competitor.name.lower()
+    ticker_info = None
+
+    # 1. Check known tickers dictionary
     if comp_lower in KNOWN_TICKERS:
-        info = KNOWN_TICKERS[comp_lower]
+        ticker_info = KNOWN_TICKERS[comp_lower]
+    else:
+        # 2. Try dynamic lookup via yfinance
+        ticker_info = lookup_ticker_dynamically(db_competitor.name)
+
+    # Apply ticker info if found
+    if ticker_info and ticker_info.get("symbol"):
         db_competitor.is_public = True
-        db_competitor.ticker_symbol = info["symbol"]
-        db_competitor.stock_exchange = info["exchange"]
+        db_competitor.ticker_symbol = ticker_info["symbol"]
+        db_competitor.stock_exchange = ticker_info.get("exchange", "UNKNOWN")
+        print(f"[AUTO-DETECT] {db_competitor.name} identified as public: {ticker_info['symbol']} on {ticker_info.get('exchange')}")
+    elif ticker_info and ticker_info.get("symbol") is None:
+        # Explicitly marked as private in KNOWN_TICKERS
+        db_competitor.is_public = False
+        print(f"[AUTO-DETECT] {db_competitor.name} identified as private company")
 
     db.add(db_competitor)
     db.commit()
@@ -6363,9 +6443,11 @@ def get_news_feed(
     try:
         from news_monitor import NewsMonitor
         from datetime import datetime, timedelta
+        from database import NewsArticleCache
 
         monitor = NewsMonitor()
         all_articles = []
+        cache_used = False
 
         # Get competitors to fetch news for
         competitors_query = db.query(Competitor).filter(Competitor.is_deleted == False)
@@ -6373,7 +6455,81 @@ def get_news_feed(
             competitors_query = competitors_query.filter(Competitor.id == competitor_id)
         competitors_list = competitors_query.all()
 
-        # Determine date range (default to last 30 days)
+        # v5.0.8: Check cache first
+        cache_query = db.query(NewsArticleCache).filter(
+            NewsArticleCache.cache_expires_at > datetime.utcnow()
+        )
+        if competitor_id:
+            cache_query = cache_query.filter(NewsArticleCache.competitor_id == competitor_id)
+
+        cached_articles = cache_query.order_by(NewsArticleCache.published_at.desc()).limit(500).all()
+
+        if cached_articles:
+            cache_used = True
+            for cached in cached_articles:
+                all_articles.append({
+                    "competitor_id": cached.competitor_id,
+                    "competitor_name": cached.competitor_name,
+                    "title": cached.title,
+                    "url": cached.url,
+                    "source": cached.source,
+                    "source_type": cached.source_type or "google_news",
+                    "published_at": cached.published_at.isoformat() if cached.published_at else "",
+                    "snippet": cached.snippet or "",
+                    "sentiment": cached.sentiment or "neutral",
+                    "event_type": cached.event_type or "general",
+                    "is_major_event": cached.is_major_event or False,
+                    "cached": True
+                })
+
+        # If no cache, fetch live (limited to prevent timeout)
+        if not cache_used and len(competitors_list) <= 10:
+            # Determine date range (default to last 30 days)
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                except ValueError:
+                    start_dt = datetime.utcnow() - timedelta(days=30)
+            else:
+                start_dt = datetime.utcnow() - timedelta(days=30)
+
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                except ValueError:
+                    end_dt = datetime.utcnow()
+            else:
+                end_dt = datetime.utcnow()
+
+            # Calculate days to look back
+            days_lookback = (datetime.utcnow() - start_dt).days + 1
+
+            # Fetch news for each competitor
+            for comp in competitors_list:
+                try:
+                    digest = monitor.fetch_news(comp.name, days=days_lookback)
+
+                    # Add competitor info to each article
+                    for article in digest.articles:
+                        article_dict = {
+                            "competitor_id": comp.id,
+                            "competitor_name": comp.name,
+                            "title": article.title,
+                            "url": article.url,
+                            "source": article.source,
+                            "source_type": "google_news",  # Default source type
+                            "published_at": article.published_date,
+                            "snippet": article.snippet,
+                            "sentiment": article.sentiment,
+                            "event_type": article.event_type or "general",
+                            "is_major_event": article.is_major_event
+                        }
+                        all_articles.append(article_dict)
+                except Exception as e:
+                    print(f"Error fetching news for {comp.name}: {e}")
+                    continue
+
+        # Parse date range for filtering
         if start_date:
             try:
                 start_dt = datetime.strptime(start_date, '%Y-%m-%d')
@@ -6389,34 +6545,6 @@ def get_news_feed(
                 end_dt = datetime.utcnow()
         else:
             end_dt = datetime.utcnow()
-
-        # Calculate days to look back
-        days_lookback = (datetime.utcnow() - start_dt).days + 1
-
-        # Fetch news for each competitor
-        for comp in competitors_list:
-            try:
-                digest = monitor.fetch_news(comp.name, days=days_lookback)
-
-                # Add competitor info to each article
-                for article in digest.articles:
-                    article_dict = {
-                        "competitor_id": comp.id,
-                        "competitor_name": comp.name,
-                        "title": article.title,
-                        "url": article.url,
-                        "source": article.source,
-                        "source_type": "google_news",  # Default source type
-                        "published_at": article.published_date,
-                        "snippet": article.snippet,
-                        "sentiment": article.sentiment,
-                        "event_type": article.event_type or "general",
-                        "is_major_event": article.is_major_event
-                    }
-                    all_articles.append(article_dict)
-            except Exception as e:
-                print(f"Error fetching news for {comp.name}: {e}")
-                continue
 
         # Filter by date range
         filtered_articles = []
@@ -6500,6 +6628,95 @@ def get_news_feed(
             "pagination": {"page": 1, "page_size": page_size, "total_items": 0, "total_pages": 1},
             "error": str(e)
         }
+
+
+@app.post("/api/news-feed/refresh-cache")
+def refresh_news_cache(
+    background_tasks: BackgroundTasks,
+    competitor_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Manually refresh the news cache for competitors.
+
+    v5.0.8: Fetches fresh news and stores in NewsArticleCache table.
+
+    Args:
+        competitor_id: Optional - refresh only this competitor
+    """
+    from database import NewsArticleCache
+    from news_monitor import NewsMonitor
+    from datetime import datetime, timedelta
+
+    def do_refresh():
+        monitor = NewsMonitor()
+        refreshed = 0
+
+        # Get competitors
+        query = db.query(Competitor).filter(Competitor.is_deleted == False)
+        if competitor_id:
+            query = query.filter(Competitor.id == competitor_id)
+
+        competitors = query.all()
+
+        for comp in competitors:
+            try:
+                digest = monitor.fetch_news(comp.name, days=7)
+
+                for article in digest.articles:
+                    # Check if article already exists
+                    existing = db.query(NewsArticleCache).filter(
+                        NewsArticleCache.url == article.url
+                    ).first()
+
+                    if existing:
+                        # Update expiry
+                        existing.cache_expires_at = datetime.utcnow() + timedelta(hours=4)
+                    else:
+                        # Parse published date
+                        pub_date = None
+                        if article.published_date:
+                            for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%a, %d %b %Y %H:%M:%S %Z"]:
+                                try:
+                                    pub_date = datetime.strptime(article.published_date[:19], fmt[:19])
+                                    break
+                                except:
+                                    continue
+
+                        # Create new cache entry
+                        cache_entry = NewsArticleCache(
+                            competitor_id=comp.id,
+                            competitor_name=comp.name,
+                            title=article.title,
+                            url=article.url,
+                            source=article.source,
+                            source_type="google_news",
+                            published_at=pub_date or datetime.utcnow(),
+                            snippet=article.snippet,
+                            sentiment=article.sentiment,
+                            event_type=article.event_type,
+                            is_major_event=article.is_major_event,
+                            fetched_at=datetime.utcnow(),
+                            cache_expires_at=datetime.utcnow() + timedelta(hours=4)
+                        )
+                        db.add(cache_entry)
+                        refreshed += 1
+
+                db.commit()
+
+            except Exception as e:
+                print(f"Error refreshing news for {comp.name}: {e}")
+                continue
+
+        print(f"[News Cache] Refreshed {refreshed} articles for {len(competitors)} competitors")
+
+    # Run in background
+    background_tasks.add_task(do_refresh)
+
+    return {
+        "status": "started",
+        "message": f"Refreshing news cache for {'all' if not competitor_id else 'competitor ' + str(competitor_id)} competitors"
+    }
 
 
 @app.get("/api/alerts/price-changes")
@@ -6775,43 +6992,8 @@ def get_most_competitive(limit: int = 5):
         return {"error": str(e)}
 
 
-@app.get("/api/scrape/all")
-async def trigger_scrape_all(
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Trigger a live refresh of all competitor data."""
-    from refresh_orchestrator import refresh_orchestrator
-
-    # Log the refresh action with user info
-    user_email = current_user.get("email", "unknown")
-    user_id = current_user.get("id")
-
-    # Count competitors for immediate response
-    count = db.query(Competitor).filter(Competitor.is_deleted == False).count()
-
-    # Log this activity (shared across all users)
-    log_activity(
-        db, user_email, user_id,
-        "data_refresh",
-        {"action": "full_refresh", "competitor_count": count, "triggered_by": user_email}
-    )
-
-    # Run full refresh in background
-    async def run_refresh():
-        result = await refresh_orchestrator.refresh_all(priority_order=False)
-        print(f"Refresh complete: {result}")
-
-    background_tasks.add_task(asyncio.create_task, run_refresh())
-
-    return {
-        "success": True,
-        "message": f"Live refresh started for {count} competitors by {user_email}",
-        "count": count,
-        "triggered_by": user_email,
-        "note": "Check /api/refresh/history for results"
-    }
+# NOTE: GET /api/scrape/all removed - use POST /api/scrape/all instead (defined at line ~5015)
+# The POST endpoint provides full progress tracking and RefreshSession audit trail
 
 
 @app.get("/api/refresh/history")
@@ -7055,8 +7237,11 @@ def get_users(db: Session = Depends(get_db)):
 
 @app.post("/api/users/invite")
 def invite_user(invite: UserInviteRequest, db: Session = Depends(get_db)):
-    """Invite a new user (creates account with default password)."""
+    """Invite a new user (creates account and sends email invite)."""
     from extended_features import auth_manager
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
 
     existing = db.query(User).filter(User.email == invite.email).first()
     if existing:
@@ -7072,7 +7257,126 @@ def invite_user(invite: UserInviteRequest, db: Session = Depends(get_db)):
         role=invite.role
     )
 
-    return {"message": f"User {invite.email} invited successfully. Default password: {default_password}"}
+    # Try to send email invite
+    email_sent = False
+    smtp_host = os.getenv("SMTP_HOST", "")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    from_email = os.getenv("ALERT_FROM_EMAIL", smtp_user)
+
+    if smtp_host and smtp_user and smtp_password:
+        try:
+            # Build email
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = "🎉 You're Invited to Certify Intel!"
+            msg["From"] = from_email
+            msg["To"] = invite.email
+
+            # Get server URL for the invite link
+            server_host = os.getenv("HOST", "localhost")
+            server_port = os.getenv("PORT", "8000")
+            app_url = f"http://{server_host}:{server_port}"
+            if server_host == "0.0.0.0":
+                app_url = "http://localhost:8000"
+
+            # Plain text version
+            text_body = f"""
+Hello {invite.full_name or 'there'}!
+
+You've been invited to join Certify Intel - the Competitive Intelligence Platform.
+
+Your Account Details:
+- Email: {invite.email}
+- Temporary Password: {default_password}
+- Role: {invite.role}
+
+To get started:
+1. Go to: {app_url}
+2. Log in with your email and temporary password
+3. Change your password after first login
+
+If you have any questions, contact your administrator.
+
+Best regards,
+The Certify Intel Team
+"""
+
+            # HTML version
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+        .content {{ background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }}
+        .credentials {{ background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0; }}
+        .btn {{ display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+        .footer {{ text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Welcome to Certify Intel!</h1>
+            <p>Competitive Intelligence Platform</p>
+        </div>
+        <div class="content">
+            <p>Hello <strong>{invite.full_name or 'there'}</strong>!</p>
+            <p>You've been invited to join Certify Intel - your team's competitive intelligence command center.</p>
+
+            <div class="credentials">
+                <h3>📧 Your Login Credentials</h3>
+                <p><strong>Email:</strong> {invite.email}</p>
+                <p><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 8px; border-radius: 4px;">{default_password}</code></p>
+                <p><strong>Role:</strong> {invite.role}</p>
+            </div>
+
+            <h3>🚀 Getting Started</h3>
+            <ol>
+                <li>Click the button below to access Certify Intel</li>
+                <li>Log in with your email and temporary password</li>
+                <li>Change your password after first login</li>
+            </ol>
+
+            <center>
+                <a href="{app_url}" class="btn">Access Certify Intel →</a>
+            </center>
+
+            <div class="footer">
+                <p>If you have any questions, contact your administrator.</p>
+                <p>© 2026 Certify Intel | Competitive Intelligence Platform</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+            msg.attach(MIMEText(text_body, "plain"))
+            msg.attach(MIMEText(html_body, "html"))
+
+            # Send email
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.sendmail(from_email, [invite.email], msg.as_string())
+
+            email_sent = True
+            print(f"[INVITE] Email sent successfully to {invite.email}")
+
+        except Exception as e:
+            print(f"[INVITE] Failed to send email to {invite.email}: {e}")
+
+    response_msg = f"User {invite.email} invited successfully."
+    if email_sent:
+        response_msg += " Email invite sent!"
+    else:
+        response_msg += f" (Email not sent - SMTP not configured). Default password: {default_password}"
+
+    return {"message": response_msg, "email_sent": email_sent, "default_password": default_password if not email_sent else None}
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
