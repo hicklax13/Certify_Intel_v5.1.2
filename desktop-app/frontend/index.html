@@ -5,20 +5,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Certify Intel - Competitive Intelligence Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="mobile-responsive.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700&display=swap"
         rel="stylesheet">
+    <link rel="icon" type="image/jpeg" href="browser_tab_icon.jpg">
 </head>
 
 <body>
+    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+        <span>☰</span>
+    </button>
+    <div class="mobile-overlay" onclick="toggleSidebar()"></div>
+
     <div id="app">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="mainSidebar">
+            <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebarCollapse()" title="Toggle Sidebar">
+                <span class="toggle-chevron">◀</span>
+            </button>
             <div class="logo">
-                <img src="logo.png" alt="Certify Intel" class="logo-img"
+                <img src="certify_intel_logo.png" alt="Certify Intel" class="logo-img"
                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                 <h1 class="logo-fallback-hidden">Certify<span>Intel</span></h1>
             </div>
@@ -38,11 +48,17 @@
                 <a href="#" class="nav-item" data-page="changes">
                     <span class="icon">🔔</span> Change Log
                 </a>
+                <a href="#" class="nav-item" data-page="newsfeed">
+                    <span class="icon">📰</span> News Feed
+                </a>
                 <a href="#" class="nav-item" data-page="analytics">
                     <span class="icon">📈</span> Analytics & Reports
                 </a>
                 <a href="#" class="nav-item" data-page="battlecards">
                     <span class="icon">🃏</span> Battlecards
+                </a>
+                <a href="#" class="nav-item" data-page="salesmarketing">
+                    <span class="icon">🎯</span> Sales & Marketing
                 </a>
                 <a href="#" class="nav-item" data-page="dataquality">
                     <span class="icon">✅</span> Data Quality
@@ -96,12 +112,28 @@
                     <button class="btn btn-primary" onclick="triggerScrapeAll()">
                         🔄 Refresh Data
                     </button>
-                    <div class="user-menu">
-                        <span class="user-avatar">CI</span>
-                        <button class="btn btn-secondary" onclick="logout()"
-                            style="margin-left: 8px; padding: 6px 12px; font-size: 0.85em;">
-                            🚪 Logout
-                        </button>
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar" onclick="toggleUserDropdown()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        <div class="user-dropdown" id="userDropdown">
+                            <div class="dropdown-user-info">
+                                <strong id="userName">User</strong>
+                                <span id="userEmail">user@certifyhealth.com</span>
+                                <span class="user-role" id="userRole">Analyst</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" id="inviteUserLink" onclick="showInviteUserModal()" style="display: none;">
+                                👤 Invite Team Member
+                            </a>
+                            <a href="#" class="dropdown-item" onclick="logout()">
+                                🚪 Logout
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -113,23 +145,68 @@
                     <p class="subtitle">Real-time competitor monitoring for Certify Health</p>
                 </div>
 
+                <!-- Last Data Refresh Indicator -->
+                <div class="data-refresh-indicator" id="dataRefreshIndicator">
+                    <div class="refresh-status">
+                        <span class="refresh-icon">🔄</span>
+                        <div class="refresh-info">
+                            <span class="refresh-label">Last Data Refresh:</span>
+                            <span class="refresh-time" id="lastRefreshTime">Loading...</span>
+                        </div>
+                    </div>
+                    <p class="refresh-description">Data is automatically refreshed from all connected sources. Click "Refresh Data" to manually update.</p>
+                </div>
+
+                <!-- Data Refresh Progress (Inline) - Phase 1: Task 5.0.1-023 -->
+                <div id="inlineRefreshProgress" class="inline-refresh-progress" style="display: none;">
+                    <div class="refresh-progress-header">
+                        <div class="refresh-progress-title">
+                            <span class="refresh-icon spinning">🔄</span>
+                            <span>Refreshing Competitor Data...</span>
+                        </div>
+                        <span id="inlineProgressPercent" class="progress-percent">0%</span>
+                    </div>
+                    <div class="inline-progress-bar-container">
+                        <div id="inlineProgressBar" class="inline-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="refresh-progress-details">
+                        <span id="inlineProgressText">Starting...</span>
+                        <span id="inlineProgressCount">0 / 0 competitors</span>
+                    </div>
+                    <div id="inlineProgressLive" class="refresh-live-updates">
+                        <!-- Live updates will appear here -->
+                    </div>
+                </div>
+
+                <!-- AI-Generated Executive Summary -->
                 <!-- AI-Generated Executive Summary -->
                 <div id="aiSummaryCard" class="ai-summary-card">
                     <div class="ai-summary-header">
                         <div class="ai-summary-title-group">
-                            <img id="aiProviderLogo"
-                                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Cpath d='M22.28 9.9c.5-1.47.73-3.02.68-4.55A5.38 5.38 0 0 0 17.73.42a5.29 5.29 0 0 0-5.14 1.24A5.29 5.29 0 0 0 4.63.68 5.38 5.38 0 0 0 .88 6.75c-.2 1.52.05 3.05.72 4.44a5.35 5.35 0 0 0 .68 8.3 5.28 5.28 0 0 0 5.14.12 5.29 5.29 0 0 0 7.96.98 5.38 5.38 0 0 0 3.75-6.07c.68-1.3.98-2.76.88-4.22l-.73.6z'/%3E%3C/svg%3E"
-                                alt="AI" class="ai-provider-logo">
+                            <button id="aiSummaryToggle" class="ai-summary-toggle" onclick="toggleAISummary()" title="Expand/Collapse">
+                                <span class="toggle-icon">▼</span>
+                            </button>
+                            <div id="aiProviderLogo" class="ai-provider-logo" style="width: 32px; height: 32px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a2 2 0 0 1 0 4h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a2 2 0 0 1 0-4h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+                                    <circle cx="7.5" cy="14.5" r="1.5" fill="white"/>
+                                    <circle cx="16.5" cy="14.5" r="1.5" fill="white"/>
+                                </svg>
+                            </div>
                             <h3 class="ai-summary-title">AI-Generated Executive Summary</h3>
                         </div>
-                        <div class="ai-model-info">
-                            <span id="aiModelBadge" class="ai-model-badge">GPT-4</span>
-                            <span class="ai-badge">AI Generated</span>
+                        <div class="ai-actions">
+                            <button id="editPromptBtn" class="btn btn-secondary btn-sm" title="Edit Instructions">⚙️
+                                Edit Prompt</button>
+                            <button id="btnGenerateSummary" class="btn btn-primary btn-sm" onclick="startAISummary()">✨
+                                Generate Summary</button>
+                            <button id="btnClearSummary" class="btn btn-secondary btn-sm" onclick="clearAISummary()">🗑️
+                                Clear</button>
                         </div>
                     </div>
                     <div id="aiSummaryContent" class="ai-summary-content">
-                        <div class="ai-loading">
-                            <span class="ai-spinner">⏳</span> Generating comprehensive strategic insights...
+                        <div class="ai-empty-state">
+                            Ready to generate insights. Click "Generate Summary" to start.
                         </div>
                     </div>
                     <div id="aiSummaryMeta" class="ai-summary-meta"></div>
@@ -145,6 +222,69 @@
                                 placeholder="Ask a question about competitors, pricing, threats..."
                                 onkeypress="if(event.key==='Enter') sendAIChat()">
                             <button class="btn btn-primary ai-chat-send" onclick="sendAIChat()">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompt Editor Modal -->
+                <div id="promptEditorModal" class="company-list-modal" style="display: none;">
+                    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;"
+                        onclick="closePromptEditorModal()">
+                        <div style="background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;"
+                            onclick="event.stopPropagation()">
+                            <div
+                                style="background: #1B2B65; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; color: white !important;">Edit AI Instructions</h3>
+                                <button onclick="closePromptEditorModal()"
+                                    style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">×</button>
+                            </div>
+                            <div style="padding: 20px; overflow-y: auto;">
+                                <!-- Saved Prompts Section -->
+                                <div class="saved-prompts-section" style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <label style="font-weight: 600; font-size: 14px;">📁 My Saved Prompts</label>
+                                        <button class="btn btn-sm btn-secondary" onclick="refreshSavedPrompts()" style="padding: 4px 10px; font-size: 12px;">🔄 Refresh</button>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <select id="savedPromptsSelect" style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                                            <option value="">-- Select a saved prompt --</option>
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" onclick="loadSelectedPrompt()" style="padding: 8px 12px;">Load</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="deleteSelectedPrompt()" style="padding: 8px 12px; color: #dc3545;">🗑️</button>
+                                    </div>
+                                </div>
+
+                                <!-- Prompt Editor -->
+                                <div class="form-group">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Executive
+                                        Summary Prompt</label>
+                                    <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Instructions for the
+                                        AI on how to format and focus the Weekly Executive Briefing.</p>
+                                    <textarea id="summaryPromptInput"
+                                        style="width: 100%; height: 250px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+
+                                <!-- Save As New Section -->
+                                <div class="save-new-section" style="margin-top: 16px; padding: 15px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">💾 Save As New Prompt</label>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <input type="text" id="newPromptName" placeholder="Enter prompt name (e.g., 'Weekly Brief v2')"
+                                            style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                                        <button class="btn btn-primary btn-sm" onclick="saveAsNewPrompt()" style="padding: 8px 16px; white-space: nowrap;">Save As New</button>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                    <button class="btn btn-secondary" onclick="loadDefaultPrompt()" style="padding: 10px 16px;">
+                                        🔄 Load Default
+                                    </button>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn btn-secondary" onclick="closePromptEditorModal()">Cancel</button>
+                                        <button class="btn btn-primary" onclick="saveSystemPrompt('dashboard_summary')">Save Changes</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -187,6 +327,61 @@
                             <span class="stat-label">Low Threat</span>
                         </div>
                         <div class="stat-tooltip stat-tooltip-hidden" id="tooltip-low"></div>
+                    </div>
+                </div>
+
+                <!-- Quick Action Cards (v5.4.0 Enhancement) -->
+                <div class="quick-actions-section">
+                    <h3 class="section-title">Quick Actions</h3>
+                    <div class="quick-actions-grid">
+                        <div class="quick-action-card" onclick="triggerScrapeAll()">
+                            <div class="quick-action-icon">🔄</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Refresh All Data</span>
+                                <span class="quick-action-desc">Update all competitor information</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showDiscoveryPanel()">
+                            <div class="quick-action-icon">🔍</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Discover Competitors</span>
+                                <span class="quick-action-desc">Find new competitors with AI</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="generateQuickReport()">
+                            <div class="quick-action-icon">📊</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Generate Report</span>
+                                <span class="quick-action-desc">Create executive summary PDF</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showPage('comparison')">
+                            <div class="quick-action-icon">⚖️</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Compare Competitors</span>
+                                <span class="quick-action-desc">Side-by-side analysis</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showPage('newsfeed')">
+                            <div class="quick-action-icon">📰</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Latest News</span>
+                                <span class="quick-action-desc">View competitive intelligence news</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showSchedulerModal()">
+                            <div class="quick-action-icon">⏰</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Schedule Refresh</span>
+                                <span class="quick-action-desc">Configure auto-refresh timing</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
                     </div>
                 </div>
 
@@ -267,31 +462,61 @@
             <section id="discoveredPage" class="page">
                 <div class="page-header">
                     <h2>🔮 Discovered Competitors</h2>
-                    <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="openScoutInstructionsModal()">✏️ Edit AI Instructions</button>
+                        <button class="btn btn-secondary" onclick="toggleConfigPanel()">⚙️ Configure & Schedule</button>
+                        <button class="btn btn-primary" onclick="runDiscovery()">🔍 Run Discovery</button>
+                    </div>
                 </div>
 
-                <!-- Editable Scoring Criteria -->
-                <div class="criteria-editor">
-                    <div class="criteria-header">
-                        <h3 class="criteria-title">📋 Discovery Scoring Criteria</h3>
-                        <button class="btn btn-secondary criteria-reset-btn" onclick="resetCriteria()">Reset to
-                            Default</button>
+
+                <!-- Advanced Configuration Panel -->
+                <div id="discoveryConfigPanel" class="config-panel"
+                    style="display: none; padding: 20px; background: var(--bg-card); border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                    <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+                        <!-- Column 1: AI Context Refinement -->
+                        <div class="config-chat">
+                            <h3 style="margin-top: 0;">Refine Scope with AI</h3>
+                            <p class="text-secondary" style="font-size: 0.9em; margin-bottom: 10px;">Tell the AI what to
+                                look for (e.g., "Exclude variations of 'consulting'").</p>
+                            <div id="configChatMessages" class="chat-messages"
+                                style="height: 150px; overflow-y: auto; background: var(--bg-main); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.9em;">
+                                <div class="chat-message system">Ready to refine discovery criteria.</div>
+                            </div>
+                            <div class="chat-input-row" style="display: flex; gap: 10px;">
+                                <input type="text" id="configChatInput" class="form-control"
+                                    placeholder="e.g. 'Add dental software to core keywords'"
+                                    onkeypress="if(event.key==='Enter') sendConfigChat()">
+                                <button class="btn btn-primary" onclick="sendConfigChat()">Refine</button>
+                            </div>
+                        </div>
+
+                        <!-- Column 2: Scheduler & JSON Preview -->
+                        <div class="config-schedule">
+                            <h3 style="margin-top: 0;">Schedule Run</h3>
+                            <p class="text-secondary" style="font-size: 0.9em; margin-bottom: 10px;">Schedule a one-off
+                                Discovery Agent job.</p>
+                            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                                <div style="flex-grow: 1;">
+                                    <label class="form-label">Date & Time</label>
+                                    <input type="datetime-local" id="scheduleRunTime" class="form-control">
+                                </div>
+                                <button class="btn btn-secondary" onclick="scheduleRun()">📅 Schedule</button>
+                            </div>
+
+                            <div style="margin-top: 15px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                    <label class="form-label" style="margin: 0;">Current Context Analysis</label>
+                                    <button class="btn btn-sm btn-link" onclick="loadDiscoveryContext()">🔄
+                                        Refresh</button>
+                                </div>
+                                <pre id="jsonContextPreview"
+                                    style="background: #111; color: #4ade80; padding: 10px; border-radius: 4px; max-height: 100px; overflow-y: auto; font-size: 0.75em; border: 1px solid #333;"></pre>
+                            </div>
+                        </div>
                     </div>
-                    <p class="criteria-description">
-                        Edit the criteria below to customize what the Discovery Agent searches for. Each criterion is
-                        weighted in the relevance score.
-                    </p>
-                    <textarea id="discoveryCriteria" rows="10" class="criteria-textarea"
-                        aria-label="Discovery scoring criteria" title="Edit the criteria for competitor discovery"
-                        placeholder="Enter discovery criteria here">• Target Market: Patient engagement, patient intake, healthcare check-in solutions
-• Company Size: 50-5000 employees (growth-stage or established)
-• Geography: US-based or significant US presence
-• Product Focus: Digital check-in, eligibility verification, patient payments, scheduling
-• Technology: Cloud-based SaaS, mobile-first, EHR integrations
-• Funding: Series A+ or profitable private company
-• Customer Base: Medical practices, health systems, ambulatory care
-• Competitive Signals: Similar keywords, overlapping customer segments
-• Exclude: Pure EHR vendors, hospital-only solutions, international-only</textarea>
                 </div>
 
                 <div class="discovery-info">
@@ -309,17 +534,122 @@
                 </div>
             </section>
 
+            <!-- Scout AI Instructions Modal -->
+            <div id="scoutInstructionsModal" class="company-list-modal" style="display: none;">
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;"
+                    onclick="closeScoutInstructionsModal()">
+                    <div style="background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;"
+                        onclick="event.stopPropagation()">
+                        <div style="background: #1B2B65; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; color: white !important;">🔮 Certify Scout - AI Instructions</h3>
+                            <button onclick="closeScoutInstructionsModal()"
+                                style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 20px; overflow-y: auto;">
+                            <!-- Scout Goal Description -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+                                <h4 style="margin: 0 0 8px 0; color: #0369a1;">About Certify Scout</h4>
+                                <p style="margin: 0; font-size: 14px; color: #475569;">
+                                    The Certify Scout Discovery Agent autonomously searches for new competitors in the healthcare IT space.
+                                    It uses DuckDuckGo search, web scraping, and AI qualification to identify companies that may compete with Certify Health.
+                                </p>
+                            </div>
+
+                            <!-- Scout System Prompt -->
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Scout AI System Prompt</label>
+                                <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                                    This prompt tells the AI what to look for when qualifying potential competitors.
+                                    The Scout uses this to score websites (0-100) on how relevant they are.
+                                </p>
+                                <textarea id="scoutPromptInput"
+                                    style="width: 100%; height: 300px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical; line-height: 1.5;"></textarea>
+                            </div>
+
+                            <!-- Quick Tips -->
+                            <div style="margin-top: 16px; padding: 15px; background: #fefce8; border-radius: 8px; border: 1px solid #fde047;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">💡 Tips for Effective Discovery</label>
+                                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #713f12;">
+                                    <li>Be specific about target markets (e.g., "ambulatory care", "urgent care")</li>
+                                    <li>List key product categories (e.g., "patient intake", "eligibility verification")</li>
+                                    <li>Include exclusions (e.g., "NOT pharmaceutical companies")</li>
+                                    <li>Mention company characteristics (e.g., "US-based", "50-500 employees")</li>
+                                </ul>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                <button class="btn btn-secondary" onclick="loadDefaultScoutPrompt()" style="padding: 10px 16px;">
+                                    🔄 Load Default
+                                </button>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn btn-secondary" onclick="closeScoutInstructionsModal()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="saveScoutPrompt()">Save Instructions</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Comparison Page -->
             <section id="comparisonPage" class="page">
                 <div class="page-header">
                     <h2>Competitor Comparison</h2>
                 </div>
-                <div class="comparison-selector">
-                    <label>Select competitors to compare:</label>
-                    <div id="comparisonChecklist"></div>
-                    <button class="btn btn-primary" onclick="runComparison()">Compare Selected</button>
+
+                <!-- Comparison Type Tabs -->
+                <div class="comparison-tabs">
+                    <button class="comparison-tab active" onclick="switchComparisonTab('general')" data-tab="general">
+                        📊 General Comparison
+                    </button>
+                    <button class="comparison-tab" onclick="switchComparisonTab('products')" data-tab="products">
+                        📦 Product Matrix
+                    </button>
+                    <button class="comparison-tab" onclick="switchComparisonTab('dimensions')" data-tab="dimensions">
+                        🎯 Dimension Scores
+                    </button>
                 </div>
-                <div id="comparisonResults"></div>
+
+                <!-- General Comparison Tab -->
+                <div id="comparisonTabGeneral" class="comparison-tab-content active">
+                    <div class="comparison-selector">
+                        <label>Select competitors to compare:</label>
+                        <div id="comparisonChecklist"></div>
+                        <button class="btn btn-primary" onclick="runComparison()">Compare Selected</button>
+                    </div>
+                    <div id="comparisonResults"></div>
+                </div>
+
+                <!-- Product Comparison Matrix Tab (v5.4.0) -->
+                <div id="comparisonTabProducts" class="comparison-tab-content" style="display: none;">
+                    <div class="product-comparison-header">
+                        <h3>📦 Product Comparison Matrix</h3>
+                        <p class="subtitle">Compare product offerings across competitors</p>
+                    </div>
+                    <div class="product-comparison-selector">
+                        <label>Select competitors for product comparison:</label>
+                        <div id="productComparisonChecklist" class="competitor-checklist-grid"></div>
+                        <button class="btn btn-primary" onclick="runProductComparison()">Compare Products</button>
+                    </div>
+                    <div id="productComparisonResults"></div>
+                </div>
+
+                <!-- Dimension Scores Tab -->
+                <div id="comparisonTabDimensions" class="comparison-tab-content" style="display: none;">
+                    <div class="dimension-comparison-header">
+                        <h3>🎯 Dimension Score Comparison</h3>
+                        <p class="subtitle">Compare competitive evaluation dimensions</p>
+                    </div>
+                    <div class="dimension-comparison-selector">
+                        <label>Select competitors for dimension comparison:</label>
+                        <div id="dimensionComparisonChecklist" class="competitor-checklist-grid"></div>
+                        <button class="btn btn-primary" onclick="runDimensionComparison()">Compare Dimensions</button>
+                    </div>
+                    <div id="dimensionComparisonResults">
+                        <div id="dimensionRadarContainer" style="max-width: 600px; margin: 24px auto;"></div>
+                    </div>
+                </div>
             </section>
 
             <!-- Changes Page -->
@@ -346,6 +676,144 @@
                 </div>
                 <div id="changesList" class="changes-list-full">
                     <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- News Feed Page (v5.0.3 - Phase 1) -->
+            <section id="newsfeedPage" class="page">
+                <div class="page-header">
+                    <h2>📰 News Feed</h2>
+                    <p class="subtitle">Aggregated news and intelligence from multiple sources</p>
+                </div>
+
+                <!-- Filters Bar -->
+                <div class="news-feed-filters">
+                    <div class="filter-group">
+                        <label for="newsCompetitorFilter">Competitor</label>
+                        <select id="newsCompetitorFilter" onchange="loadNewsFeed()">
+                            <option value="">All Competitors</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsDateFrom">From Date</label>
+                        <input type="date" id="newsDateFrom" onchange="loadNewsFeed()">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsDateTo">To Date</label>
+                        <input type="date" id="newsDateTo" onchange="loadNewsFeed()">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsSentimentFilter">Sentiment</label>
+                        <select id="newsSentimentFilter" onchange="loadNewsFeed()">
+                            <option value="">All Sentiment</option>
+                            <option value="positive">🟢 Positive</option>
+                            <option value="neutral">🟡 Neutral</option>
+                            <option value="negative">🔴 Negative</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsSourceFilter">Source</label>
+                        <select id="newsSourceFilter" onchange="loadNewsFeed()">
+                            <option value="">All Sources</option>
+                            <option value="google_news">Google News</option>
+                            <option value="sec_edgar">SEC EDGAR</option>
+                            <option value="newsapi">NewsAPI</option>
+                            <option value="gnews">GNews</option>
+                            <option value="mediastack">MediaStack</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="newsEventFilter">Event Type</label>
+                        <select id="newsEventFilter" onchange="loadNewsFeed()">
+                            <option value="">All Events</option>
+                            <option value="funding">💰 Funding</option>
+                            <option value="acquisition">🤝 Acquisition</option>
+                            <option value="product_launch">🚀 Product Launch</option>
+                            <option value="partnership">🔗 Partnership</option>
+                            <option value="leadership">👔 Leadership</option>
+                            <option value="financial">📊 Financial</option>
+                            <option value="legal">⚖️ Legal</option>
+                            <option value="general">📄 General</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="loadNewsFeed()">
+                        🔍 Search
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetNewsFeedFilters()">
+                        ↺ Reset
+                    </button>
+                </div>
+
+                <!-- News Stats Summary -->
+                <div class="news-feed-stats" id="newsFeedStats">
+                    <div class="news-stat-card">
+                        <span class="stat-value" id="totalNewsCount">-</span>
+                        <span class="stat-label">Total Articles</span>
+                    </div>
+                    <div class="news-stat-card positive">
+                        <span class="stat-value" id="positiveNewsCount">-</span>
+                        <span class="stat-label">Positive</span>
+                    </div>
+                    <div class="news-stat-card neutral">
+                        <span class="stat-value" id="neutralNewsCount">-</span>
+                        <span class="stat-label">Neutral</span>
+                    </div>
+                    <div class="news-stat-card negative">
+                        <span class="stat-value" id="negativeNewsCount">-</span>
+                        <span class="stat-label">Negative</span>
+                    </div>
+                </div>
+
+                <!-- News Feed Loading Indicator -->
+                <div id="newsFeedLoading" class="news-feed-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <span>Loading news articles...</span>
+                </div>
+
+                <!-- News Feed Table -->
+                <div class="news-feed-container">
+                    <table class="news-feed-table" id="newsFeedTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Competitor</th>
+                                <th>Headline</th>
+                                <th>Source</th>
+                                <th>Sentiment</th>
+                                <th>Event Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="newsFeedTableBody">
+                            <!-- Loaded dynamically -->
+                            <tr class="news-empty-state">
+                                <td colspan="7">
+                                    <div class="empty-state-content">
+                                        <span class="empty-icon">📰</span>
+                                        <p>No news articles found. Adjust your filters or refresh data.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="news-feed-pagination" id="newsFeedPagination">
+                    <button class="pagination-btn" id="newsPrevBtn" onclick="loadNewsFeed(currentNewsPage - 1)" disabled>
+                        ← Previous
+                    </button>
+                    <span class="pagination-info" id="newsPageInfo">Page 1 of 1</span>
+                    <button class="pagination-btn" id="newsNextBtn" onclick="loadNewsFeed(currentNewsPage + 1)" disabled>
+                        Next →
+                    </button>
                 </div>
             </section>
 
@@ -446,8 +914,159 @@
                     <h2>Sales Battlecards</h2>
                     <button class="btn btn-secondary" onclick="generateAllBattlecards()">📄 Generate All PDFs</button>
                 </div>
+
+                <!-- v5.0.7: Quick Dimension Scorecard Widget -->
+                <div class="dimension-widget-container" id="battlecardDimensionWidget">
+                    <div class="dimension-widget-header">
+                        <h3>🎯 Quick Dimension Overview</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="showPage('salesmarketing')">
+                            Open Full Module →
+                        </button>
+                    </div>
+                    <div class="dimension-widget-selector">
+                        <select id="battlecardDimensionCompetitor" class="form-select" onchange="loadBattlecardDimensionWidget()">
+                            <option value="">-- Select Competitor for Dimensions --</option>
+                        </select>
+                    </div>
+                    <div id="battlecardDimensionScores" class="dimension-widget-scores">
+                        <p class="sm-placeholder">Select a competitor to see their dimension scores</p>
+                    </div>
+                </div>
+
                 <div class="battlecards-grid" id="battlecardsGrid">
                     <!-- Loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- Sales & Marketing Module Page (v5.0.7) -->
+            <section id="salesmarketingPage" class="page">
+                <div class="page-header">
+                    <h2>🎯 Sales & Marketing Module</h2>
+                    <p class="page-description">Competitive dimensions, battlecards, and sales enablement tools based on 9 key evaluation criteria</p>
+                </div>
+
+                <!-- Sub-navigation Tabs -->
+                <div class="sm-module-tabs">
+                    <button class="sm-tab-btn active" onclick="showSalesMarketingTab('dimensions')">
+                        📊 Dimension Scorecard
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('battlecards')">
+                        ⚔️ Dynamic Battlecards
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('comparison')">
+                        📈 Competitor Comparison
+                    </button>
+                    <button class="sm-tab-btn" onclick="showSalesMarketingTab('talkingpoints')">
+                        💬 Talking Points
+                    </button>
+                </div>
+
+                <!-- Tab Content: Dimension Scorecard -->
+                <div id="sm-dimensionsTab" class="sm-tab-content active">
+                    <div class="sm-filter-bar">
+                        <select id="dimensionCompetitorSelect" class="form-select" onchange="loadCompetitorDimensions()">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="aiSuggestDimensions()">
+                            🤖 AI Suggest Scores
+                        </button>
+                        <button class="btn btn-primary" onclick="saveAllDimensions()">
+                            💾 Save All Changes
+                        </button>
+                    </div>
+
+                    <!-- Dimension Profile Summary -->
+                    <div id="dimensionProfileSummary" class="sm-profile-summary" style="display: none;">
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Overall Score</span>
+                            <span class="sm-summary-value" id="smOverallScore">--</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Strengths</span>
+                            <span class="sm-summary-value sm-strength" id="smStrengthCount">0</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Weaknesses</span>
+                            <span class="sm-summary-value sm-weakness" id="smWeaknessCount">0</span>
+                        </div>
+                        <div class="sm-summary-card">
+                            <span class="sm-summary-label">Sales Priority</span>
+                            <span class="sm-summary-value" id="smSalesPriority">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Dimension Grid -->
+                    <div id="dimensionGrid" class="sm-dimension-grid">
+                        <p class="sm-placeholder">Select a competitor to view and edit their 9-dimension scorecard.</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Dynamic Battlecards -->
+                <div id="sm-battlecardsTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="battlecardCompetitorSelect" class="form-select">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <select id="battlecardType" class="form-select">
+                            <option value="full">Full Battlecard</option>
+                            <option value="quick">Quick Reference (1-Page)</option>
+                            <option value="objection_handler">Objection Handler</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="generateDynamicBattlecard()">
+                            ⚔️ Generate Battlecard
+                        </button>
+                    </div>
+                    <div id="dynamicBattlecardContent" class="sm-battlecard-container">
+                        <p class="sm-placeholder">Select a competitor and battlecard type, then click Generate to create a dimension-based battlecard.</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Competitor Comparison -->
+                <div id="sm-comparisonTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="compareCompetitor1" class="form-select">
+                            <option value="">-- Select Competitor 1 --</option>
+                        </select>
+                        <span class="sm-vs-label">vs</span>
+                        <select id="compareCompetitor2" class="form-select">
+                            <option value="">-- Select Competitor 2 --</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadDimensionComparison()">
+                            Compare Dimensions
+                        </button>
+                        <button class="btn btn-secondary" onclick="compareVsCertify()">
+                            📊 vs Certify Health
+                        </button>
+                    </div>
+                    <div id="comparisonContent" class="sm-comparison-container">
+                        <canvas id="dimensionRadarChart" style="max-height: 400px;"></canvas>
+                        <div id="comparisonDetails" class="sm-comparison-details"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Talking Points -->
+                <div id="sm-talkingpointsTab" class="sm-tab-content" style="display: none;">
+                    <div class="sm-filter-bar">
+                        <select id="talkingPointsCompetitor" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">-- Select Competitor --</option>
+                        </select>
+                        <select id="talkingPointsDimension" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">All Dimensions</option>
+                        </select>
+                        <select id="talkingPointsType" class="form-select" onchange="loadTalkingPoints()">
+                            <option value="">All Types</option>
+                            <option value="strength">Strengths</option>
+                            <option value="weakness">Weaknesses</option>
+                            <option value="objection">Objections</option>
+                            <option value="counter">Counter-Points</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="showAddTalkingPointModal()">
+                            ➕ Add Talking Point
+                        </button>
+                    </div>
+                    <div id="talkingPointsList" class="sm-talking-points-container">
+                        <p class="sm-placeholder">Select a competitor to view talking points organized by dimension.</p>
+                    </div>
                 </div>
             </section>
 
@@ -494,16 +1113,17 @@
                 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <h2>Data Quality Dashboard</h2>
-                        <p>Monitor data completeness, quality scores, and freshness across all competitors</p>
+                        <p>Monitor data completeness, confidence scores, and source attribution across all competitors</p>
                     </div>
                     <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="recalculateAllConfidence()">🔄 Recalculate Scores</button>
                         <button class="btn btn-primary" onclick="verifyAllRecords()">✅ Mark All Verified</button>
                         <button class="btn btn-secondary" onclick="exportQualityReport()">📊 Export Report</button>
                     </div>
                 </div>
 
-                <!-- Quality Summary Cards -->
-                <div class="stats-grid" style="margin-bottom: 2rem;">
+                <!-- Quality Summary Cards - Row 1: Core Metrics -->
+                <div class="stats-grid" style="margin-bottom: 1rem;">
                     <div class="stat-card stat-card-clickable" onclick="showQualityDetails('completeness')">
                         <div class="stat-value" id="overallCompleteness">--</div>
                         <div class="stat-label">Overall Completeness</div>
@@ -524,15 +1144,89 @@
                     </div>
                 </div>
 
-                <!-- Charts Row -->
+                <!-- Confidence Distribution Cards - Row 2 -->
+                <div class="stats-grid confidence-stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('high')" style="border-left: 4px solid #10b981;">
+                        <div class="stat-value confidence-high-value" id="highConfidenceCount">--</div>
+                        <div class="stat-label">High Confidence</div>
+                        <div class="stat-sub" id="highConfidencePercent" style="color: #10b981; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('moderate')" style="border-left: 4px solid #f59e0b;">
+                        <div class="stat-value confidence-moderate-value" id="moderateConfidenceCount">--</div>
+                        <div class="stat-label">Moderate Confidence</div>
+                        <div class="stat-sub" id="moderateConfidencePercent" style="color: #f59e0b; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="filterByConfidence('low')" style="border-left: 4px solid #ef4444;">
+                        <div class="stat-value confidence-low-value" id="lowConfidenceCount">--</div>
+                        <div class="stat-label">Low Confidence</div>
+                        <div class="stat-sub" id="lowConfidencePercent" style="color: #ef4444; font-size: 12px;">--% of data</div>
+                    </div>
+                    <div class="stat-card confidence-stat-card" onclick="showQualityDetails('verified')">
+                        <div class="stat-value" id="verificationRate">--</div>
+                        <div class="stat-label">Verification Rate</div>
+                        <div class="stat-sub" id="verifiedCount" style="color: #64748b; font-size: 12px;">-- verified</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row - Enhanced with Confidence Distribution -->
                 <div class="charts-row" style="margin-bottom: 2rem;">
                     <div class="chart-card">
                         <h3>Quality Tier Distribution</h3>
                         <canvas id="qualityTierChart"></canvas>
                     </div>
                     <div class="chart-card">
+                        <h3>Confidence Distribution</h3>
+                        <canvas id="confidenceDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
                         <h3>Field Coverage Overview</h3>
                         <canvas id="fieldCoverageChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Source Type Breakdown -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>📊 Source Type Breakdown</h3>
+                            <p style="color: var(--text-secondary);">Data points by source type with average confidence scores</p>
+                        </div>
+                    </div>
+                    <div id="sourceTypeBreakdown" class="source-type-grid">
+                        <div class="loading">Loading source breakdown...</div>
+                    </div>
+                </div>
+
+                <!-- Field Confidence Analysis -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>📋 Field Coverage with Confidence</h3>
+                            <p style="color: var(--text-secondary);">Key fields tracked with coverage percentage and average confidence</p>
+                        </div>
+                    </div>
+                    <div id="fieldConfidenceAnalysis" class="field-confidence-grid">
+                        <div class="loading">Loading field analysis...</div>
+                    </div>
+                </div>
+
+                <!-- Competitor Quality Ranking -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3>🏆 Competitor Data Quality Ranking</h3>
+                            <p style="color: var(--text-secondary);">Competitors ranked by average confidence score</p>
+                        </div>
+                        <select id="qualityRankingFilter" onchange="filterQualityRanking()" style="padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            <option value="all">All Tiers</option>
+                            <option value="Excellent">Excellent (70+)</option>
+                            <option value="Good">Good (50-69)</option>
+                            <option value="Fair">Fair (30-49)</option>
+                            <option value="Poor">Poor (&lt;30)</option>
+                        </select>
+                    </div>
+                    <div id="competitorQualityRanking" style="max-height: 400px; overflow-y: auto;">
+                        <div class="loading">Loading competitor rankings...</div>
                     </div>
                 </div>
 
@@ -712,9 +1406,184 @@
                             <span>Daily 6:00 AM</span>
                         </div>
                     </div>
+                    <div class="settings-card full-width">
+                        <h3>Team Management</h3>
+                        <div class="team-header"
+                            style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                            <p>Manage access and roles.</p>
+                            <button class="btn btn-primary btn-sm" onclick="showInviteUserModal()">+ Invite
+                                Member</button>
+                        </div>
+                        <div id="teamList">
+                            <div class="loading">Loading team...</div>
+                        </div>
+                    </div>
                 </div>
-            </section>
-        </main>
+
+                <!-- AI Provider Settings (v5.0.2) -->
+                <div class="settings-card full-width icon-card" id="aiProviderSettings" style="border: 1px solid #10B981;">
+                    <h3>🤖 AI Provider Configuration</h3>
+                    <p style="margin-bottom: 15px;">Configure which AI provider to use for different tasks. <span id="aiProviderVersion" style="color: var(--text-secondary); font-size: 0.85em;">v5.0.2</span></p>
+
+                    <div id="aiProviderStatus" class="ai-provider-status" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <!-- OpenAI Status -->
+                        <div class="provider-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: white; font-size: 16px;">✦</span>
+                                </div>
+                                <div>
+                                    <strong>OpenAI</strong>
+                                    <div id="openaiStatusBadge" class="status-badge" style="margin-left: 0;">Checking...</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">
+                                Model: <span id="openaiModel">gpt-4o-mini</span>
+                            </div>
+                        </div>
+
+                        <!-- Gemini Status -->
+                        <div class="provider-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #4285F4 0%, #8E44AD 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: white; font-size: 16px;">◇</span>
+                                </div>
+                                <div>
+                                    <strong>Google Gemini</strong>
+                                    <div id="geminiStatusBadge" class="status-badge" style="margin-left: 0;">Checking...</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">
+                                Model: <span id="geminiModel">gemini-2.5-flash</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Task Routing Display -->
+                    <div id="aiTaskRouting" style="background: var(--card-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.95em;">Task Routing</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 0.85em;">
+                            <div>
+                                <span style="color: var(--text-secondary);">Data Extraction:</span>
+                                <span id="routingExtraction" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Executive Summary:</span>
+                                <span id="routingSummary" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Bulk Tasks:</span>
+                                <span id="routingBulk" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Quality Tasks:</span>
+                                <span id="routingQuality" style="font-weight: 500; text-transform: capitalize;">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 0.85em; color: var(--text-secondary);">
+                        <strong>Note:</strong> AI provider settings are configured via environment variables. Edit <code>.env</code> to change providers.
+                        <br>• <code>AI_PROVIDER=hybrid</code> - Smart routing (recommended)
+                        <br>• <code>AI_PROVIDER=openai</code> - Use OpenAI for all tasks
+                        <br>• <code>AI_PROVIDER=gemini</code> - Use Gemini for all tasks (90% cheaper)
+                    </div>
+                </div>
+
+                <!-- Knowledge Base Import (v5.0.8) -->
+                <div class="settings-card full-width icon-card" id="knowledgeBaseImport" style="border: 1px solid #4CAF50;">
+                    <h3>📁 Knowledge Base Import</h3>
+                    <p style="margin-bottom: 15px;">Import competitor data from Certify Health's knowledge base files. All imported data will be labeled as "Source: Certify Health".</p>
+
+                    <div id="kbImportStatus" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: var(--primary-color);" id="kbFilesCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Files Found</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: #4CAF50;" id="kbCompetitorsCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Competitors</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 600; color: #FFA726;" id="kbPendingCount">-</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary);">Pending Verification</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="previewKBImport()">👁️ Preview Import</button>
+                        <button class="btn btn-primary" onclick="runKBImport()">📥 Import All</button>
+                        <button class="btn btn-secondary" onclick="navigateTo('verification')">✓ Verification Queue</button>
+                    </div>
+
+                    <div id="kbImportResults" style="margin-top: 15px; display: none;">
+                        <h4>Import Results</h4>
+                        <div id="kbImportResultsContent"></div>
+                    </div>
+                </div>
+
+                <div class="settings-card full-width icon-card" style="border: 1px solid var(--primary-color);">
+                    <h3>🤖 AI Admin & Knowledge Base</h3>
+                    <p>Manage AI personas, prompts, and internal knowledge sources (RAG).</p>
+                    <div class="admin-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="openPromptEditor()">✏️ Edit AI Prompts</button>
+                        <button class="btn btn-secondary" onclick="openKnowledgeBase()">📚 Manage Knowledge
+                            Base</button>
+                    </div>
+                </div>
+    </div>
+    </section>
+
+    <!-- Verification Queue Page (v5.0.8) -->
+    <section id="verificationPage" class="page">
+        <div class="page-header">
+            <h2>✓ Data Verification Queue</h2>
+            <p style="color: var(--text-secondary);">Review and verify data imported from Certify Health knowledge base.</p>
+        </div>
+
+        <div class="verification-controls" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="bulkApproveVerification()">✓ Approve All Visible</button>
+            <button class="btn btn-secondary" onclick="loadVerificationQueue()">↺ Refresh</button>
+            <button class="btn btn-secondary" onclick="navigateTo('settings')">← Back to Settings</button>
+        </div>
+
+        <div class="verification-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="stat-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: 600; color: #FFA726;" id="verifyPendingCount">0</div>
+                <div style="font-size: 0.85em; color: var(--text-secondary);">Pending Review</div>
+            </div>
+            <div class="stat-card" style="background: var(--glass-bg); padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: 600; color: #4CAF50;" id="verifyApprovedCount">0</div>
+                <div style="font-size: 0.85em; color: var(--text-secondary);">Approved</div>
+            </div>
+        </div>
+
+        <div id="verificationQueue" class="verification-list">
+            <div class="loading">Loading verification queue...</div>
+        </div>
+    </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <a href="#" class="bottom-nav-item active" onclick="navigateTo('dashboard'); return false;">
+            <span class="icon">📊</span>
+            <span>Dash</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('competitors'); return false;">
+            <span class="icon">🏢</span>
+            <span>Comps</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('analytics'); return false;">
+            <span class="icon">📈</span>
+            <span>Trends</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('settings'); return false;">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+        </a>
+    </nav>
     </div>
 
     <!-- Modal Template -->
@@ -725,9 +1594,267 @@
         </div>
     </div>
 
+
+    <!-- Prompt Editor Modal -->
+    <div id="promptModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="modal-close" onclick="closePromptModal()">&times;</span>
+            <div class="modal-header">
+                <h2>Edit AI System Prompts</h2>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select Prompt</label>
+                    <select id="promptKeySelector" class="form-control" onchange="loadPromptContent()">
+                        <option value="dashboard_summary">Dashboard Executive Summary</option>
+                        <option value="chat_persona">Chat Analyst Persona</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>System Prompt Content</label>
+                    <textarea id="promptContentEditor" class="form-control" rows="15"
+                        style="font-family: monospace; font-size: 0.9em;"></textarea>
+                </div>
+                <div class="form-actions">
+                    <div id="promptSaveStatus" style="margin-right: 15px; color: var(--success-color); display: none;">
+                        Saved!</div>
+                    <button class="btn btn-primary" onclick="savePromptContent()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Knowledge Base Modal -->
+    <div id="kbModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="modal-close" onclick="closeKbModal()">&times;</span>
+            <div class="modal-header">
+                <h2>📚 Internal Knowledge Base</h2>
+                <button class="btn btn-primary btn-sm" onclick="showAddKbItem()">+ Add New Document</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary">Upload internal documents or strategy text for the AI to use as context (RAG).
+                </p>
+
+                <div id="kbList" class="kb-list"
+                    style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+                    <!-- Loading... -->
+                </div>
+
+                <div id="addKbForm"
+                    style="display: none; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <h3>Add New Knowledge Source</h3>
+                    <div class="form-group">
+                        <label>Title / Identifier</label>
+                        <input type="text" id="kbTitle" class="form-control" placeholder="e.g. Q3 Sales Strategy">
+                    </div>
+                    <div class="form-group">
+                        <label>Content Text</label>
+                        <textarea id="kbContent" class="form-control" rows="10"
+                            placeholder="Paste the text from the document here..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="hideAddKbForm()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveKbItem()">Save Document</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Correction Modal -->
+    <div id="correctionModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeCorrectionModal()">&times;</span>
+            <div class="modal-header">
+                <h2>Correct Data</h2>
+            </div>
+            <div class="modal-body">
+                <p>Provide a corrected value for <strong id="correctionFieldName"></strong>.</p>
+                <form id="correctionForm" onsubmit="handleCorrectionSubmit(event)">
+                    <input type="hidden" id="correctionCompetitorId">
+                    <input type="hidden" id="correctionField">
+
+                    <div class="form-group">
+                        <label for="correctionValue">Correct Value</label>
+                        <textarea id="correctionValue" class="form-control" rows="3" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="correctionReason">Reason for Change</label>
+                        <select id="correctionReason" class="form-control" required>
+                            <option value="Incorrect Source Data">Incorrect Source Data</option>
+                            <option value="Outdated Information">Outdated Information</option>
+                            <option value="Typo/Formatting Error">Typo/Formatting Error</option>
+                            <option value="New Announcement">New Announcement</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeCorrectionModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Correction</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Data Refresh Progress Modal -->
+        <div id="refreshProgressModal" class="modal-overlay" style="display: none;">
+            <div class="modal progress-modal">
+                <div class="modal-header">
+                    <h3>Refreshing Data...</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="progress-current">
+                        <span id="progressCurrentText">Starting refresh...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="refreshProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="progressPercent">0%</span>
+                        <span id="progressCount">0 of 0 competitors</span>
+                    </div>
+                    <div class="progress-completed-list" id="progressCompletedList">
+                        <!-- Completed competitors will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Summary Progress Modal -->
+        <div id="aiSummaryProgressModal" class="modal-overlay" style="display: none;">
+            <div class="modal progress-modal" style="max-width: 450px;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 12px 12px 0 0;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a2 2 0 0 1 0 4h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a2 2 0 0 1 0-4h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+                            </svg>
+                        </div>
+                        <h3 style="margin: 0; color: white;">Generating AI Summary</h3>
+                    </div>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="progress-current" style="margin-bottom: 16px;">
+                        <span id="aiProgressStepText" style="font-size: 14px; color: #475569;">Initializing...</span>
+                    </div>
+                    <div class="progress-bar-container" style="height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                        <div id="aiSummaryProgressBar" class="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10B981, #059669); transition: width 0.3s ease;"></div>
+                    </div>
+                    <div class="progress-stats" style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 13px; color: #64748b;">
+                        <span id="aiProgressPercent">0%</span>
+                        <span id="aiProgressElapsed">Elapsed: 0s</span>
+                    </div>
+                    <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 12px; color: #64748b;">
+                        <strong>Steps:</strong>
+                        <ol id="aiProgressSteps" style="margin: 8px 0 0 16px; padding: 0;">
+                            <li id="step1" style="margin: 4px 0;">Loading competitor data</li>
+                            <li id="step2" style="margin: 4px 0;">Loading AI configuration</li>
+                            <li id="step3" style="margin: 4px 0;">Gathering knowledge base</li>
+                            <li id="step4" style="margin: 4px 0;">Preparing analysis data</li>
+                            <li id="step5" style="margin: 4px 0;">Generating summary with AI</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Refresh Complete Modal (Enhanced - Phase 3: Task 5.0.1-030) -->
+        <div id="refreshCompleteModal" class="modal-overlay" style="display: none;">
+            <div class="modal complete-modal" style="max-width: 600px;">
+                <div class="modal-header success-header">
+                    <span class="success-icon">&#10003;</span>
+                    <h3>Data Refresh Complete!</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="complete-stats">
+                        <div class="stat-row">
+                            <span class="stat-label">Competitors Refreshed</span>
+                            <span class="stat-value" id="completeTotal">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Data Values Changed</span>
+                            <span class="stat-value" id="completeChanges">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">New Values Added</span>
+                            <span class="stat-value" id="completeNewValues">0</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Summary Section -->
+                    <div id="refreshAISummarySection" class="refresh-ai-summary">
+                        <div class="ai-summary-header-mini">
+                            <span class="ai-icon">🤖</span>
+                            <span>AI Analysis of Changes</span>
+                        </div>
+                        <div id="refreshAISummaryContent" class="ai-summary-content-mini">
+                            <span class="loading-text">Generating summary...</span>
+                        </div>
+                    </div>
+
+                    <!-- Change Details Accordion -->
+                    <div class="change-details-section">
+                        <button class="accordion-toggle" onclick="toggleChangeDetails()">
+                            <span>📋 View Detailed Changes</span>
+                            <span class="toggle-arrow">▼</span>
+                        </button>
+                        <div id="changeDetailsContent" class="change-details-content" style="display: none;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeRefreshCompleteModal()">OK</button>
+                    <button class="btn btn-primary" onclick="closeRefreshCompleteModal(); navigateTo('changes');">View Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Sources Modal -->
+    <div id="dataSourcesModal" class="data-sources-modal" onclick="closeDataSourcesModal(event)">
+        <div class="data-sources-content" onclick="event.stopPropagation()">
+            <div class="data-sources-header">
+                <h3>📋 Data Source Attribution</h3>
+                <button class="close-btn" onclick="closeDataSourcesModal()">&times;</button>
+            </div>
+            <div class="data-sources-body">
+                <div class="sources-description">
+                    Every data point is tracked with its source and confidence level based on the Admiralty Code framework.
+                </div>
+                <div id="dataSourcesTableContainer">
+                    <p class="loading">Loading data sources...</p>
+                </div>
+                <div class="sources-legend">
+                    <h4>Confidence Levels</h4>
+                    <div class="legend-items">
+                        <span class="legend-item">
+                            <span class="dot confidence-high"></span>
+                            High (70-100): Verified from authoritative sources
+                        </span>
+                        <span class="legend-item">
+                            <span class="dot confidence-moderate"></span>
+                            Moderate (40-69): Credible but not fully verified
+                        </span>
+                        <span class="legend-item">
+                            <span class="dot confidence-low"></span>
+                            Low (0-39): Unverified marketing claims
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="visualizations.js"></script>
-    <script src="app.js"></script>
+    <script src="visualizations.js?v=2"></script>
+    <script src="enhanced_analytics.js?v=2"></script>
+    <script src="app_v2.js?v=6"></script>
+    <script src="prompt_manager.js?v=3"></script>
+    <script src="sales_marketing.js?v=1"></script>
 </body>
 
 </html>

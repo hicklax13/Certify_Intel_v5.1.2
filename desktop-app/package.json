@@ -1,6 +1,6 @@
 {
     "name": "certify-intel",
-    "version": "2.0.1",
+    "version": "5.4.0",
     "description": "Certify Intel - Competitive Intelligence Platform for Healthcare Technology",
     "main": "electron/main.js",
     "author": "Certify Health",
@@ -65,7 +65,7 @@
                 }
             ],
             "icon": "resources/icons/icon.ico",
-            "artifactName": "20260125_Certify_Intel_v${version}_Setup.${ext}"
+            "artifactName": "20260127_Certify_Intel_v${version}_Setup.${ext}"
         },
         "mac": {
             "target": [
@@ -79,7 +79,7 @@
             ],
             "icon": "resources/icons/icon.icns",
             "category": "public.app-category.business",
-            "artifactName": "20260125_Certify_Intel_v${version}_${arch}.${ext}"
+            "artifactName": "20260127_Certify_Intel_v${version}_${arch}.${ext}"
         },
         "nsis": {
             "oneClick": false,
@@ -89,7 +89,7 @@
             "installerHeaderIcon": "resources/icons/icon.ico",
             "createDesktopShortcut": true,
             "createStartMenuShortcut": true,
-            "artifactName": "20260125_Certify_Intel_v${version}_Setup.${ext}"
+            "artifactName": "20260127_Certify_Intel_v${version}_Setup.${ext}"
         },
         "dmg": {
             "contents": [
@@ -108,7 +108,7 @@
         "publish": {
             "provider": "github",
             "owner": "hicklax13",
-            "repo": "Project_Intel_v4",
+            "repo": "Project_Intel_v5.0.1",
             "releaseType": "release"
         }
     }

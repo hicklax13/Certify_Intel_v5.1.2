@@ -11,6 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700&display=swap"
         rel="stylesheet">
+    <link rel="icon" type="image/jpeg" href="browser_tab_icon.jpg">
     <style>
         body {
             margin: 0;
@@ -44,8 +45,11 @@
         }
 
         .login-logo img {
-            height: 48px;
-            margin-bottom: 8px;
+            height: 120px;
+            width: 120px;
+            object-fit: contain;
+            margin-bottom: 16px;
+            border-radius: 16px;
         }
 
         .login-logo h1 {
@@ -196,6 +200,35 @@
                 transform: rotate(360deg);
             }
         }
+
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-wrapper input {
+            flex: 1;
+            padding-right: 70px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .password-toggle:hover {
+            color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
     </style>
 </head>
 
@@ -203,7 +236,7 @@
     <div class="login-container">
         <div class="login-card">
             <div class="login-logo">
-                <img src="logo.png" alt="Certify Intel" onerror="this.style.display='none';">
+                <img src="app_icon.jpg" alt="Certify Intel">
                 <h1>Certify<span>Intel</span></h1>
                 <p>Competitive Intelligence Dashboard</p>
             </div>
@@ -216,14 +249,19 @@
             <form id="loginForm" class="login-form" onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" name="username" placeholder="admin@certifyhealth.com"
+                    <input type="email" id="email" name="username" placeholder="admin@certifyintel.com"
                         autocomplete="username" required>
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="••••••••"
-                        autocomplete="current-password" required>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="password" name="password" placeholder="••••••••"
+                            autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility()">
+                            <span id="toggleIcon">Show</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-options">
@@ -236,6 +274,43 @@
                 <button type="submit" class="login-btn" id="loginBtn">
                     Sign In
                 </button>
+
+                <p class="auth-switch" style="text-align:center;margin-top:20px;color:#94a3b8;font-size:0.875rem;">
+                    Don't have an account?
+                    <a href="#" onclick="toggleAuthMode('register')" style="color:#3b82f6;text-decoration:none;font-weight:500;">Create one</a>
+                </p>
+            </form>
+
+            <!-- Registration Form (hidden by default) -->
+            <form id="registerForm" class="login-form" onsubmit="handleRegister(event)" style="display:none;">
+                <div class="form-group">
+                    <label for="regFullName">Full Name</label>
+                    <input type="text" id="regFullName" placeholder="John Doe" autocomplete="name">
+                </div>
+
+                <div class="form-group">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" placeholder="you@company.com" autocomplete="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" placeholder="Minimum 8 characters" autocomplete="new-password" required minlength="8">
+                </div>
+
+                <div class="form-group">
+                    <label for="regPasswordConfirm">Confirm Password</label>
+                    <input type="password" id="regPasswordConfirm" placeholder="Re-enter password" autocomplete="new-password" required>
+                </div>
+
+                <button type="submit" class="login-btn" id="registerBtn">
+                    Create Account
+                </button>
+
+                <p class="auth-switch" style="text-align:center;margin-top:20px;color:#94a3b8;font-size:0.875rem;">
+                    Already have an account?
+                    <a href="#" onclick="toggleAuthMode('login')" style="color:#3b82f6;text-decoration:none;font-weight:500;">Sign in</a>
+                </p>
             </form>
 
             <p class="footer-text">© 2026 Certify Health. All rights reserved.</p>
@@ -244,6 +319,104 @@
 
     <script>
         const API_BASE = window.location.origin;
+
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('toggleIcon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.textContent = 'Hide';
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.textContent = 'Show';
+            }
+        }
+
+        function toggleAuthMode(mode) {
+            document.getElementById('loginForm').style.display = mode === 'login' ? 'flex' : 'none';
+            document.getElementById('registerForm').style.display = mode === 'register' ? 'flex' : 'none';
+            document.getElementById('errorMessage').classList.remove('visible');
+            // Reset error styling
+            const el = document.getElementById('errorMessage');
+            el.style.background = 'rgba(239, 68, 68, 0.15)';
+            el.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            document.getElementById('errorText').style.color = '#fca5a5';
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMessage');
+            const textEl = document.getElementById('errorText');
+            textEl.textContent = msg;
+            el.style.background = 'rgba(239, 68, 68, 0.15)';
+            el.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            textEl.style.color = '#fca5a5';
+            el.classList.add('visible');
+        }
+
+        function showSuccess(msg) {
+            const el = document.getElementById('errorMessage');
+            const textEl = document.getElementById('errorText');
+            textEl.textContent = msg;
+            el.style.background = 'rgba(34, 197, 94, 0.15)';
+            el.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            textEl.style.color = '#86efac';
+            el.classList.add('visible');
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            const btn = document.getElementById('registerBtn');
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const confirmPassword = document.getElementById('regPasswordConfirm').value;
+            const fullName = document.getElementById('regFullName').value;
+
+            // Client-side validation
+            if (password !== confirmPassword) {
+                showError('Passwords do not match');
+                return;
+            }
+
+            if (password.length < 8) {
+                showError('Password must be at least 8 characters');
+                return;
+            }
+
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading-spinner"></span> Creating account...';
+            document.getElementById('errorMessage').classList.remove('visible');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        full_name: fullName
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Registration failed');
+                }
+
+                // Success - switch to login form
+                toggleAuthMode('login');
+                document.getElementById('email').value = email;
+                showSuccess('Account created successfully! Please sign in.');
+
+            } catch (error) {
+                showError(error.message || 'Registration failed. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Create Account';
+            }
+        }
 
         // Check if already logged in
         document.addEventListener('DOMContentLoaded', () => {
@@ -255,7 +428,7 @@
                 })
                     .then(res => {
                         if (res.ok) {
-                            window.location.href = '/app/';
+                            window.location.href = '/';
                         }
                     })
                     .catch(() => {
@@ -304,7 +477,7 @@
                 localStorage.setItem('access_token', data.access_token);
 
                 // Redirect to dashboard
-                window.location.href = '/app/';
+                window.location.href = '/';
 
             } catch (error) {
                 errorText.textContent = error.message || 'Login failed. Please try again.';
