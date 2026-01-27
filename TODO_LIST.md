@@ -1304,7 +1304,7 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 | Sales & Marketing | 9 dimensions fully implemented |
 | News Feed | 13 sources integrated |
 | Data Quality | Admiralty Code scoring active |
-| Desktop App | ✅ FIXED (PyInstaller .env path resolved) |
+| Desktop App | ✅ RELEASED (v2.0.1 - 517MB installer on GitHub) |
 | Vertex AI | PROPOSED (pending approval) |
 | Product Discovery System | ✅ COMPLETE (100% coverage) |
 
@@ -1312,11 +1312,46 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 
 | # | Task ID | Description | Priority | Status |
 |---|---------|-------------|----------|--------|
-| 1 | DESKTOP-BUILD | Build and test Desktop App installer | HIGH | READY |
-| 2 | VERTEX-1.1 | Set up GCP project with Vertex AI (if approved) | HIGH | PENDING |
-| 3 | VERTEX-1.2 | Create vertex_ai_provider.py (~800 lines) | HIGH | PENDING |
-| 4 | API-002 | Register for GNews API (user action) | LOW | PENDING |
-| 5 | NOTIF-001 | Configure SMTP email alerts (user action) | MEDIUM | PENDING |
+| 1 | VERTEX-1.1 | Set up GCP project with Vertex AI (if approved) | HIGH | PENDING |
+| 2 | VERTEX-1.2 | Create vertex_ai_provider.py (~800 lines) | HIGH | PENDING |
+| 3 | API-002 | Register for GNews API (user action) | LOW | PENDING |
+| 4 | NOTIF-001 | Configure SMTP email alerts (user action) | MEDIUM | PENDING |
+| 5 | MAC-BUILD | Build macOS Desktop App installer | LOW | READY |
+
+---
+
+## ✅ COMPLETED: Desktop App Build & Release (v2.0.1) - January 27, 2026
+
+> **Status**: ✅ **RELEASED** - Windows installer available on GitHub
+> **Release URL**: https://github.com/hicklax13/Project_Intel_v5.0.1/releases/tag/v2.0.1
+
+### Build Output
+
+| File | Size | Description |
+|------|------|-------------|
+| `20260125_Certify_Intel_v2.0.1_Setup.exe` | 517 MB | Windows NSIS installer |
+| `certify_backend.exe` | 224 MB | PyInstaller Python bundle |
+| `certify_intel.db` | 3.3 MB | Pre-populated database |
+
+### Prerequisites Used
+
+| Tool | Version |
+|------|---------|
+| Python | 3.14.2 |
+| PyInstaller | 6.18.0 |
+| Node.js | v24.13.0 |
+| Electron | 28.3.3 |
+| electron-builder | 24.13.3 |
+
+### Build Commands
+
+```bash
+# Backend
+cd backend && python -m PyInstaller certify_backend.spec --clean --noconfirm
+
+# Desktop App
+cd desktop-app && npm install && npm run build:win
+```
 
 ---
 

@@ -39,7 +39,7 @@ The critical authentication bug has been **FIXED**. The application now works co
 **Certify Intel** is a production-ready Competitive Intelligence Platform designed to track, analyze, and counter 82 competitors in the healthcare technology space. It provides a centralized, real-time dashboard for sales, product, and leadership teams.
 
 **Version**: v5.1.0
-**Status**: 🟢 Web Version Production-Ready | 🔴 Desktop App Blocked
+**Status**: 🟢 Web Version Production-Ready | 🟢 Desktop App Released (v2.0.1)
 **Last Updated**: January 27, 2026
 
 ---
@@ -105,7 +105,7 @@ db.close()
 | Module | Status | Reason |
 |--------|--------|--------|
 | **Authentication Bug** | ✅ **FIXED** | Fixed Jan 26, 2026 - Wrong localStorage key was root cause |
-| **Desktop App (v5.0.3)** | ✅ **FIXED** | Fixed Jan 27, 2026 - PyInstaller .env path issue resolved |
+| **Desktop App (v2.0.1)** | ✅ **RELEASED** | Built & released Jan 27, 2026 - Windows installer available |
 | Vertex AI Integration (v5.3.0) | ⏳ PROPOSED | Pending approval - 30 tasks, 6-8 weeks |
 
 ---
@@ -114,11 +114,11 @@ db.close()
 
 | # | Task ID | Description | Date |
 |---|---------|-------------|------|
-| 1 | 5.0.3-001 | Fixed Desktop App PyInstaller .env path issue | Jan 27, 2026 |
-| 2 | PROD-100 | Product coverage to 100% (789 products across 82 competitors) | Jan 27, 2026 |
-| 3 | NEWS-100 | News coverage to 100% (1,539 articles cached) | Jan 27, 2026 |
-| 4 | DATA-CLEAN | Cleaned 41 duplicate competitor entries | Jan 27, 2026 |
-| 5 | PROD-API | Created Products API Router with 12 endpoints | Jan 27, 2026 |
+| 1 | DESKTOP-BUILD | Built & released Desktop App v2.0.1 (517MB installer) | Jan 27, 2026 |
+| 2 | 5.0.3-001 | Fixed Desktop App PyInstaller .env path issue | Jan 27, 2026 |
+| 3 | PROD-100 | Product coverage to 100% (789 products across 82 competitors) | Jan 27, 2026 |
+| 4 | NEWS-100 | News coverage to 100% (1,539 articles cached) | Jan 27, 2026 |
+| 5 | DATA-CLEAN | Cleaned 41 duplicate competitor entries | Jan 27, 2026 |
 
 ---
 
@@ -126,11 +126,11 @@ db.close()
 
 | # | Task ID | Description | Priority | Blocker |
 |---|---------|-------------|----------|---------|
-| 1 | DESKTOP-BUILD | Build and test Desktop App installer | HIGH | None |
-| 2 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
-| 3 | VERTEX-1.2 | Configure Vertex AI APIs | MEDIUM | Depends on VERTEX-1.1 |
-| 4 | VERTEX-2.1 | Implement RAG Engine | MEDIUM | Depends on VERTEX-1 |
-| 5 | VERTEX-2.2 | Set up Vector Search | MEDIUM | Depends on VERTEX-1 |
+| 1 | VERTEX-1.1 | Set up GCP project with Vertex AI | HIGH | Pending approval |
+| 2 | VERTEX-1.2 | Configure Vertex AI APIs | MEDIUM | Depends on VERTEX-1.1 |
+| 3 | VERTEX-2.1 | Implement RAG Engine | MEDIUM | Depends on VERTEX-1 |
+| 4 | VERTEX-2.2 | Set up Vector Search | MEDIUM | Depends on VERTEX-1 |
+| 5 | API-002 | Register for GNews API (user action) | LOW | None |
 
 ---
 
@@ -930,5 +930,59 @@ Achieved 100% product and news coverage for all 82 competitors by implementing t
 
 ---
 
+## Session Log: January 27, 2026 (Session 13 - Desktop App Build & Release)
+
+**Session**: Desktop App Build, Test, and GitHub Release
+**Version**: v2.0.1
+**Release URL**: https://github.com/hicklax13/Project_Intel_v5.0.1/releases/tag/v2.0.1
+
+### Session Summary
+
+Successfully built, tested, and released the Desktop App as a standalone Windows installer.
+
+### Build Output
+
+| File | Size | Description |
+|------|------|-------------|
+| `20260125_Certify_Intel_v2.0.1_Setup.exe` | 517 MB | Windows NSIS installer |
+| `certify_backend.exe` | 224 MB | PyInstaller Python bundle |
+| `certify_intel.db` | 3.3 MB | Pre-populated database |
+
+### Fixes Applied During Build
+
+1. **PyInstaller .env Path Fix** (`__main__.py`, `main.py`, `database.py`)
+   - Environment variables now load from exe directory, not temp folder
+   - Database created next to exe on first run
+
+2. **Windows cp1252 Encoding Fix** (`__main__.py`)
+   - Added UTF-8 encoding when reading .env file
+   - Prevents "charmap codec" errors
+
+3. **Emoji Removal for Windows** (`discovery_agent.py`)
+   - Replaced emoji characters with ASCII equivalents
+   - Prevents console output crashes on Windows
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `backend/__main__.py` | UTF-8 encoding for .env reading |
+| `backend/discovery_agent.py` | Replaced emojis with ASCII |
+
+### Commits Made
+
+| Commit | Description |
+|--------|-------------|
+| `06ae8e9` | Fix: Desktop App PyInstaller .env path issue |
+| `a9c67c3` | Fix: Windows compatibility for Desktop App build |
+
+### GitHub Release
+
+- **Tag**: v2.0.1
+- **URL**: https://github.com/hicklax13/Project_Intel_v5.0.1/releases/tag/v2.0.1
+- **Artifact**: `20260125_Certify_Intel_v2.0.1_Setup.exe` (517 MB)
+
+---
+
 **Last Updated**: January 27, 2026
-**Updated By**: Claude Opus 4.5 (Product & News Coverage Session)
+**Updated By**: Claude Opus 4.5 (Desktop App Build & Release Session)
