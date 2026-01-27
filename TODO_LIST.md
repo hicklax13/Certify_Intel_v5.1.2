@@ -576,13 +576,15 @@ The bug was **NOT** any of the initially suspected causes. The actual root cause
 2. **✅ COMPLETED**: Cloud Deployment (v5.1.0) - Docker, nginx, AWS/GCP/Azure guides
 3. **✅ COMPLETED**: Team Features (v5.2.0) - Teams, annotations, role-based dashboards
 4. **✅ COMPLETED**: Gemini API Key (API-001) - Hybrid AI mode now active
-5. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
-6. **⏳ PROPOSED**: Vertex AI Integration (v5.3.0) - Pending approval, see `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md`
+5. **✅ COMPLETED**: Setup Guide (SETUP_GUIDE.md) - Cross-platform Windows/Mac installation guide
+6. **✅ COMPLETED**: Authentication Bug Fix - Fixed localStorage key issue in app_v2.js and sales_marketing.js
+7. **BLOCKED**: Fix Desktop App (v5.0.3) - Resolve PyInstaller path issue
+8. **⏳ PROPOSED**: Vertex AI Integration (v5.3.0) - Pending approval, see `docs/VERTEX_AI_IMPLEMENTATION_PLAN.md`
 
 ---
 
-**Last Updated**: January 26, 2026, 4:15 PM EST
-**Updated By**: Claude Opus 4.5 (Vertex AI Planning Session Complete)
+**Last Updated**: January 26, 2026, 7:32 PM EST
+**Updated By**: Claude Opus 4.5 (Authentication Bug Fix & Setup Guide Session)
 
 ---
 

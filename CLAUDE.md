@@ -46,6 +46,8 @@ The critical authentication bug has been **FIXED**. The application now works co
 
 ## Quick Start
 
+> **For detailed setup instructions, see [`SETUP_GUIDE.md`](SETUP_GUIDE.md)**
+
 ```bash
 cd backend
 python main.py
@@ -101,11 +103,11 @@ db.close()
 
 | # | Task ID | Description | Date |
 |---|---------|-------------|------|
-| 1 | AUTH-FIX | Fixed critical authentication bug (wrong localStorage key) | Jan 26, 2026 |
-| 2 | CREDS-UPDATE | Updated admin credentials and added password toggle | Jan 26, 2026 |
-| 3 | 5.2.0-003 | Shared annotations - Team notes on competitors | Jan 26, 2026 |
-| 4 | 5.2.0-002 | Role-based dashboards - Custom views per role | Jan 26, 2026 |
-| 5 | 5.2.0-001 | Multi-user improvements - Team collaboration | Jan 26, 2026 |
+| 1 | SETUP-GUIDE | Created cross-platform setup guide (Windows/Mac) | Jan 26, 2026 |
+| 2 | AUTH-FIX | Fixed critical authentication bug (wrong localStorage key) | Jan 26, 2026 |
+| 3 | CREDS-UPDATE | Updated admin credentials and added password toggle | Jan 26, 2026 |
+| 4 | 5.2.0-003 | Shared annotations - Team notes on competitors | Jan 26, 2026 |
+| 5 | 5.2.0-002 | Role-based dashboards - Custom views per role | Jan 26, 2026 |
 
 ---
 
@@ -724,6 +726,7 @@ Dimension Metadata → DimensionAnalyzer → SalesMarketingModule
 
 | File | Purpose |
 |------|---------|
+| `SETUP_GUIDE.md` | **Quick start for new users (Windows/Mac)** |
 | `TODO_LIST.md` | Master task tracking (check first!) |
 | `CLAUDE.md` | This file - development documentation |
 | `docs/SALES_MARKETING_MODULE_PLAN.md` | Sales module design |
