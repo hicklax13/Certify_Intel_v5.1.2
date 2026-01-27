@@ -378,23 +378,39 @@ async def lifespan(app: FastAPI):
         print("Initializing Enterprise Automation Engine...")
         start_scheduler()
 
-    # Run Public/Private Workflow on Startup
-    # Run Public/Private Workflow on Startup
+    # Run Startup Tasks
     try:
         from extended_features import ClassificationWorkflow, auth_manager
-        
+
         # Initialize DB Session for startup tasks
         db = SessionLocal()
-        
+
         # 1. Ensure Admin User
         print("Ensuring default admin user exists...")
         auth_manager.ensure_default_admin(db)
-        
-        # 2. Run Classification Workflow - DISABLED (costs money, use button instead)
+
+        # 2. Preinstall Knowledge Base (client-provided data)
+        # This only runs on first startup - subsequent startups skip
+        print("Checking knowledge base preinstall...")
+        try:
+            from knowledge_base_importer import preinstall_knowledge_base
+            result = preinstall_knowledge_base(db)
+            if result and result.get("success"):
+                print(f"  [OK] Preinstalled {result.get('competitors_imported', 0)} competitors")
+                print(f"  [OK] Updated {result.get('competitors_updated', 0)} existing competitors")
+                print("  [OK] Data labeled as 'Certify Health (Preinstalled)'")
+            elif result and result.get("skipped"):
+                print("  [OK] No competitors found in knowledge base folder")
+            else:
+                print("  [OK] Already preinstalled, skipping")
+        except Exception as e:
+            print(f"  [!] Knowledge base preinstall warning: {e}")
+
+        # 3. Run Classification Workflow - DISABLED (costs money, use button instead)
         # workflow = ClassificationWorkflow(db)
         # print("Running 'Private vs Public' Classification Workflow...")
         # workflow.run_classification_pipeline()
-        
+
         db.close()
     except Exception as e:
         print(f"Startup task warning: {e}")

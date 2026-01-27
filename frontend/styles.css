@@ -2792,6 +2792,43 @@ h4::after,
     content: " ✓";
 }
 
+/* Preinstalled data badge - distinct from manual imports */
+.source-badge-preinstalled {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.source-badge-preinstalled::before {
+    content: "📦";
+    margin-right: 2px;
+}
+
+/* Alternative: smaller preinstall indicator */
+.preinstall-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(124, 58, 237, 0.2);
+    color: #A78BFA;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 500;
+}
+
+.preinstall-indicator::before {
+    content: "📦";
+    font-size: 8px;
+}
+
 /* Source tooltip on hover */
 .source-tooltip {
     position: absolute;

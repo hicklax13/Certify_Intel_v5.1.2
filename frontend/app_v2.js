@@ -5297,7 +5297,17 @@ function renderSourceBadge(source) {
     if (!source) return '';
 
     if (source.source_type === 'client_provided') {
+        // Check if this is preinstalled data
+        const isPreinstalled = source.source_name && source.source_name.includes('Preinstalled');
         const verifiedClass = source.is_verified ? 'verified' : 'unverified';
+
+        if (isPreinstalled) {
+            // Preinstalled data - special purple badge
+            const tooltip = 'Preinstalled from Certify Health knowledge base';
+            return `<span class="source-badge-preinstalled" title="${tooltip}">Certify Health</span>`;
+        }
+
+        // Manual import - green badge
         const tooltip = source.is_verified
             ? `Verified by ${source.verified_by || 'admin'}`
             : 'Pending verification';

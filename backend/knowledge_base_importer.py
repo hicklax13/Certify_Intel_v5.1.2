@@ -919,6 +919,331 @@ def is_known_competitor(name: str) -> bool:
 # CLI TESTING
 # ==============================================================================
 
+# ==============================================================================
+# PREINSTALL FUNCTION - Auto-import on first startup
+# ==============================================================================
+
+def preinstall_knowledge_base(db_session=None):
+    """
+    Auto-import knowledge base on first startup.
+
+    This function is called during server startup to ensure client-provided
+    competitor data is preinstalled in the database. It only runs once -
+    subsequent startups skip the import.
+
+    Features:
+    - Runs only on first startup (tracks via SystemSetting)
+    - Labels all data as "Certify Health (Preinstalled)"
+    - Uses fill-gaps-only mode (never overwrites existing data)
+    - Creates DataSource records for tracking
+    - Logs the import activity
+
+    Args:
+        db_session: Optional SQLAlchemy session. If None, creates its own.
+
+    Returns:
+        dict with import results or None if skipped
+    """
+    from database import SessionLocal, Competitor, DataSource, SystemSetting
+
+    # Create session if not provided
+    if db_session is None:
+        db = SessionLocal()
+        close_db = True
+    else:
+        db = db_session
+        close_db = False
+
+    try:
+        # Check if preinstall has already been done
+        setting = db.query(SystemSetting).filter(
+            SystemSetting.key == "knowledge_base_preinstalled"
+        ).first()
+
+        if setting and setting.value == "true":
+            print("[KB Preinstall] Already preinstalled, skipping...")
+            return None
+
+        print("[KB Preinstall] Starting preinstall of client-provided knowledge base...")
+
+        # Run the import
+        importer = KnowledgeBaseImporter()
+        result = importer.extract_all()
+
+        if result.competitors_found == 0:
+            print("[KB Preinstall] No competitors found in knowledge base folder")
+            # Still mark as done to avoid re-checking empty folder
+            _mark_preinstall_complete(db)
+            if close_db:
+                db.close()
+            return {"skipped": True, "reason": "no_competitors_found"}
+
+        # Import competitors
+        imported_count = 0
+        updated_count = 0
+
+        for comp_data in result.competitors:
+            try:
+                # Check if competitor already exists
+                existing = db.query(Competitor).filter(
+                    Competitor.name.ilike(comp_data.canonical_name)
+                ).first()
+
+                if existing:
+                    # Update existing (fill gaps only)
+                    fields_updated = _preinstall_update_competitor(
+                        db, existing, comp_data
+                    )
+                    if fields_updated > 0:
+                        updated_count += 1
+                else:
+                    # Create new competitor
+                    _preinstall_create_competitor(db, comp_data)
+                    imported_count += 1
+
+            except Exception as e:
+                print(f"[KB Preinstall] Error importing {comp_data.canonical_name}: {e}")
+
+        # Commit all changes
+        db.commit()
+
+        # Mark preinstall as complete
+        _mark_preinstall_complete(db)
+
+        print(f"[KB Preinstall] Complete! {imported_count} new, {updated_count} updated")
+        print(f"[KB Preinstall] Data labeled as 'Certify Health (Preinstalled)'")
+
+        return {
+            "success": True,
+            "competitors_imported": imported_count,
+            "competitors_updated": updated_count,
+            "total_found": result.unique_competitors
+        }
+
+    except Exception as e:
+        print(f"[KB Preinstall] Error: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+    finally:
+        if close_db:
+            db.close()
+
+
+def _mark_preinstall_complete(db):
+    """Mark preinstall as complete in SystemSetting."""
+    from database import SystemSetting
+
+    setting = db.query(SystemSetting).filter(
+        SystemSetting.key == "knowledge_base_preinstalled"
+    ).first()
+
+    if setting:
+        setting.value = "true"
+        setting.updated_at = datetime.now()
+    else:
+        setting = SystemSetting(
+            key="knowledge_base_preinstalled",
+            value="true"
+        )
+        db.add(setting)
+
+    db.commit()
+
+
+def _preinstall_create_competitor(db, comp_data: CompetitorData):
+    """Create a new competitor with preinstall labeling."""
+    from database import Competitor, DataSource
+
+    competitor = Competitor(
+        name=comp_data.canonical_name.title(),
+        website=comp_data.website,
+        status=comp_data.status or "Active",
+        threat_level=comp_data.threat_level or "Medium",
+
+        # Pricing
+        pricing_model=comp_data.pricing_model,
+        base_price=comp_data.base_price,
+        price_unit=comp_data.price_unit,
+
+        # Product
+        product_categories=comp_data.product_categories,
+        key_features=comp_data.key_features,
+        integration_partners=comp_data.integration_partners,
+        certifications=comp_data.certifications,
+
+        # Market
+        target_segments=comp_data.target_segments,
+        customer_size_focus=comp_data.customer_size_focus,
+        geographic_focus=comp_data.geographic_focus,
+        customer_count=comp_data.customer_count,
+        customer_acquisition_rate=comp_data.customer_acquisition_rate,
+        key_customers=comp_data.key_customers,
+
+        # Company
+        employee_count=comp_data.employee_count,
+        employee_growth_rate=comp_data.employee_growth_rate,
+        year_founded=comp_data.year_founded,
+        headquarters=comp_data.headquarters,
+        funding_total=comp_data.funding_total,
+        latest_round=comp_data.latest_round,
+        pe_vc_backers=comp_data.pe_vc_backers,
+
+        # Digital
+        website_traffic=comp_data.website_traffic,
+        social_following=comp_data.social_following,
+        g2_rating=comp_data.g2_rating,
+
+        # Features
+        has_pxp=comp_data.has_patient_intake,
+        has_rcm=comp_data.has_insurance_verification,
+        has_payments=comp_data.has_payments,
+        has_patient_mgmt=comp_data.has_patient_portal,
+
+        # Notes
+        notes=comp_data.notes,
+        recent_launches=comp_data.recent_launches,
+
+        # Metadata
+        created_at=datetime.now(),
+        last_updated=datetime.now()
+    )
+
+    db.add(competitor)
+    db.flush()  # Get the ID
+
+    # Create DataSource records with "Preinstalled" label
+    _create_preinstall_data_sources(db, competitor.id, comp_data)
+
+    return competitor
+
+
+def _preinstall_update_competitor(db, existing, comp_data: CompetitorData) -> int:
+    """Update existing competitor with preinstall data (fill gaps only)."""
+    from database import Competitor, DataSource
+
+    fields_updated = 0
+
+    field_mapping = {
+        "website": "website",
+        "pricing_model": "pricing_model",
+        "base_price": "base_price",
+        "price_unit": "price_unit",
+        "product_categories": "product_categories",
+        "key_features": "key_features",
+        "integration_partners": "integration_partners",
+        "certifications": "certifications",
+        "target_segments": "target_segments",
+        "customer_size_focus": "customer_size_focus",
+        "geographic_focus": "geographic_focus",
+        "customer_count": "customer_count",
+        "customer_acquisition_rate": "customer_acquisition_rate",
+        "key_customers": "key_customers",
+        "employee_count": "employee_count",
+        "employee_growth_rate": "employee_growth_rate",
+        "year_founded": "year_founded",
+        "headquarters": "headquarters",
+        "funding_total": "funding_total",
+        "latest_round": "latest_round",
+        "pe_vc_backers": "pe_vc_backers",
+        "website_traffic": "website_traffic",
+        "social_following": "social_following",
+        "g2_rating": "g2_rating",
+        "notes": "notes",
+        "recent_launches": "recent_launches",
+    }
+
+    for data_field, db_field in field_mapping.items():
+        new_value = getattr(comp_data, data_field, None)
+        if not new_value:
+            continue
+
+        existing_value = getattr(existing, db_field, None)
+
+        # Fill gaps only - never overwrite existing data
+        if not existing_value:
+            setattr(existing, db_field, new_value)
+            fields_updated += 1
+
+            # Create DataSource for this field
+            _create_single_preinstall_source(
+                db, existing.id, db_field, new_value, comp_data.source_file
+            )
+
+    if fields_updated > 0:
+        existing.last_updated = datetime.now()
+
+    return fields_updated
+
+
+def _create_preinstall_data_sources(db, competitor_id: int, comp_data: CompetitorData):
+    """Create DataSource records for all populated fields with Preinstalled label."""
+
+    fields_to_track = [
+        ("website", comp_data.website),
+        ("pricing_model", comp_data.pricing_model),
+        ("base_price", comp_data.base_price),
+        ("price_unit", comp_data.price_unit),
+        ("product_categories", comp_data.product_categories),
+        ("key_features", comp_data.key_features),
+        ("integration_partners", comp_data.integration_partners),
+        ("certifications", comp_data.certifications),
+        ("target_segments", comp_data.target_segments),
+        ("customer_size_focus", comp_data.customer_size_focus),
+        ("geographic_focus", comp_data.geographic_focus),
+        ("customer_count", comp_data.customer_count),
+        ("customer_acquisition_rate", comp_data.customer_acquisition_rate),
+        ("key_customers", comp_data.key_customers),
+        ("employee_count", comp_data.employee_count),
+        ("employee_growth_rate", comp_data.employee_growth_rate),
+        ("year_founded", comp_data.year_founded),
+        ("headquarters", comp_data.headquarters),
+        ("funding_total", comp_data.funding_total),
+        ("latest_round", comp_data.latest_round),
+        ("pe_vc_backers", comp_data.pe_vc_backers),
+        ("website_traffic", comp_data.website_traffic),
+        ("social_following", comp_data.social_following),
+        ("g2_rating", comp_data.g2_rating),
+        ("notes", comp_data.notes),
+        ("recent_launches", comp_data.recent_launches),
+    ]
+
+    for field_name, value in fields_to_track:
+        if value:
+            _create_single_preinstall_source(
+                db, competitor_id, field_name, value, comp_data.source_file
+            )
+
+
+def _create_single_preinstall_source(db, competitor_id: int, field_name: str, value: str, source_file: str):
+    """Create a single DataSource record with Preinstalled labeling."""
+    from database import DataSource
+
+    source = DataSource(
+        competitor_id=competitor_id,
+        field_name=field_name,
+        current_value=value,
+        source_type="client_provided",
+        source_name="Certify Health (Preinstalled)",  # Clear labeling
+        source_url=f"file://{source_file}",
+        extraction_method="preinstall",
+        confidence_score=85,  # High confidence - client provided
+        confidence_level="high",
+        source_reliability="B",  # Usually reliable
+        information_credibility=2,  # Probably true
+        is_verified=True,  # Preinstalled data is auto-verified
+        verified_by="preinstall",
+        verification_date=datetime.now(),
+        extracted_at=datetime.now(),
+        created_at=datetime.now()
+    )
+    db.add(source)
+
+
+# ==============================================================================
+# CLI TESTING
+# ==============================================================================
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Certify Intel - Knowledge Base Importer")
