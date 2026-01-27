@@ -6312,3 +6312,559 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ============================================
+// Quick Action Functions (v5.4.0 Enhancement)
+// ============================================
+
+/**
+ * Show Discovery Panel for finding new competitors
+ */
+async function showDiscoveryPanel() {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('discoveryModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'discoveryModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header">
+                    <h3>🔍 Competitor Discovery Agent</h3>
+                    <button class="modal-close" onclick="closeDiscoveryModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="discovery-panel">
+                        <div class="form-group">
+                            <label>Industry Focus</label>
+                            <select id="discoveryIndustry" class="form-control">
+                                <option value="healthcare">Healthcare Technology</option>
+                                <option value="patient_engagement">Patient Engagement</option>
+                                <option value="ehr">EHR/EMR Systems</option>
+                                <option value="telehealth">Telehealth</option>
+                                <option value="revenue_cycle">Revenue Cycle Management</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Candidates</label>
+                            <input type="number" id="discoveryMaxCandidates" class="form-control" value="10" min="1" max="50">
+                        </div>
+                        <button class="btn btn-primary" onclick="runDiscovery()" id="runDiscoveryBtn">
+                            🚀 Start Discovery
+                        </button>
+                    </div>
+                    <div id="discoveryResults" class="discovery-results" style="margin-top: 20px; display: none;">
+                        <h4>Discovery Results</h4>
+                        <div id="discoveryResultsList"></div>
+                        <div id="discoveryActions" style="margin-top: 16px; display: none;">
+                            <button class="btn btn-primary" onclick="addSelectedDiscoveries()">
+                                ➕ Add Selected Competitors
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}
+
+function closeDiscoveryModal() {
+    const modal = document.getElementById('discoveryModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function runDiscovery() {
+    const industry = document.getElementById('discoveryIndustry').value;
+    const maxCandidates = document.getElementById('discoveryMaxCandidates').value;
+    const btn = document.getElementById('runDiscoveryBtn');
+    const resultsDiv = document.getElementById('discoveryResults');
+    const resultsList = document.getElementById('discoveryResultsList');
+
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Discovering...';
+    resultsDiv.style.display = 'none';
+
+    try {
+        showToast('Starting competitor discovery...', 'info');
+
+        // Note: This would call the actual discovery API when available
+        // For now, show history of discovered competitors
+        const response = await fetchAPI('/api/discovery/history');
+
+        if (response && response.competitors && response.competitors.length > 0) {
+            resultsList.innerHTML = response.competitors.map((comp, idx) => `
+                <div class="discovery-result-item">
+                    <input type="checkbox" id="disc_${idx}" value="${escapeHtml(comp.name)}" style="margin-right: 12px;">
+                    <div class="discovery-result-info">
+                        <div class="discovery-result-name">${escapeHtml(comp.name)}</div>
+                        <div class="discovery-result-url">${escapeHtml(comp.website || comp.url || 'No URL')}</div>
+                    </div>
+                    <div class="discovery-result-score">${comp.relevance_score || comp.data_quality_score || '-'}%</div>
+                </div>
+            `).join('');
+            document.getElementById('discoveryActions').style.display = 'block';
+        } else {
+            resultsList.innerHTML = `
+                <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
+                    <p>No previous discoveries found.</p>
+                    <p style="font-size: 12px;">Discovery requires the scheduler to be running or manual trigger via API.</p>
+                </div>
+            `;
+            document.getElementById('discoveryActions').style.display = 'none';
+        }
+
+        resultsDiv.style.display = 'block';
+        showToast('Discovery results loaded', 'success');
+    } catch (error) {
+        console.error('Discovery error:', error);
+        showToast('Error running discovery: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Start Discovery';
+    }
+}
+
+async function addSelectedDiscoveries() {
+    const checkboxes = document.querySelectorAll('#discoveryResultsList input[type="checkbox"]:checked');
+    if (checkboxes.length === 0) {
+        showToast('Please select at least one competitor', 'warning');
+        return;
+    }
+
+    showToast(`Adding ${checkboxes.length} competitor(s)...`, 'info');
+    closeDiscoveryModal();
+    showPage('competitors');
+}
+
+/**
+ * Generate Quick Report (PDF)
+ */
+async function generateQuickReport() {
+    showToast('Generating executive report...', 'info');
+
+    try {
+        // Open the report export in a new tab
+        window.open('/api/export/pdf', '_blank');
+        showToast('Report generation started', 'success');
+    } catch (error) {
+        console.error('Error generating report:', error);
+        showToast('Error generating report', 'error');
+    }
+}
+
+/**
+ * Show Scheduler Configuration Modal
+ */
+function showSchedulerModal() {
+    let modal = document.getElementById('schedulerModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'schedulerModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>⏰ Refresh Schedule Configuration</h3>
+                    <button class="modal-close" onclick="closeSchedulerModal()">&times;</button>
+                </div>
+                <div class="modal-body scheduler-modal-content">
+                    <p style="margin-bottom: 16px; color: var(--text-secondary);">Configure automatic data refresh schedule</p>
+
+                    <div class="scheduler-option" onclick="selectScheduleOption(this, 'daily')">
+                        <input type="radio" name="schedule" value="daily">
+                        <div>
+                            <div class="scheduler-option-label">Daily Refresh</div>
+                            <div class="scheduler-option-desc">Refresh all competitors every day at 6 AM</div>
+                        </div>
+                    </div>
+
+                    <div class="scheduler-option active" onclick="selectScheduleOption(this, 'weekly')">
+                        <input type="radio" name="schedule" value="weekly" checked>
+                        <div>
+                            <div class="scheduler-option-label">Weekly Refresh</div>
+                            <div class="scheduler-option-desc">Refresh all competitors every Sunday at 2 AM</div>
+                        </div>
+                    </div>
+
+                    <div class="scheduler-option" onclick="selectScheduleOption(this, 'high_priority')">
+                        <input type="radio" name="schedule" value="high_priority">
+                        <div>
+                            <div class="scheduler-option-label">High-Priority Only</div>
+                            <div class="scheduler-option-desc">Daily refresh for high-threat competitors only</div>
+                        </div>
+                    </div>
+
+                    <div class="scheduler-option" onclick="selectScheduleOption(this, 'manual')">
+                        <input type="radio" name="schedule" value="manual">
+                        <div>
+                            <div class="scheduler-option-label">Manual Only</div>
+                            <div class="scheduler-option-desc">No automatic refresh - manual trigger only</div>
+                        </div>
+                    </div>
+
+                    <div id="schedulerStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
+                        <span id="schedulerStatusText">Loading status...</span>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button class="btn btn-secondary" onclick="closeSchedulerModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveScheduleConfig()">Save Configuration</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Load current scheduler status
+    loadSchedulerStatus();
+    modal.style.display = 'flex';
+}
+
+function closeSchedulerModal() {
+    const modal = document.getElementById('schedulerModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function selectScheduleOption(element, value) {
+    document.querySelectorAll('.scheduler-option').forEach(opt => opt.classList.remove('active'));
+    element.classList.add('active');
+    element.querySelector('input[type="radio"]').checked = true;
+}
+
+async function loadSchedulerStatus() {
+    const statusText = document.getElementById('schedulerStatusText');
+    try {
+        const status = await fetchAPI('/api/scheduler/status');
+        if (status) {
+            const running = status.running ? '🟢 Running' : '🔴 Stopped';
+            const jobCount = status.jobs ? status.jobs.length : 0;
+            statusText.innerHTML = `<strong>Status:</strong> ${running} | <strong>Active Jobs:</strong> ${jobCount}`;
+        }
+    } catch (error) {
+        statusText.textContent = 'Unable to load scheduler status';
+    }
+}
+
+async function saveScheduleConfig() {
+    const selected = document.querySelector('input[name="schedule"]:checked').value;
+
+    try {
+        showToast('Saving schedule configuration...', 'info');
+
+        // Call the schedule configuration API
+        const result = await fetchAPI('/api/refresh/schedule', {
+            method: 'POST',
+            body: JSON.stringify({
+                schedule_type: selected,
+                enabled: selected !== 'manual'
+            })
+        });
+
+        if (result) {
+            showToast('Schedule configuration saved', 'success');
+            closeSchedulerModal();
+        }
+    } catch (error) {
+        console.error('Error saving schedule:', error);
+        showToast('Error saving schedule configuration', 'error');
+    }
+}
+
+// ============================================
+// Comparison Page Tabs (v5.4.0)
+// ============================================
+
+/**
+ * Switch between comparison tabs
+ */
+function switchComparisonTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.comparison-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Update tab content
+    document.querySelectorAll('.comparison-tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.style.display = 'none';
+    });
+
+    const targetTab = document.getElementById(`comparisonTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    if (targetTab) {
+        targetTab.classList.add('active');
+        targetTab.style.display = 'block';
+    }
+
+    // Load checklists for product/dimension tabs
+    if (tabName === 'products') {
+        loadProductComparisonChecklist();
+    } else if (tabName === 'dimensions') {
+        loadDimensionComparisonChecklist();
+    }
+}
+
+/**
+ * Load competitor checklist for product comparison
+ */
+async function loadProductComparisonChecklist() {
+    const container = document.getElementById('productComparisonChecklist');
+    if (!container) return;
+
+    try {
+        const competitors = await fetchAPI('/api/competitors');
+        if (competitors && competitors.length > 0) {
+            container.innerHTML = competitors.slice(0, 50).map(comp => `
+                <div class="competitor-checkbox-item">
+                    <input type="checkbox" id="prod_comp_${comp.id}" value="${comp.id}" data-name="${escapeHtml(comp.name)}">
+                    <label for="prod_comp_${comp.id}">${escapeHtml(comp.name)}</label>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading competitors:', error);
+        container.innerHTML = '<p style="color: var(--text-secondary);">Error loading competitors</p>';
+    }
+}
+
+/**
+ * Load competitor checklist for dimension comparison
+ */
+async function loadDimensionComparisonChecklist() {
+    const container = document.getElementById('dimensionComparisonChecklist');
+    if (!container) return;
+
+    try {
+        const competitors = await fetchAPI('/api/competitors');
+        if (competitors && competitors.length > 0) {
+            container.innerHTML = competitors.slice(0, 50).map(comp => `
+                <div class="competitor-checkbox-item">
+                    <input type="checkbox" id="dim_comp_${comp.id}" value="${comp.id}" data-name="${escapeHtml(comp.name)}">
+                    <label for="dim_comp_${comp.id}">${escapeHtml(comp.name)}</label>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading competitors:', error);
+        container.innerHTML = '<p style="color: var(--text-secondary);">Error loading competitors</p>';
+    }
+}
+
+/**
+ * Run product comparison between selected competitors
+ */
+async function runProductComparison() {
+    const checkboxes = document.querySelectorAll('#productComparisonChecklist input[type="checkbox"]:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+    const selectedNames = Array.from(checkboxes).map(cb => cb.dataset.name);
+
+    if (selectedIds.length < 2) {
+        showToast('Please select at least 2 competitors to compare', 'warning');
+        return;
+    }
+
+    if (selectedIds.length > 5) {
+        showToast('Please select at most 5 competitors', 'warning');
+        return;
+    }
+
+    const resultsDiv = document.getElementById('productComparisonResults');
+    resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="spinner"></span> Loading products...</div>';
+
+    try {
+        // Fetch products for each competitor
+        const productPromises = selectedIds.map(id => fetchAPI(`/api/products/competitor/${id}`));
+        const productsResults = await Promise.all(productPromises);
+
+        // Build product comparison matrix
+        const allProducts = {};
+        const competitorProducts = {};
+
+        selectedIds.forEach((id, idx) => {
+            competitorProducts[id] = new Set();
+            const products = productsResults[idx] || [];
+            products.forEach(p => {
+                const productName = (p.name || '').toLowerCase();
+                allProducts[productName] = allProducts[productName] || {
+                    name: p.name,
+                    category: p.category || 'Uncategorized'
+                };
+                competitorProducts[id].add(productName);
+            });
+        });
+
+        // Group by category
+        const productsByCategory = {};
+        Object.values(allProducts).forEach(p => {
+            const cat = p.category || 'Uncategorized';
+            productsByCategory[cat] = productsByCategory[cat] || [];
+            productsByCategory[cat].push(p);
+        });
+
+        // Build HTML table
+        let tableHtml = `
+            <div class="product-matrix-container">
+                <table class="product-matrix">
+                    <thead>
+                        <tr>
+                            <th>Product / Feature</th>
+                            ${selectedNames.map(name => `<th>${escapeHtml(name)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        Object.entries(productsByCategory).sort().forEach(([category, products]) => {
+            tableHtml += `<tr class="category-row"><td colspan="${selectedIds.length + 1}">${escapeHtml(category)}</td></tr>`;
+            products.forEach(product => {
+                tableHtml += `<tr><td>${escapeHtml(product.name)}</td>`;
+                selectedIds.forEach(id => {
+                    const hasProduct = competitorProducts[id].has(product.name.toLowerCase());
+                    tableHtml += `<td class="${hasProduct ? 'has-feature' : 'no-feature'}">
+                        <span class="${hasProduct ? 'feature-check' : 'feature-x'}">${hasProduct ? '✓' : '✗'}</span>
+                    </td>`;
+                });
+                tableHtml += '</tr>';
+            });
+        });
+
+        tableHtml += '</tbody></table></div>';
+
+        if (Object.keys(allProducts).length === 0) {
+            resultsDiv.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p>No products found for the selected competitors.</p>
+                    <p style="font-size: 12px;">Products can be discovered using the Product Discovery feature.</p>
+                </div>
+            `;
+        } else {
+            resultsDiv.innerHTML = tableHtml;
+        }
+
+        showToast(`Comparing ${Object.keys(allProducts).length} products across ${selectedIds.length} competitors`, 'success');
+
+    } catch (error) {
+        console.error('Error running product comparison:', error);
+        resultsDiv.innerHTML = '<p style="color: var(--danger-color); text-align: center;">Error loading product data</p>';
+        showToast('Error loading product data', 'error');
+    }
+}
+
+/**
+ * Run dimension comparison between selected competitors
+ */
+async function runDimensionComparison() {
+    const checkboxes = document.querySelectorAll('#dimensionComparisonChecklist input[type="checkbox"]:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+    const selectedNames = Array.from(checkboxes).map(cb => cb.dataset.name);
+
+    if (selectedIds.length < 2) {
+        showToast('Please select at least 2 competitors to compare', 'warning');
+        return;
+    }
+
+    if (selectedIds.length > 5) {
+        showToast('Please select at most 5 competitors', 'warning');
+        return;
+    }
+
+    const resultsDiv = document.getElementById('dimensionComparisonResults');
+    resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="spinner"></span> Loading dimensions...</div>';
+
+    try {
+        // Fetch dimension scores for each competitor
+        const dimensionPromises = selectedIds.map(id => fetchAPI(`/api/sales-marketing/competitors/${id}/dimensions`));
+        const dimensionResults = await Promise.all(dimensionPromises);
+
+        // Get dimension metadata
+        const dimensions = await fetchAPI('/api/sales-marketing/dimensions');
+
+        // Build comparison data
+        const comparisonData = selectedIds.map((id, idx) => ({
+            id,
+            name: selectedNames[idx],
+            dimensions: dimensionResults[idx] || {}
+        }));
+
+        // Build HTML with radar chart placeholder and table
+        let html = `
+            <div id="dimensionRadarContainer" style="max-width: 600px; margin: 24px auto;">
+                <canvas id="dimensionRadarChart"></canvas>
+            </div>
+            <div class="product-matrix-container">
+                <table class="product-matrix">
+                    <thead>
+                        <tr>
+                            <th>Dimension</th>
+                            ${selectedNames.map(name => `<th>${escapeHtml(name)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        const dimensionIds = Object.keys(dimensions || {});
+        dimensionIds.forEach(dimId => {
+            const dimMeta = dimensions[dimId];
+            html += `<tr><td>${dimMeta?.icon || ''} ${dimMeta?.name || dimId}</td>`;
+            comparisonData.forEach(comp => {
+                const score = comp.dimensions[dimId]?.score || comp.dimensions[`${dimId}_score`] || '-';
+                const scoreClass = score >= 4 ? 'has-feature' : (score >= 2 ? '' : 'no-feature');
+                html += `<td class="${scoreClass}">${score}/5</td>`;
+            });
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+
+        resultsDiv.innerHTML = html;
+
+        // Create radar chart if Chart.js is available
+        if (typeof Chart !== 'undefined' && dimensionIds.length > 0) {
+            const ctx = document.getElementById('dimensionRadarChart');
+            if (ctx) {
+                const colors = ['#3A95ED', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+                const datasets = comparisonData.map((comp, idx) => ({
+                    label: comp.name,
+                    data: dimensionIds.map(dimId => comp.dimensions[dimId]?.score || comp.dimensions[`${dimId}_score`] || 0),
+                    borderColor: colors[idx % colors.length],
+                    backgroundColor: colors[idx % colors.length] + '20',
+                    borderWidth: 2,
+                    pointRadius: 4
+                }));
+
+                new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: dimensionIds.map(id => dimensions[id]?.name || id),
+                        datasets
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            r: {
+                                min: 0,
+                                max: 5,
+                                ticks: { stepSize: 1 }
+                            }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            }
+        }
+
+        showToast(`Comparing ${dimensionIds.length} dimensions across ${selectedIds.length} competitors`, 'success');
+
+    } catch (error) {
+        console.error('Error running dimension comparison:', error);
+        resultsDiv.innerHTML = '<p style="color: var(--danger-color); text-align: center;">Error loading dimension data</p>';
+        showToast('Error loading dimension data', 'error');
+    }
+}

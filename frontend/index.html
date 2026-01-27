@@ -330,6 +330,61 @@
                     </div>
                 </div>
 
+                <!-- Quick Action Cards (v5.4.0 Enhancement) -->
+                <div class="quick-actions-section">
+                    <h3 class="section-title">Quick Actions</h3>
+                    <div class="quick-actions-grid">
+                        <div class="quick-action-card" onclick="triggerScrapeAll()">
+                            <div class="quick-action-icon">🔄</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Refresh All Data</span>
+                                <span class="quick-action-desc">Update all competitor information</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showDiscoveryPanel()">
+                            <div class="quick-action-icon">🔍</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Discover Competitors</span>
+                                <span class="quick-action-desc">Find new competitors with AI</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="generateQuickReport()">
+                            <div class="quick-action-icon">📊</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Generate Report</span>
+                                <span class="quick-action-desc">Create executive summary PDF</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showPage('comparison')">
+                            <div class="quick-action-icon">⚖️</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Compare Competitors</span>
+                                <span class="quick-action-desc">Side-by-side analysis</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showPage('newsfeed')">
+                            <div class="quick-action-icon">📰</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Latest News</span>
+                                <span class="quick-action-desc">View competitive intelligence news</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                        <div class="quick-action-card" onclick="showSchedulerModal()">
+                            <div class="quick-action-icon">⏰</div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Schedule Refresh</span>
+                                <span class="quick-action-desc">Configure auto-refresh timing</span>
+                            </div>
+                            <span class="quick-action-arrow">→</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Charts Row -->
                 <div class="charts-row">
                     <div class="chart-card">
@@ -542,12 +597,59 @@
                 <div class="page-header">
                     <h2>Competitor Comparison</h2>
                 </div>
-                <div class="comparison-selector">
-                    <label>Select competitors to compare:</label>
-                    <div id="comparisonChecklist"></div>
-                    <button class="btn btn-primary" onclick="runComparison()">Compare Selected</button>
+
+                <!-- Comparison Type Tabs -->
+                <div class="comparison-tabs">
+                    <button class="comparison-tab active" onclick="switchComparisonTab('general')" data-tab="general">
+                        📊 General Comparison
+                    </button>
+                    <button class="comparison-tab" onclick="switchComparisonTab('products')" data-tab="products">
+                        📦 Product Matrix
+                    </button>
+                    <button class="comparison-tab" onclick="switchComparisonTab('dimensions')" data-tab="dimensions">
+                        🎯 Dimension Scores
+                    </button>
                 </div>
-                <div id="comparisonResults"></div>
+
+                <!-- General Comparison Tab -->
+                <div id="comparisonTabGeneral" class="comparison-tab-content active">
+                    <div class="comparison-selector">
+                        <label>Select competitors to compare:</label>
+                        <div id="comparisonChecklist"></div>
+                        <button class="btn btn-primary" onclick="runComparison()">Compare Selected</button>
+                    </div>
+                    <div id="comparisonResults"></div>
+                </div>
+
+                <!-- Product Comparison Matrix Tab (v5.4.0) -->
+                <div id="comparisonTabProducts" class="comparison-tab-content" style="display: none;">
+                    <div class="product-comparison-header">
+                        <h3>📦 Product Comparison Matrix</h3>
+                        <p class="subtitle">Compare product offerings across competitors</p>
+                    </div>
+                    <div class="product-comparison-selector">
+                        <label>Select competitors for product comparison:</label>
+                        <div id="productComparisonChecklist" class="competitor-checklist-grid"></div>
+                        <button class="btn btn-primary" onclick="runProductComparison()">Compare Products</button>
+                    </div>
+                    <div id="productComparisonResults"></div>
+                </div>
+
+                <!-- Dimension Scores Tab -->
+                <div id="comparisonTabDimensions" class="comparison-tab-content" style="display: none;">
+                    <div class="dimension-comparison-header">
+                        <h3>🎯 Dimension Score Comparison</h3>
+                        <p class="subtitle">Compare competitive evaluation dimensions</p>
+                    </div>
+                    <div class="dimension-comparison-selector">
+                        <label>Select competitors for dimension comparison:</label>
+                        <div id="dimensionComparisonChecklist" class="competitor-checklist-grid"></div>
+                        <button class="btn btn-primary" onclick="runDimensionComparison()">Compare Dimensions</button>
+                    </div>
+                    <div id="dimensionComparisonResults">
+                        <div id="dimensionRadarContainer" style="max-width: 600px; margin: 24px auto;"></div>
+                    </div>
+                </div>
             </section>
 
             <!-- Changes Page -->
