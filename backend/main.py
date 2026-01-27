@@ -1834,6 +1834,186 @@ def get_pricing_analytics(db: Session = Depends(get_db)):
     return {"pricing_models": [{"model": k, "count": v} for k, v in models.items()]}
 
 
+@app.get("/api/analytics/dashboard")
+def get_analytics_dashboard(db: Session = Depends(get_db)):
+    """
+    Get comprehensive analytics dashboard data.
+
+    v5.2.0: Phase 5 - Complete analytics dashboard.
+
+    Returns all metrics needed for the analytics page including:
+    - Competitor counts by status and threat level
+    - Data freshness metrics
+    - News sentiment trends
+    - Dimension score averages
+    - Market positioning data
+    """
+    from datetime import timedelta
+    from sqlalchemy import func
+
+    competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
+    total = len(competitors)
+
+    # Status breakdown
+    status_counts = {}
+    for c in competitors:
+        status = c.status or "Unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    # Threat level breakdown
+    threat_counts = {"High": 0, "Medium": 0, "Low": 0}
+    for c in competitors:
+        level = c.threat_level or "Low"
+        if level in threat_counts:
+            threat_counts[level] += 1
+
+    # Data freshness
+    now = datetime.utcnow()
+    fresh_count = 0  # Updated within 7 days
+    stale_count = 0  # Not updated in 30+ days
+    for c in competitors:
+        if c.last_updated:
+            age = (now - c.last_updated).days
+            if age <= 7:
+                fresh_count += 1
+            elif age > 30:
+                stale_count += 1
+
+    # Data quality average
+    quality_sum = sum(c.data_quality_score or 0 for c in competitors)
+    avg_quality = quality_sum / total if total > 0 else 0
+
+    # News sentiment from cache
+    try:
+        from database import NewsArticleCache
+        recent_cutoff = now - timedelta(days=30)
+        news_query = db.query(NewsArticleCache).filter(
+            NewsArticleCache.published_at >= recent_cutoff
+        ).all()
+
+        sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+        for article in news_query:
+            sent = article.sentiment or "neutral"
+            if sent in sentiment_counts:
+                sentiment_counts[sent] += 1
+
+        news_total = len(news_query)
+    except:
+        sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+        news_total = 0
+
+    # Dimension score averages (if available)
+    dimension_averages = {}
+    dimension_fields = [
+        "product_packaging_score", "integration_depth_score", "support_service_score",
+        "retention_stickiness_score", "user_adoption_score", "implementation_ttv_score",
+        "reliability_enterprise_score", "pricing_flexibility_score", "reporting_analytics_score"
+    ]
+
+    for field in dimension_fields:
+        scores = [getattr(c, field, None) for c in competitors if hasattr(c, field)]
+        valid_scores = [s for s in scores if s is not None]
+        if valid_scores:
+            dimension_name = field.replace("_score", "").replace("_", " ").title()
+            dimension_averages[dimension_name] = sum(valid_scores) / len(valid_scores)
+
+    # Market positioning (customer count vs threat level)
+    market_data = []
+    for c in competitors[:50]:  # Limit for performance
+        customer_count = 0
+        if c.customer_count:
+            try:
+                customer_count = int(''.join(filter(str.isdigit, str(c.customer_count)[:10])))
+            except:
+                customer_count = 100
+
+        market_data.append({
+            "name": c.name,
+            "x": c.data_quality_score or 50,  # Data quality as proxy for market presence
+            "y": customer_count,
+            "threat": c.threat_level or "Low",
+            "size": {"High": 30, "Medium": 20, "Low": 10}.get(c.threat_level, 15)
+        })
+
+    # Recent changes count
+    changes_count = db.query(DataChangeHistory).filter(
+        DataChangeHistory.changed_at >= now - timedelta(days=7)
+    ).count()
+
+    return {
+        "summary": {
+            "total_competitors": total,
+            "active_count": status_counts.get("Active", 0),
+            "discovered_count": status_counts.get("Discovered", 0),
+            "avg_data_quality": round(avg_quality, 1),
+            "fresh_data_count": fresh_count,
+            "stale_data_count": stale_count,
+            "recent_changes": changes_count
+        },
+        "threat_distribution": threat_counts,
+        "status_distribution": status_counts,
+        "news_sentiment": {
+            "counts": sentiment_counts,
+            "total": news_total
+        },
+        "dimension_averages": dimension_averages,
+        "market_positioning": market_data[:30],
+        "generated_at": now.isoformat()
+    }
+
+
+@app.get("/api/analytics/market-map")
+def get_market_map_data(db: Session = Depends(get_db)):
+    """
+    Get data for market positioning visualization.
+
+    v5.2.0: Phase 5 - Market map for analytics page.
+
+    Returns competitors positioned by data quality (x) and estimated size (y).
+    """
+    competitors = db.query(Competitor).filter(
+        Competitor.is_deleted == False,
+        Competitor.status == "Active"
+    ).all()
+
+    data = []
+    for c in competitors:
+        # Estimate customer count
+        customer_count = 100
+        if c.customer_count:
+            try:
+                customer_count = int(''.join(filter(str.isdigit, str(c.customer_count)[:10]))) or 100
+            except:
+                customer_count = 100
+
+        # Estimate employee count for sizing
+        employee_count = 50
+        if c.employee_count:
+            try:
+                employee_count = int(''.join(filter(str.isdigit, str(c.employee_count)[:6]))) or 50
+            except:
+                employee_count = 50
+
+        data.append({
+            "id": c.id,
+            "name": c.name,
+            "x": c.data_quality_score or 50,
+            "y": min(customer_count, 10000),  # Cap for display
+            "size": min(employee_count / 10, 50),  # Scale for bubble size
+            "threat": c.threat_level or "Low",
+            "category": c.product_categories[:50] if c.product_categories else "Unknown"
+        })
+
+    return {
+        "competitors": data,
+        "count": len(data),
+        "axes": {
+            "x": {"label": "Data Quality Score", "min": 0, "max": 100},
+            "y": {"label": "Estimated Customers", "min": 0, "max": 10000}
+        }
+    }
+
+
 # ============== DATA QUALITY ENDPOINTS ==============
 
 # List of all data fields that should be tracked
@@ -2011,38 +2191,196 @@ def get_competitor_completeness(competitor_id: int, db: Session = Depends(get_db
 # ============== CHANGE HISTORY ENDPOINTS ==============
 
 @app.get("/api/changes")
-def get_changes(competitor_id: Optional[int] = None, days: int = 30, db: Session = Depends(get_db)):
-    """Get change logs for timeline."""
+def get_changes(
+    competitor_id: Optional[int] = None,
+    days: int = 30,
+    field_name: Optional[str] = None,
+    changed_by: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Get change logs for timeline with advanced filtering.
+
+    v5.2.0: Enhanced filtering for Phase 4.
+
+    Args:
+        competitor_id: Filter by specific competitor
+        days: Number of days to look back (default: 30)
+        field_name: Filter by specific field (e.g., "pricing_model", "key_features")
+        changed_by: Filter by who made the change
+        start_date: Filter from this date (YYYY-MM-DD)
+        end_date: Filter until this date (YYYY-MM-DD)
+        page: Page number for pagination
+        page_size: Number of items per page
+    """
     from datetime import timedelta
-    cutoff = datetime.utcnow() - timedelta(days=days)
-    
-    query = db.query(DataChangeHistory).filter(DataChangeHistory.changed_at >= cutoff)
-    
+
+    # Build query
+    query = db.query(DataChangeHistory)
+
+    # Date filtering
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(DataChangeHistory.changed_at >= start_dt)
+        except ValueError:
+            pass
+    else:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(DataChangeHistory.changed_at >= cutoff)
+
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(DataChangeHistory.changed_at < end_dt)
+        except ValueError:
+            pass
+
+    # Other filters
     if competitor_id:
         query = query.filter(DataChangeHistory.competitor_id == competitor_id)
-        
-    changes = query.order_by(DataChangeHistory.changed_at.desc()).limit(100).all()
-    
+
+    if field_name:
+        query = query.filter(DataChangeHistory.field_name.ilike(f"%{field_name}%"))
+
+    if changed_by:
+        query = query.filter(DataChangeHistory.changed_by.ilike(f"%{changed_by}%"))
+
+    # Get total count before pagination
+    total_count = query.count()
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    changes = query.order_by(DataChangeHistory.changed_at.desc()).offset(offset).limit(page_size).all()
+
     return {
         "competitor_id": competitor_id,
         "days": days,
         "count": len(changes),
+        "total_count": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size,
         "changes": [
             {
                 "id": c.id,
                 "competitor_id": c.competitor_id,
                 "competitor_name": c.competitor_name,
                 "change_type": c.field_name.replace("_", " ").title(),
+                "field_name": c.field_name,
                 "previous_value": c.old_value,
                 "new_value": c.new_value,
                 "severity": "Medium",
                 "detected_at": c.changed_at.isoformat(),
                 "source": c.changed_by or "manual",
-                "changed_by": c.changed_by
+                "changed_by": c.changed_by,
+                "change_reason": c.change_reason
             }
             for c in changes
         ]
     }
+
+
+@app.get("/api/changes/export")
+def export_changes(
+    competitor_id: Optional[int] = None,
+    days: int = 90,
+    format: str = "csv",
+    db: Session = Depends(get_db)
+):
+    """
+    Export change logs to CSV or Excel.
+
+    v5.2.0: Phase 4 - Change log export.
+
+    Args:
+        competitor_id: Filter by specific competitor
+        days: Number of days to look back
+        format: "csv" or "excel"
+    """
+    from datetime import timedelta
+    import io
+    import csv
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    query = db.query(DataChangeHistory).filter(DataChangeHistory.changed_at >= cutoff)
+
+    if competitor_id:
+        query = query.filter(DataChangeHistory.competitor_id == competitor_id)
+
+    changes = query.order_by(DataChangeHistory.changed_at.desc()).all()
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Date", "Competitor", "Field", "Old Value", "New Value",
+            "Changed By", "Reason"
+        ])
+
+        for c in changes:
+            writer.writerow([
+                c.changed_at.isoformat() if c.changed_at else "",
+                c.competitor_name,
+                c.field_name,
+                c.old_value[:200] if c.old_value else "",
+                c.new_value[:200] if c.new_value else "",
+                c.changed_by or "system",
+                c.change_reason or ""
+            ])
+
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=changelog_export_{datetime.now().strftime('%Y%m%d')}.csv"
+            }
+        )
+
+    elif format == "excel":
+        try:
+            from openpyxl import Workbook
+            from fastapi.responses import FileResponse
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Change Log"
+
+            # Header
+            ws.append([
+                "Date", "Competitor", "Field", "Old Value", "New Value",
+                "Changed By", "Reason"
+            ])
+
+            for c in changes:
+                ws.append([
+                    c.changed_at.strftime("%Y-%m-%d %H:%M") if c.changed_at else "",
+                    c.competitor_name,
+                    c.field_name,
+                    (c.old_value[:200] if c.old_value else ""),
+                    (c.new_value[:200] if c.new_value else ""),
+                    c.changed_by or "system",
+                    c.change_reason or ""
+                ])
+
+            os.makedirs("./exports", exist_ok=True)
+            filepath = f"./exports/changelog_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            wb.save(filepath)
+
+            return FileResponse(
+                filepath,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=f"changelog_export_{datetime.now().strftime('%Y%m%d')}.xlsx"
+            )
+        except ImportError:
+            return {"error": "openpyxl not installed for Excel export"}
+
+    return {"error": f"Unknown format: {format}"}
 
 
 @app.get("/api/changes/history/{competitor_id}")
@@ -6381,25 +6719,142 @@ async def run_discovery(request: Request):
 async def run_live_discovery():
     """Run live discovery with DuckDuckGo search (rate-limited)."""
     global discovery_results
-    
+
     try:
         from discovery_agent import DiscoveryAgent
-        
+
         agent = DiscoveryAgent(use_live_search=True, use_openai=False)
         candidates = await agent.run_discovery_loop(max_candidates=5)
-        
+
         discovery_results = {
             "candidates": candidates,
             "last_run": datetime.utcnow().isoformat(),
             "count": len(candidates),
             "mode": "live"
         }
-        
+
         return discovery_results
-        
+
     except Exception as e:
         print(f"Live discovery error: {e}")
         return {"error": str(e), "candidates": [], "message": "Live discovery failed"}
+
+
+@app.post("/api/discovery/add")
+async def add_discovered_competitors(request: Request, db: Session = Depends(get_db)):
+    """
+    Add discovered competitors to the database.
+
+    v5.2.0: Phase 3 - End-to-end discovery flow.
+
+    Request body:
+    {
+        "candidates": [
+            {"name": "...", "url": "...", "reasoning": "...", "relevance_score": 0.8}
+        ]
+    }
+    """
+    try:
+        body = await request.json()
+        candidates = body.get("candidates", [])
+
+        if not candidates:
+            return {"success": False, "error": "No candidates provided"}
+
+        added = []
+        skipped = []
+
+        for candidate in candidates:
+            name = candidate.get("name", "").strip()
+            url = candidate.get("url", "").strip()
+            reasoning = candidate.get("reasoning", "")
+            score = candidate.get("relevance_score", 0)
+
+            if not name or not url:
+                skipped.append({"name": name, "reason": "Missing name or URL"})
+                continue
+
+            # Check for duplicates
+            exists = db.query(Competitor).filter(
+                (Competitor.website.ilike(f"%{url}%")) |
+                (Competitor.name.ilike(f"%{name}%"))
+            ).first()
+
+            if exists:
+                skipped.append({"name": name, "reason": f"Duplicate of {exists.name}"})
+                continue
+
+            # Create new competitor
+            new_comp = Competitor(
+                name=name,
+                website=url,
+                status="Discovered",
+                threat_level="Low",
+                notes=f"Discovered by Certify Scout. Relevance: {score:.0%}. {reasoning}",
+                data_quality_score=int(score * 100) if score else 50,
+                created_at=datetime.utcnow()
+            )
+            db.add(new_comp)
+            db.flush()
+
+            # Log the discovery
+            change = ChangeLog(
+                competitor_id=new_comp.id,
+                competitor_name=new_comp.name,
+                change_type="New Competitor Discovered",
+                new_value=url,
+                source="Certify Scout",
+                severity="Medium"
+            )
+            db.add(change)
+
+            added.append({
+                "id": new_comp.id,
+                "name": name,
+                "url": url,
+                "score": score
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "added": added,
+            "added_count": len(added),
+            "skipped": skipped,
+            "skipped_count": len(skipped)
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/discovery/history")
+def get_discovery_history(limit: int = 50, db: Session = Depends(get_db)):
+    """Get history of discovered competitors."""
+    try:
+        discovered = db.query(Competitor).filter(
+            Competitor.status == "Discovered",
+            Competitor.is_deleted == False
+        ).order_by(Competitor.created_at.desc()).limit(limit).all()
+
+        return {
+            "count": len(discovered),
+            "competitors": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "website": c.website,
+                    "discovered_at": c.created_at.isoformat() if c.created_at else None,
+                    "notes": c.notes,
+                    "score": c.data_quality_score
+                }
+                for c in discovered
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e), "competitors": []}
 
 
 # ============== Enhancement Endpoints ==============
