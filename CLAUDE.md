@@ -38,9 +38,12 @@ The critical authentication bug has been **FIXED**. The application now works co
 
 **Certify Intel** is a production-ready Competitive Intelligence Platform designed to track, analyze, and counter 82 competitors in the healthcare technology space. It provides a centralized, real-time dashboard for sales, product, and leadership teams.
 
-**Version**: v5.5.0
-**Status**: 🟢 Web Version Production-Ready | 🟢 Desktop App Released (v5.5.0)
+**Version**: v5.1.2 (Public Release)
+**Repository**: Certify_Intel_v5.1.2 (Public)
+**Status**: Production-Ready
 **Last Updated**: January 27, 2026
+
+> **Note**: This is the public release version. For development/private version, see Project_Intel_v6.1.1.
 
 ---
 
@@ -1403,5 +1406,53 @@ Created [test_features.ps1](test_features.ps1) to verify all endpoints:
 
 ---
 
+## Public Release: Certify Intel v5.1.2
+
+**Repository**: https://github.com/hicklax13/Certify_Intel_v5.1.2
+**Version**: v5.1.2 (Public Release)
+**Release Date**: January 27, 2026
+
+### This is the Public Release Version
+
+This repository contains the production-ready public release of Certify Intel. For continued development work, refer to the private repository Project_Intel_v6.1.1.
+
+### Download
+
+Get the latest Desktop App from the Releases page:
+https://github.com/hicklax13/Certify_Intel_v5.1.2/releases/tag/v5.1.2
+
+### Quick Start
+
+**Web Browser Version:**
+```bash
+cd backend
+python main.py
+```
+Open http://localhost:8000
+
+**Default Login:**
+- Email: admin@certifyintel.com
+- Password: MSFWINTERCLINIC2026
+
+### What's Included
+
+| Feature | Coverage |
+|---------|----------|
+| Competitors | 82 |
+| Products | 789 (100%) |
+| News Articles | 1,634 |
+| Data Sources | 512 (86% verified) |
+| AI Provider | Hybrid (OpenAI + Gemini) |
+
+### Last 5 Tasks Completed (Session 19)
+
+1. Created installer packages for v5.1.2
+2. Tested Desktop and Web Browser versions
+3. Created public GitHub repository
+4. Published Desktop App release with install instructions
+5. Updated documentation for public release
+
+---
+
 **Last Updated**: January 27, 2026
-**Updated By**: Claude Opus 4.5 (Feature Verification Session - ALL 5 FEATURES PROVEN)
+**Updated By**: Claude Opus 4.5 (Migration Session - Public Release Complete)
