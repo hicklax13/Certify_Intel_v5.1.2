@@ -3,7 +3,7 @@
  * Frontend logic for competitive intelligence dashboard
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.location.origin;
 
 // State
 let competitors = [];
@@ -4087,7 +4087,7 @@ async function renderMarketTrends() {
 
     try {
         const response = await fetch('/api/analytics/trends', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
 
         // Default data if fetch fails or is empty
