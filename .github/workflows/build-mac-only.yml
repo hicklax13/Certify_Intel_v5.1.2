@@ -112,7 +112,9 @@ jobs:
       - name: Build macOS installer
         run: |
           cd desktop-app
-          npm run build:mac
+          # Use --publish never to skip auto-publish (package.json has wrong repo)
+          # We upload to release manually in the next step
+          npx electron-builder --mac --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
