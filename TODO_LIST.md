@@ -1319,5 +1319,92 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 
 ---
 
-**Last Session Update**: January 26, 2026, 10:30 PM EST
-**Updated By**: Claude Opus 4.5 (Bug Fixes & Email Setup Session)
+**Last Session Update**: January 26, 2026
+**Updated By**: Claude Opus 4.5 (Knowledge Base Importer Session)
+
+---
+
+## Session Log: January 26, 2026 (Session 11 - Knowledge Base Importer)
+
+**Session**: Knowledge Base Import Feature - v5.0.8
+**Phases Completed**: 7/7
+**Commit**: bb0acef
+
+### Summary
+
+Implemented a comprehensive Knowledge Base Import system that allows importing
+competitor data from client-provided files with source tracking and verification.
+
+### 7 Phases Completed
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Create knowledge_base_importer.py with CSV/Excel/PDF/Word/MD parsers | ✅ Complete |
+| 2 | Add source_type='client_provided' and DataSource records | ✅ Complete |
+| 3 | Create knowledge_base router with 11 API endpoints | ✅ Complete |
+| 4 | Add frontend source badges and import UI | ✅ Complete |
+| 5 | Build verification queue API and UI | ✅ Complete |
+| 6 | Dashboard integration with import status widget | ✅ Complete |
+| 7 | News Feed with caching and background refresh | ✅ Complete |
+
+### Files Created (2)
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `backend/knowledge_base_importer.py` | ~966 | Core import engine with 74 competitor aliases |
+| `backend/routers/knowledge_base.py` | ~681 | 11 API endpoints for import/verification |
+
+### Files Modified (6)
+
+| File | Changes |
+|------|---------|
+| `backend/main.py` | Added KB router, news cache refresh endpoint (+377 lines) |
+| `backend/database.py` | Added NewsArticleCache table |
+| `frontend/index.html` | Added KB Import UI and Verification Queue |
+| `frontend/app_v2.js` | Added KB import JavaScript functions |
+| `frontend/styles.css` | Added .source-badge-client styling |
+| `TODO_LIST.md` | Session log entry |
+
+### Files Renamed (74)
+
+Moved all files from `client_docs/` to `client_docs_knowledge_base/` for the import system.
+
+### New API Endpoints (11)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/knowledge-base/scan` | GET | Scan folder for supported files |
+| `/api/knowledge-base/preview` | GET | Preview import results |
+| `/api/knowledge-base/import` | POST | Run the import |
+| `/api/knowledge-base/competitor-names` | GET | Get 74 known competitor names |
+| `/api/knowledge-base/verification-queue` | GET | Get unverified data |
+| `/api/knowledge-base/verification/approve/{id}` | POST | Approve data point |
+| `/api/knowledge-base/verification/reject/{id}` | POST | Reject data point |
+| `/api/knowledge-base/verification/bulk-approve` | POST | Bulk approve |
+| `/api/admin/knowledge-base` | GET | Admin KB listing |
+| `/api/admin/knowledge-base` | POST | Admin KB create |
+| `/api/admin/knowledge-base/{id}` | DELETE | Admin KB delete |
+
+### Key Features
+
+- **74 Competitors**: All competitor names recognized with alias matching
+- **Source Labeling**: All imported data tagged as "Source: Certify Health"
+- **Fill Gaps Only**: Import only fills empty fields, never overwrites
+- **Auto-Import**: Data appears immediately with "unverified" badge
+- **Verification Queue**: UI to approve/reject imported data
+- **News Caching**: NewsArticleCache table for faster news loads
+
+### Testing
+
+To test the import:
+1. Start server: `cd backend && python main.py`
+2. Go to Settings page → "Knowledge Base Import" section
+3. Click "Preview Import" → see competitors from files
+4. Click "Import All" → import with Certify Health source label
+5. Go to Verification Queue → approve/reject imported data
+
+### Server Status
+
+- Total routes: 271
+- Knowledge Base routes: 11
+- Server loads successfully
