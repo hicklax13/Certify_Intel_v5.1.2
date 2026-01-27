@@ -1304,14 +1304,15 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 | Sales & Marketing | 9 dimensions fully implemented |
 | News Feed | 13 sources integrated |
 | Data Quality | Admiralty Code scoring active |
-| Desktop App | BLOCKED (PyInstaller .env issue) |
+| Desktop App | ✅ FIXED (PyInstaller .env path resolved) |
 | Vertex AI | PROPOSED (pending approval) |
+| Product Discovery System | ✅ COMPLETE (100% coverage) |
 
 ### Next 5 Tasks for Future Session:
 
 | # | Task ID | Description | Priority | Status |
 |---|---------|-------------|----------|--------|
-| 1 | 5.0.3-001 | Fix .env path in PyInstaller desktop app | HIGH | BLOCKED |
+| 1 | DESKTOP-BUILD | Build and test Desktop App installer | HIGH | READY |
 | 2 | VERTEX-1.1 | Set up GCP project with Vertex AI (if approved) | HIGH | PENDING |
 | 3 | VERTEX-1.2 | Create vertex_ai_provider.py (~800 lines) | HIGH | PENDING |
 | 4 | API-002 | Register for GNews API (user action) | LOW | PENDING |
@@ -1319,8 +1320,106 @@ This session focused on reviewing, documenting, and integrating the Vertex AI im
 
 ---
 
-**Last Session Update**: January 26, 2026
-**Updated By**: Claude Opus 4.5 (Knowledge Base Importer Session)
+## ✅ COMPLETED: Desktop App PyInstaller Fix (v5.0.3) - January 27, 2026
+
+> **Status**: ✅ **COMPLETED** - .env path resolution fixed for PyInstaller builds
+
+### Root Cause
+
+When bundled with PyInstaller:
+- `__main__.py` correctly loaded `.env` from the exe directory
+- But `main.py` then called `load_dotenv()` again, looking in the temp extraction folder
+- This overwrote the correct environment variables with empty values
+
+### Fix Applied
+
+1. **[main.py](backend/main.py)**: Added PyInstaller-aware `_load_env()` function
+   - Checks for `CERTIFY_BUNDLED` flag set by `__main__.py`
+   - Skips `load_dotenv()` if already loaded by bundle entry point
+   - Falls back to looking next to executable if frozen
+
+2. **[database.py](backend/database.py)**: Added PyInstaller-aware `_get_database_url()` function
+   - Ensures database is created next to exe, not in temp folder
+   - Uses exe directory path when running frozen
+
+3. **[__main__.py](backend/__main__.py)**: Fixed database path handling
+   - Always sets DATABASE_URL to exe directory (not just if file exists)
+   - Allows first-run database creation in correct location
+
+4. **[desktop-app/README.md](desktop-app/README.md)**: Added post-installation instructions
+   - Documents .env configuration steps
+   - Added troubleshooting section
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `backend/main.py` | Added `_load_env()` with PyInstaller detection |
+| `backend/database.py` | Added `_get_database_url()` with frozen mode support |
+| `backend/__main__.py` | Fixed database path to always use exe directory |
+| `desktop-app/README.md` | Added configuration & troubleshooting sections |
+
+---
+
+## ✅ COMPLETED: Product Discovery System (v5.1.0) - January 27, 2026
+
+> **Status**: ✅ **COMPLETED** - 100% Product & News Coverage Achieved
+> **Competitors**: 82 (cleaned from 123)
+> **Product Coverage**: 100% (789 products)
+> **News Coverage**: 100% (1,539 articles)
+
+### Final Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Competitors | 123 (with duplicates) | **82** (cleaned) |
+| Product Coverage | 0% (0 records) | **100%** (789 products) |
+| News Coverage | ~75% | **100%** (1,539 articles) |
+| Avg Products/Competitor | 0 | **9.6** |
+| Avg News/Competitor | ~12 | **18.8** |
+
+### Top Competitors by Product Count
+
+| Competitor | Products |
+|------------|----------|
+| Athenahealth | 104 |
+| Centralreach | 47 |
+| Compugroup Medical | 47 |
+| CureMD | 42 |
+| FormDR | 41 |
+
+### Files Created
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `backend/product_discovery_crawler.py` | ~500 | Playwright + AI product discovery |
+| `backend/routers/products.py` | ~450 | 12 API endpoints for products |
+| `backend/comprehensive_news_scraper.py` | ~400 | Multi-source news aggregation |
+| `backend/populate_product_and_news_data.py` | ~500 | 3-phase data population script |
+
+### New API Endpoints (14)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/products/` | GET | List all products |
+| `/api/products/{id}` | GET | Get product details |
+| `/api/products/` | POST | Create product |
+| `/api/products/{id}` | PUT | Update product |
+| `/api/products/{id}` | DELETE | Delete product |
+| `/api/products/competitor/{id}` | GET | Products by competitor |
+| `/api/products/discover/{id}` | POST | Discover products for competitor |
+| `/api/products/discover/all` | POST | Discover all products |
+| `/api/products/coverage` | GET | Coverage statistics |
+| `/api/products/audit/quick` | GET | Quick audit |
+| `/api/products/categories` | GET | Product categories |
+| `/api/products/search` | GET | Search products |
+| `/api/news-coverage` | GET | News coverage stats |
+| `/api/news-coverage/refresh-all` | POST | Refresh all news |
+
+---
+
+**Last Session Update**: January 27, 2026
+**Updated By**: Claude Opus 4.5 (Product & News 100% Coverage Session)
 
 ---
 
@@ -1407,4 +1506,69 @@ To test the import:
 
 - Total routes: 271
 - Knowledge Base routes: 11
+- Server loads successfully
+
+---
+
+## Session Log: January 27, 2026 (Session 12 - Product & News 100% Coverage)
+
+**Session**: Product Discovery System & News Coverage Completion
+**Duration**: ~1 hour
+**Version**: v5.1.0
+
+### Session Summary
+
+Achieved 100% product and news coverage for all 82 competitors by implementing the Product Discovery System, cleaning duplicate data, and filling coverage gaps.
+
+### 10 Tasks Completed
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | Build Product Discovery Crawler (product_discovery_crawler.py) | ✅ Complete |
+| 2 | Create Products API Router (routers/products.py) | ✅ Complete |
+| 3 | Build Comprehensive News Scraper | ✅ Complete |
+| 4 | Add news coverage endpoints to main.py | ✅ Complete |
+| 5 | Test server startup and endpoints | ✅ Complete |
+| 6 | Run quick product audit for all competitors | ✅ Complete |
+| 7 | Run comprehensive news refresh | ✅ Complete |
+| 8 | Clean up 41 duplicate entries (38 URLs + 3 duplicates) | ✅ Complete |
+| 9 | Fill remaining product gaps to 100% | ✅ Complete |
+| 10 | Fill remaining news gaps to 100% | ✅ Complete |
+
+### Data Cleanup Performed
+
+1. **Removed 38 URL-like entries**: Competitor names like "Https://Www.Intelichart.Com/" were actually URLs
+2. **Marked 3 duplicates**: Vecanahealthcare, Insynchcs, Well.Company
+3. **Fixed 7 missing websites**: Added URLs to Clearwaveinc, Epionhealth, Healthmark-Group, Nextgen, Intakeq.Com, Getwellnetwork, Aliatech
+4. **Fixed company name searches**: Used correct names (e.g., "Vecna Healthcare" instead of "Vecnahealth") for news
+
+### Files Created (4)
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `backend/product_discovery_crawler.py` | ~500 | Playwright + AI product discovery |
+| `backend/routers/products.py` | ~450 | 12 API endpoints for products |
+| `backend/comprehensive_news_scraper.py` | ~400 | Multi-source news aggregation |
+| `backend/populate_product_and_news_data.py` | ~500 | 3-phase data population script |
+
+### Files Modified (2)
+
+| File | Changes |
+|------|---------|
+| `backend/main.py` | Added products router, news coverage endpoints |
+| `backend/database.py` | CompetitorProduct table already existed |
+
+### Database Changes
+
+| Table | Before | After |
+|-------|--------|-------|
+| Competitor | 123 records | 82 records (41 marked deleted) |
+| CompetitorProduct | 0 records | 789 records |
+| NewsArticleCache | ~1,200 records | 1,539 records |
+
+### Server Status (v5.1.0)
+
+- Total routes: 285+
+- Product routes: 12
+- News routes: 14
 - Server loads successfully

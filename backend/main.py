@@ -7,15 +7,56 @@ A lightweight FastAPI backend that:
 4. Exports data to Excel-compatible formats
 """
 import os
+import sys
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    print(f"Loading environment variables from .env")
-    print(f"Database URL: {os.getenv('DATABASE_URL', 'sqlite:///./certify_intel.db')}")
-except ImportError:
-    print("python-dotenv not installed, using system environment variables")
+# ==============================================================================
+# ENVIRONMENT LOADING - PyInstaller Compatible (v5.0.3 Fix)
+# ==============================================================================
+def _load_env():
+    """
+    Load environment variables with PyInstaller awareness.
+
+    When bundled with PyInstaller:
+    - __main__.py sets CERTIFY_BUNDLED=true and loads .env from exe directory
+    - We skip load_dotenv() here to avoid overwriting with empty values
+
+    When running normally (development):
+    - load_dotenv() finds .env in the current/backend directory
+    """
+    # Check if already loaded by __main__.py (bundled mode)
+    if os.getenv('CERTIFY_BUNDLED') == 'true':
+        print("[ENV] Running bundled - .env already loaded by __main__.py")
+        return True
+
+    try:
+        from dotenv import load_dotenv
+
+        # Check for PyInstaller frozen mode even without CERTIFY_BUNDLED flag
+        if getattr(sys, 'frozen', False):
+            # Running as PyInstaller bundle - look for .env next to executable
+            exe_dir = os.path.dirname(sys.executable)
+            env_path = os.path.join(exe_dir, '.env')
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+                print(f"[ENV] Loaded from exe directory: {env_path}")
+                return True
+            else:
+                print(f"[ENV] Warning: No .env found at {env_path}")
+                print(f"[ENV] Please place your .env file next to the executable")
+                return False
+        else:
+            # Normal development mode - look in current directory
+            load_dotenv()
+            print("[ENV] Loading environment variables from .env")
+            return True
+
+    except ImportError:
+        print("[ENV] python-dotenv not installed, using system environment variables")
+        return False
+
+_load_env()
+print(f"[ENV] Database URL: {os.getenv('DATABASE_URL', 'sqlite:///./certify_intel.db')}")
+# ==============================================================================
 
 import json
 import asyncio
@@ -4693,7 +4734,7 @@ async def bulk_update_competitors(
 
 
 # Import routers
-from routers import reports, discovery, sales_marketing, teams, knowledge_base
+from routers import reports, discovery, sales_marketing, teams, knowledge_base, products
 import api_routes
 
 # Include routers
@@ -4703,6 +4744,7 @@ app.include_router(teams.router)  # Team Features (v5.2.0)
 app.include_router(reports.router)
 app.include_router(sales_marketing.router)  # Sales & Marketing Module (v5.0.7)
 app.include_router(knowledge_base.router)  # Knowledge Base Import (v5.0.8)
+app.include_router(products.router)  # Product Discovery System (v5.1.0)
 
 app.add_middleware(
     CORSMiddleware,
@@ -6732,6 +6774,146 @@ def refresh_news_cache(
     return {
         "status": "started",
         "message": f"Refreshing news cache for {'all' if not competitor_id else 'competitor ' + str(competitor_id)} competitors"
+    }
+
+
+@app.get("/api/news-coverage")
+def get_news_coverage(db: Session = Depends(get_db)):
+    """
+    Get news coverage status for all competitors.
+
+    v5.1.0: Shows which competitors have news coverage and identifies gaps.
+    """
+    from database import NewsArticleCache
+    from sqlalchemy import func
+
+    try:
+        competitors = db.query(Competitor).filter(
+            Competitor.is_deleted == False
+        ).all()
+
+        now = datetime.utcnow()
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        coverage = []
+        total_with_news = 0
+        total_recent_news = 0
+
+        for comp in competitors:
+            # Count articles
+            total = db.query(NewsArticleCache).filter(
+                NewsArticleCache.competitor_id == comp.id
+            ).count()
+
+            recent = db.query(NewsArticleCache).filter(
+                NewsArticleCache.competitor_id == comp.id,
+                NewsArticleCache.published_at >= week_ago
+            ).count()
+
+            if total > 0:
+                total_with_news += 1
+            if recent > 0:
+                total_recent_news += 1
+
+            # Get last fetch time
+            latest = db.query(NewsArticleCache).filter(
+                NewsArticleCache.competitor_id == comp.id
+            ).order_by(
+                NewsArticleCache.fetched_at.desc()
+            ).first()
+
+            coverage.append({
+                "competitor_id": comp.id,
+                "competitor_name": comp.name,
+                "total_articles": total,
+                "recent_articles": recent,
+                "has_news": total > 0,
+                "has_recent_news": recent > 0,
+                "last_fetched": latest.fetched_at.isoformat() if latest else None
+            })
+
+        coverage_pct = (total_with_news / len(competitors) * 100) if competitors else 0
+        recent_pct = (total_recent_news / len(competitors) * 100) if competitors else 0
+
+        return {
+            "total_competitors": len(competitors),
+            "competitors_with_news": total_with_news,
+            "competitors_with_recent_news": total_recent_news,
+            "coverage_percentage": round(coverage_pct, 1),
+            "recent_coverage_percentage": round(recent_pct, 1),
+            "coverage_details": coverage,
+            "competitors_missing_news": [
+                c for c in coverage if not c["has_news"]
+            ]
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/news-coverage/refresh-all")
+def refresh_all_news_coverage(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Comprehensive news refresh for ALL competitors.
+
+    v5.1.0: Uses ComprehensiveNewsScraper to ensure complete news coverage.
+    """
+    def do_comprehensive_refresh():
+        try:
+            from comprehensive_news_scraper import NewsFeedService
+            service = NewsFeedService(db)
+            result = service.refresh_all_news()
+            print(f"[News Coverage] Refresh complete: {result.new_articles_found} new articles")
+        except ImportError:
+            # Fallback to basic refresh
+            print("[News Coverage] ComprehensiveNewsScraper not available, using basic refresh")
+            from news_monitor import NewsMonitor
+            from database import NewsArticleCache
+
+            monitor = NewsMonitor()
+            competitors = db.query(Competitor).filter(Competitor.is_deleted == False).all()
+
+            for comp in competitors:
+                try:
+                    digest = monitor.fetch_news(comp.name, days=30)
+                    for article in digest.articles:
+                        existing = db.query(NewsArticleCache).filter(
+                            NewsArticleCache.url == article.url
+                        ).first()
+
+                        if not existing:
+                            cache_entry = NewsArticleCache(
+                                competitor_id=comp.id,
+                                competitor_name=comp.name,
+                                title=article.title[:500],
+                                url=article.url,
+                                source=article.source,
+                                source_type="news_monitor",
+                                published_at=datetime.utcnow(),
+                                snippet=article.snippet[:1000] if article.snippet else None,
+                                sentiment=article.sentiment,
+                                event_type=article.event_type,
+                                is_major_event=article.is_major_event,
+                                fetched_at=datetime.utcnow(),
+                                cache_expires_at=datetime.utcnow() + timedelta(hours=24),
+                                created_at=datetime.utcnow()
+                            )
+                            db.add(cache_entry)
+
+                    db.commit()
+                except Exception as e:
+                    print(f"Error refreshing news for {comp.name}: {e}")
+                    continue
+
+    background_tasks.add_task(do_comprehensive_refresh)
+
+    return {
+        "status": "started",
+        "message": "Comprehensive news refresh started for all competitors"
     }
 
 

@@ -2,10 +2,28 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import os
+import sys
 
 # Database setup - SQLite for simplicity
-import os
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./certify_intel.db")
+# PyInstaller Fix (v5.0.3): Ensure database is created next to executable, not in temp folder
+def _get_database_url():
+    """Get database URL with PyInstaller awareness."""
+    # First check if explicitly set (by __main__.py or user)
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
+
+    # If running as PyInstaller bundle, use exe directory
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        db_path = os.path.join(exe_dir, 'certify_intel.db')
+        return f'sqlite:///{db_path}'
+
+    # Default for development
+    return "sqlite:///./certify_intel.db"
+
+DATABASE_URL = _get_database_url()
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

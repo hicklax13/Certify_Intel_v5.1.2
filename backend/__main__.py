@@ -59,11 +59,14 @@ def setup_environment():
         else:
             print(f"Warning: No .env file found at {env_file}")
 
-        # Also check for database in exe directory
+        # ALWAYS set database path to exe directory (v5.0.3 fix)
+        # This ensures database is created next to exe, not in temp folder
         db_file = os.path.join(exe_dir, 'certify_intel.db')
+        os.environ['DATABASE_URL'] = f'sqlite:///{db_file}'
         if os.path.exists(db_file):
-            print(f"Using database from: {db_file}")
-            os.environ['DATABASE_URL'] = f'sqlite:///{db_file}'
+            print(f"Using existing database: {db_file}")
+        else:
+            print(f"Database will be created at: {db_file}")
 
         # Store exe_dir for later use
         os.environ['CERTIFY_EXE_DIR'] = exe_dir

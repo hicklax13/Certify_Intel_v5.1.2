@@ -104,6 +104,42 @@ You have two parts:
 - Send that link to your team.
 - They click "Download", run the file, and it just works. No technical steps required.
 
+## Post-Installation Configuration (IMPORTANT)
+
+After installing the application, users must configure their environment:
+
+### Step 1: Locate the Installation Directory
+
+The app is installed to (Windows):
+```
+C:\Users\<username>\AppData\Local\Programs\certify-intel\
+```
+
+### Step 2: Create the .env File
+
+1. Find `.env.example` in the installation directory
+2. Copy it and rename to `.env`
+3. Edit `.env` with your configuration:
+
+```env
+# Required
+SECRET_KEY=your-secret-key-here
+
+# AI Features (at least one required)
+OPENAI_API_KEY=sk-your-openai-key
+GOOGLE_AI_API_KEY=your-gemini-key
+
+# Optional News APIs
+GNEWS_API_KEY=your-gnews-key
+MEDIASTACK_API_KEY=your-mediastack-key
+```
+
+### Step 3: Restart the Application
+
+Close and reopen the application for changes to take effect.
+
+> **Note**: The database (`certify_intel.db`) will be created automatically in the installation directory on first run.
+
 ## Customization (Version B)
 
 The white-label template can be customized by modifying:
@@ -112,3 +148,27 @@ The white-label template can be customized by modifying:
 - `resources/icons/` - App icons
 - `package.json` - Product name, appId
 - Frontend files - Branding, colors
+
+## Troubleshooting
+
+### "Failed to start the backend server"
+
+1. **Check .env file exists** - Must be in the same directory as the executable
+2. **Check SECRET_KEY is set** - Required for authentication
+3. **Check console logs** - Run from command line to see error details:
+   ```cmd
+   cd "C:\Users\<username>\AppData\Local\Programs\certify-intel"
+   certify_backend.exe
+   ```
+
+### "401 Unauthorized" after login
+
+1. Clear browser cache and cookies
+2. Ensure `SECRET_KEY` in `.env` matches what was used when users were created
+3. Try resetting the admin password (see SETUP_GUIDE.md)
+
+### Database not found
+
+The database is automatically created in the installation directory. If missing:
+1. Check write permissions on the installation folder
+2. Run the app as administrator once to create it
