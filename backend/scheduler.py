@@ -1,127 +1,200 @@
 """
-Certify Intel - Automated Scheduler
+Certify Intel - Automated Scheduler (v5.2.0)
 Runs weekly scraping jobs and data refresh.
+
+Features:
+- Weekly full refresh for all competitors
+- Daily refresh for high-threat competitors
+- Weekly competitor discovery
+- Daily database backup
+- Enhanced logging and error handling
 """
 import os
 import asyncio
-from datetime import datetime
-from typing import List, Optional
+import logging
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
 from sqlalchemy import func
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 
 from scraper import CompetitorScraper, ScrapeResult
 from extractor import GPTExtractor, ExtractedData
-from database import SessionLocal, Competitor, ChangeLog
+from database import SessionLocal, Competitor, ChangeLog, RefreshSession
 
-# Initialize scheduler
-scheduler = AsyncIOScheduler()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize scheduler with job defaults
+scheduler = AsyncIOScheduler(
+    job_defaults={
+        'coalesce': True,  # Combine missed runs into one
+        'max_instances': 1,  # Only one instance of each job at a time
+        'misfire_grace_time': 3600  # Allow 1 hour grace period for missed jobs
+    }
+)
+
+
+def job_listener(event):
+    """Log job execution events."""
+    if event.exception:
+        logger.error(f"Job {event.job_id} failed: {event.exception}")
+    else:
+        logger.info(f"Job {event.job_id} completed successfully")
+
+
+scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
 
 
 class CompetitorRefreshJob:
     """Job that scrapes and updates competitor data."""
-    
+
     def __init__(self):
         self.scraper = None
         self.extractor = GPTExtractor()
-        
 
-    async def run_full_refresh(self, competitor_ids: Optional[List[int]] = None):
-        """Run a full data refresh for all or specified competitors."""
-        print(f"[{datetime.now()}] Starting competitor refresh job...")
-        
+    async def run_full_refresh(
+        self,
+        competitor_ids: Optional[List[int]] = None,
+        stagger_delay: float = 2.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Run a full data refresh for all or specified competitors.
+
+        Args:
+            competitor_ids: Optional list of specific competitor IDs to refresh
+            stagger_delay: Delay between each competitor to avoid rate limiting
+
+        Returns:
+            List of result dictionaries for each competitor
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Starting competitor refresh job at {start_time}")
+
         db = SessionLocal()
-        
-        # Get competitors to refresh
-        if competitor_ids:
-            competitors = db.query(Competitor).filter(
-                Competitor.id.in_(competitor_ids),
-                Competitor.is_deleted == False
-            ).all()
-        else:
-            competitors = db.query(Competitor).filter(
-                Competitor.is_deleted == False
-            ).all()
-        
-        print(f"Refreshing {len(competitors)} competitors...")
-        
-        results = []
-        
-        # Initialize Traffic Scraper
-        from public_similarweb_scraper import PublicSimilarWebScraper
-        from urllib.parse import urlparse
-        import json
-        traffic_scraper = PublicSimilarWebScraper()
-        
-        async with CompetitorScraper(headless=True) as scraper:
-            for competitor in competitors:
-                try:
-                    # 1. TRAFFIC DATA (Real SimilarWeb)
-                    try:
-                        domain = urlparse(competitor.website).netloc.replace("www.", "")
-                        print(f"   🚦 Fetching traffic for {domain}...")
-                        traffic_data = await traffic_scraper.get_traffic_data(domain)
-                        
-                        if traffic_data and not traffic_data.get("is_mock"):
-                            traffic_json = json.dumps(traffic_data)
-                            if competitor.website_traffic != traffic_json:
-                                print(f"   ✅ Updated traffic data for {competitor.name}")
-                                competitor.website_traffic = traffic_json
-                                db.add(competitor)
-                                db.commit() # Commit immediately to save progress
-                    except Exception as te:
-                        print(f"   ⚠️ Traffic scrape failed: {te}")
 
-                    # 2. CONTENT SCRAPE (Playwright)
-                    # Scrape competitor website
-                    scrape_result = await scraper.scrape_competitor(
-                        name=competitor.name,
-                        website=competitor.website,
-                        pages_to_scrape=["homepage", "pricing", "about"]
-                    )
-                    
-                    if scrape_result.success and scrape_result.pages:
-                        # Extract data from scraped content
-                        extractions = []
-                        for page in scrape_result.pages:
-                            extracted = self.extractor.extract_from_content(
-                                competitor.name,
-                                page.content,
-                                page.page_type
-                            )
-                            extractions.append(extracted)
-                        
-                        # Merge extractions
-                        merged = self.extractor.merge_extractions(extractions)
-                        
-                        # Update competitor with new data and detect changes
-                        changes = self._update_competitor(db, competitor, merged)
-                        
-                        results.append({
-                            "competitor": competitor.name,
-                            "success": True,
-                            "pages_scraped": len(scrape_result.pages),
-                            "changes_detected": len(changes)
-                        })
-                    else:
+        try:
+            # Get competitors to refresh
+            if competitor_ids:
+                competitors = db.query(Competitor).filter(
+                    Competitor.id.in_(competitor_ids),
+                    Competitor.is_deleted == False,
+                    Competitor.status == "Active"
+                ).all()
+            else:
+                competitors = db.query(Competitor).filter(
+                    Competitor.is_deleted == False,
+                    Competitor.status == "Active"
+                ).all()
+
+            total_count = len(competitors)
+            logger.info(f"Refreshing {total_count} competitors...")
+
+            # Create RefreshSession for tracking
+            refresh_session = RefreshSession(
+                competitors_scanned=total_count,
+                status="in_progress"
+            )
+            db.add(refresh_session)
+            db.commit()
+            db.refresh(refresh_session)
+            session_id = refresh_session.id
+
+            results = []
+            success_count = 0
+            changes_total = 0
+
+            async with CompetitorScraper(headless=True) as scraper:
+                for idx, competitor in enumerate(competitors, 1):
+                    logger.info(f"[{idx}/{total_count}] Processing {competitor.name}...")
+
+                    try:
+                        # Scrape competitor website with enhanced scraping
+                        scrape_result = await scraper.scrape_competitor(
+                            name=competitor.name,
+                            website=competitor.website,
+                            pages_to_scrape=["homepage", "pricing", "about", "products"]
+                        )
+
+                        if scrape_result.success and scrape_result.pages:
+                            # Extract data from scraped content
+                            extractions = []
+                            for page in scrape_result.pages:
+                                try:
+                                    extracted = self.extractor.extract_from_content(
+                                        competitor.name,
+                                        page.content,
+                                        page.page_type
+                                    )
+                                    extractions.append(extracted)
+                                except Exception as ext_err:
+                                    logger.warning(f"Extraction failed for {competitor.name}/{page.page_type}: {ext_err}")
+
+                            if extractions:
+                                # Merge extractions
+                                merged = self.extractor.merge_extractions(extractions)
+
+                                # Update competitor with new data and detect changes
+                                changes = self._update_competitor(db, competitor, merged)
+                                changes_total += len(changes)
+
+                                results.append({
+                                    "competitor": competitor.name,
+                                    "success": True,
+                                    "pages_scraped": len(scrape_result.pages),
+                                    "changes_detected": len(changes),
+                                    "duration": scrape_result.scrape_duration_seconds
+                                })
+                                success_count += 1
+                            else:
+                                results.append({
+                                    "competitor": competitor.name,
+                                    "success": False,
+                                    "error": "No data extracted"
+                                })
+                        else:
+                            results.append({
+                                "competitor": competitor.name,
+                                "success": False,
+                                "error": scrape_result.error or "No pages scraped"
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Error processing {competitor.name}: {e}")
                         results.append({
                             "competitor": competitor.name,
                             "success": False,
-                            "error": scrape_result.error or "No pages scraped"
+                            "error": str(e)
                         })
-                        
-                except Exception as e:
-                    results.append({
-                        "competitor": competitor.name,
-                        "success": False,
-                        "error": str(e)
-                    })
-        
-        db.close()
-        
-        print(f"[{datetime.now()}] Refresh complete. Results: {len([r for r in results if r['success']])} success, {len([r for r in results if not r['success']])} failed")
-        return results
+
+                    # Stagger requests to avoid rate limiting
+                    if idx < total_count:
+                        await asyncio.sleep(stagger_delay)
+
+            # Update RefreshSession
+            refresh_session.completed_at = datetime.utcnow()
+            refresh_session.status = "completed"
+            refresh_session.changes_detected = changes_total
+            refresh_session.new_values_added = sum(1 for r in results if r.get("success"))
+            db.commit()
+
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            logger.info(
+                f"Refresh complete in {duration:.1f}s. "
+                f"Success: {success_count}/{total_count}, Changes: {changes_total}"
+            )
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Refresh job failed: {e}")
+            raise
+        finally:
+            db.close()
     
     def _update_competitor(self, db, competitor: Competitor, extracted: ExtractedData) -> List[ChangeLog]:
         """Update competitor data and log changes."""

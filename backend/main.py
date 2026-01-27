@@ -8241,6 +8241,135 @@ async def websocket_refresh_progress(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 
+# ============== Scheduler Configuration Endpoints (v5.2.0) ==============
+
+@app.get("/api/scheduler/status")
+async def get_scheduler_status():
+    """Get scheduler status and configured jobs."""
+    try:
+        from scheduler import scheduler
+        jobs = []
+        for job in scheduler.get_jobs():
+            jobs.append({
+                "id": job.id,
+                "name": job.name,
+                "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+                "trigger": str(job.trigger)
+            })
+        return {
+            "running": scheduler.running,
+            "jobs": jobs
+        }
+    except Exception as e:
+        return {"running": False, "jobs": [], "error": str(e)}
+
+
+@app.post("/api/scheduler/start")
+async def start_scheduler():
+    """Start the scheduler with all jobs."""
+    try:
+        from scheduler import start_scheduler as start_sched
+        start_sched()
+        return {"success": True, "message": "Scheduler started"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/scheduler/stop")
+async def stop_scheduler_endpoint():
+    """Stop the scheduler."""
+    try:
+        from scheduler import stop_scheduler as stop_sched
+        stop_sched()
+        return {"success": True, "message": "Scheduler stopped"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/refresh/schedule")
+async def configure_refresh_schedule(request: Request):
+    """
+    Configure the refresh schedule.
+
+    Request body:
+    {
+        "type": "weekly" | "daily" | "custom",
+        "day_of_week": "sun",  // for weekly
+        "hour": 2,
+        "minute": 0,
+        "cron": "0 2 * * 0"  // for custom
+    }
+    """
+    try:
+        from scheduler import scheduler, CompetitorRefreshJob
+        from apscheduler.triggers.cron import CronTrigger
+
+        body = await request.json()
+        schedule_type = body.get("type", "weekly")
+        day_of_week = body.get("day_of_week", "sun")
+        hour = body.get("hour", 2)
+        minute = body.get("minute", 0)
+
+        job = CompetitorRefreshJob()
+
+        if schedule_type == "weekly":
+            trigger = CronTrigger(day_of_week=day_of_week, hour=hour, minute=minute)
+        elif schedule_type == "daily":
+            trigger = CronTrigger(hour=hour, minute=minute)
+        else:
+            cron_expr = body.get("cron", "0 2 * * 0")
+            parts = cron_expr.split()
+            trigger = CronTrigger(
+                minute=parts[0], hour=parts[1],
+                day=parts[2], month=parts[3], day_of_week=parts[4]
+            )
+
+        async def refresh_task():
+            await job.run_full_refresh()
+
+        scheduler.add_job(
+            refresh_task,
+            trigger,
+            id="configured_refresh",
+            name="Configured Competitor Refresh",
+            replace_existing=True
+        )
+
+        return {
+            "success": True,
+            "schedule": {
+                "type": schedule_type,
+                "day_of_week": day_of_week if schedule_type == "weekly" else None,
+                "hour": hour,
+                "minute": minute
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/refresh/trigger")
+async def trigger_manual_refresh(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Trigger an immediate manual refresh for all competitors."""
+    try:
+        from scheduler import CompetitorRefreshJob
+
+        job = CompetitorRefreshJob()
+
+        async def run_refresh():
+            await job.run_full_refresh()
+
+        background_tasks.add_task(run_refresh)
+
+        return {
+            "success": True,
+            "message": "Refresh job started in background",
+            "status_endpoint": "/api/scrape/progress"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ============== Static Files (Must be Last) ==============
 import os
 import sys
