@@ -122,16 +122,16 @@ class DiscoveryAgent:
             context_path = os.path.join(current_dir, "certify_context.json")
             
             if not os.path.exists(context_path):
-                print(f"⚠️ Warning: Context file not found at {context_path}. Using empty profile.")
+                print(f"[WARNING] Context file not found at {context_path}. Using empty profile.")
                 return {
-                    "core_keywords": [], "market_keywords": [], 
+                    "core_keywords": [], "market_keywords": [],
                     "required_context": [], "negative_keywords": [], "known_competitors": []
                 }
-                
+
             with open(context_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"⚠️ Error loading context file: {e}")
+            print(f"[WARNING] Error loading context file: {e}")
             return {
                 "core_keywords": [], "market_keywords": [], 
                 "required_context": [], "negative_keywords": [], "known_competitors": []
@@ -221,14 +221,14 @@ class DiscoveryAgent:
                     "status": "Discovered",
                     "discovered_at": datetime.utcnow().isoformat()
                 })
-                print(f"    ✅ QUALIFIED ({score}%) - {data.get('reasoning', '')[:50]}")
+                print(f"    [OK] QUALIFIED ({score}%) - {data.get('reasoning', '')[:50]}")
                 qualified += 1
             else:
                 reason = data.get("reasoning") or data.get("error", "Low score")
-                print(f"    ❌ REJECTED ({score}%) - {reason[:50]}")
+                print(f"    [X] REJECTED ({score}%) - {reason[:50]}")
         
         print("\n" + "=" * 60)
-        print(f"🏆 Discovery Complete: {len(candidates)} qualified candidates")
+        print(f"[DONE] Discovery Complete: {len(candidates)} qualified candidates")
         print("=" * 60)
         
         return candidates
@@ -244,7 +244,7 @@ class DiscoveryAgent:
                 await asyncio.sleep(self.search_delay - elapsed)
             
             try:
-                print(f"  🔎 Searching: '{query}'")
+                print(f"  [SEARCH] Searching: '{query}'")
                 with DDGS() as ddgs:
                     search_results = list(ddgs.text(query, max_results=5))
                     
@@ -263,7 +263,7 @@ class DiscoveryAgent:
                 self.last_search_time = time.time()
                 
             except Exception as e:
-                print(f"     ⚠️ Search failed: {e}")
+                print(f"     [WARNING] Search failed: {e}")
                 continue
         
         return results

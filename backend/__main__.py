@@ -48,7 +48,7 @@ def setup_environment():
             print(f"Loading .env from: {env_file}")
             # Manually load .env file
             try:
-                with open(env_file, 'r') as f:
+                with open(env_file, 'r', encoding='utf-8') as f:
                     for line in f:
                         line = line.strip()
                         if line and not line.startswith('#') and '=' in line:
