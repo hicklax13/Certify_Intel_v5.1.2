@@ -41,6 +41,14 @@ jobs:
           pip install -r requirements-mac.txt
           pip install pyinstaller
 
+      - name: Initialize database
+        run: |
+          cd backend
+          # Create .env file for database initialization
+          cp .env.example .env 2>/dev/null || echo "SECRET_KEY=build-key-not-for-production" > .env
+          # Create empty database by importing database module
+          python -c "from database import engine, Base; Base.metadata.create_all(bind=engine); print('Database created')"
+
       - name: Build backend with PyInstaller
         run: |
           cd backend
