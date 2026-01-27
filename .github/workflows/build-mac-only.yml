@@ -1,0 +1,98 @@
+name: Build Mac Installer (Add to Existing Release)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend with PyInstaller
+        run: |
+          cd backend
+          pyinstaller certify_backend.spec --clean --noconfirm
+
+      - name: Verify backend build
+        run: |
+          if [ -f "backend/dist/certify_backend" ]; then
+            echo "Backend build successful!"
+            ls -la backend/dist/certify_backend
+          else
+            echo "Backend build failed - executable not found"
+            exit 1
+          fi
+
+      - name: Prepare desktop app
+        run: |
+          mkdir -p desktop-app/backend-bundle
+          mkdir -p desktop-app/frontend
+          mkdir -p desktop-app/data
+
+          cp backend/dist/certify_backend desktop-app/backend-bundle/
+
+          if [ -f "backend/certify_intel.db" ]; then
+            cp backend/certify_intel.db desktop-app/backend-bundle/
+          fi
+
+          if [ -f "backend/.env.example" ]; then
+            cp backend/.env.example desktop-app/backend-bundle/.env
+          fi
+
+          cp -r frontend/* desktop-app/frontend/
+
+      - name: Install Node dependencies
+        run: |
+          cd desktop-app
+          npm ci
+
+      - name: Build macOS installer
+        run: |
+          cd desktop-app
+          npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build output
+        run: |
+          echo "Build output:"
+          ls -la desktop-app/dist/*.dmg
+
+      - name: Upload to existing v5.1.2 release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v5.1.2
+          files: desktop-app/dist/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Mac Installer Added to Release v5.1.2" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following files were uploaded:" >> $GITHUB_STEP_SUMMARY
+          ls -la desktop-app/dist/*.dmg >> $GITHUB_STEP_SUMMARY
