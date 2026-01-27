@@ -27,113 +27,52 @@
 
 ## Active Tasks
 
-### 🚨 CRITICAL BUG: Authentication Failure After Login (January 26, 2026)
+### ✅ FIXED: Authentication Failure After Login (January 26, 2026)
 
-> **Status**: 🔴 **IN PROGRESS** - Must be fixed before any other work
-> **Priority**: **CRITICAL** - Application is unusable without this fix
-> **Assigned**: Next Agent Session
+> **Status**: ✅ **COMPLETED** - Fixed on January 26, 2026
+> **Priority**: **CRITICAL** - Was blocking all application functionality
+> **Fixed By**: Claude Opus 4.5
 
-#### Problem Description
+#### Problem Description (RESOLVED)
 
-After successful login (`POST /token` returns 200 OK), the frontend is NOT sending the `Authorization: Bearer <token>` header with subsequent API requests. This causes:
-- All protected endpoints (`/api/competitors`, `/api/auth/me`) return 401 Unauthorized
-- Dashboard briefly flashes on screen, then redirects back to login
-- Application is completely unusable
+After successful login, the frontend was NOT sending the `Authorization: Bearer <token>` header with subsequent API requests, causing 401 errors and redirect loops.
 
-#### Evidence from Server Logs
+#### Actual Root Cause Found
 
-```
-POST /token HTTP/1.1" 200 OK           ← Login succeeds
-GET /api/notifications?limit=5" 200 OK  ← No auth required - works
-GET /api/dashboard/stats" 200 OK        ← No auth required - works
-GET /api/auth/me" 401 Unauthorized      ← Auth required - FAILS (no header sent)
-GET /api/competitors" 401 Unauthorized  ← Auth required - FAILS (no header sent)
-```
+The bug was **NOT** any of the initially suspected causes. The actual root cause was:
 
-#### Root Cause Analysis
+**Wrong localStorage key in two locations:**
+1. `frontend/app_v2.js` line 4090: `localStorage.getItem('token')` should be `localStorage.getItem('access_token')`
+2. `frontend/sales_marketing.js` line 973: duplicate `getAuthHeaders()` function using wrong key `'token'`
 
-The frontend stores the JWT token in localStorage after login, then redirects to dashboard. When dashboard loads, API calls are made but the Authorization header is NOT included. Possible causes:
+**Cascade Effect:**
+1. User logs in → token stored as `'access_token'` ✅
+2. `loadMarketTrendChart()` runs → sends `Authorization: Bearer null` (wrong key!) ❌
+3. Backend returns 401
+4. `fetchAPI()` 401 handler clears the real token
+5. All subsequent API calls fail → redirect to login
 
-1. **localStorage is not persisting** - Token is stored but not retrievable on next page load
-2. **Race condition in fetchAPI()** - First 401 response triggers `localStorage.removeItem('access_token')` before other calls complete
-3. **Browser cache** - Old JavaScript files without proper auth header handling being served
+#### Fixes Applied
 
-#### Files Involved
+| Fix | File | Line | Change |
+|-----|------|------|--------|
+| Primary Bug | `frontend/app_v2.js` | 4090 | `localStorage.getItem('token')` → `localStorage.getItem('access_token')` |
+| Secondary Bug | `frontend/sales_marketing.js` | 973 | `localStorage.getItem('token')` → `localStorage.getItem('access_token')` |
+| API_BASE | `frontend/app_v2.js` | 6 | `'http://localhost:8000'` → `window.location.origin` |
 
-| File | Location | Role |
-|------|----------|------|
-| `frontend/login.html` | Lines 428-440 | Stores token after login, redirects to `/` |
-| `frontend/app_v2.js` | Lines 21-29 | `checkAuth()` - checks if token exists |
-| `frontend/app_v2.js` | Lines 42-46 | `getAuthHeaders()` - returns Authorization header |
-| `frontend/app_v2.js` | Lines 315-346 | `fetchAPI()` - makes API calls with headers |
-| `frontend/app_v2.js` | Lines 326-329 | **Race condition** - removes token on 401 |
-| `backend/extended_features.py` | `verify_token()` | JWT validation |
-| `backend/api_routes.py` | `/api/auth/me` | Protected endpoint |
+#### Additional Updates
 
-#### Fix Plan (3 Phases)
+| Update | Details |
+|--------|---------|
+| Admin Credentials | Changed to `admin@certifyintel.com` / `MSFWINTERCLINIC2026` |
+| Password Toggle | Added Show/Hide button on login page |
+| Login Placeholder | Updated to show new email |
 
-| Phase | Task ID | Task | Status | Details |
-|-------|---------|------|--------|---------|
-| **1** | AUTH-1.1 | Add visible on-screen debugging to login.html | PENDING | Show alert confirming token was stored |
-| **1** | AUTH-1.2 | Add 1-second delay before redirect | PENDING | Ensure localStorage persists before navigation |
-| **1** | AUTH-1.3 | Add visible token status to dashboard | PENDING | Show token in console on page load |
-| **2** | AUTH-2.1 | Use both localStorage AND sessionStorage | PENDING | Backup storage for token persistence |
-| **2** | AUTH-2.2 | Verify token before redirect in login.html | PENDING | Don't redirect if storage failed |
-| **2** | AUTH-2.3 | Remove auto-clear on 401 in fetchAPI() | PENDING | Prevent race condition from clearing token |
-| **3** | AUTH-3.1 | Update cache buster versions on JS files | PENDING | Change `?v=6` to `?v=7` in index.html |
-| **3** | AUTH-3.2 | Add no-cache headers to HTML responses | PENDING | Prevent browser caching of HTML |
+#### Test Credentials (UPDATED)
 
-#### Debug Logging Already Added
-
-Previous session added debug logging to trace the issue:
-
-**Frontend (login.html)**:
-```javascript
-console.log('[LOGIN DEBUG] Response data:', data);
-console.log('[LOGIN DEBUG] access_token:', data.access_token ? data.access_token.substring(0, 30) + '...' : 'MISSING');
-localStorage.setItem('access_token', data.access_token);
-const storedToken = localStorage.getItem('access_token');
-console.log('[LOGIN DEBUG] Stored token:', storedToken ? storedToken.substring(0, 30) + '...' : 'FAILED TO STORE');
-```
-
-**Frontend (app_v2.js)**:
-```javascript
-function checkAuth() {
-    const token = localStorage.getItem('access_token');
-    console.log('[AUTH DEBUG] checkAuth - token:', token ? token.substring(0, 30) + '...' : 'NULL');
-    // ...
-}
-
-function getAuthHeaders() {
-    const token = localStorage.getItem('access_token');
-    console.log('[AUTH DEBUG] getAuthHeaders - token:', token ? token.substring(0, 30) + '...' : 'NULL');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
-```
-
-**Backend (api_routes.py)**:
-```python
-@router.get("/api/auth/me")
-async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
-    auth_header = request.headers.get("authorization", "NONE")
-    print(f"[AUTH DEBUG] /api/auth/me called")
-    print(f"[AUTH DEBUG] Authorization header: {auth_header[:50] if auth_header != 'NONE' else 'NONE'}...")
-    print(f"[AUTH DEBUG] Token from oauth2_scheme: {token[:30] if token else 'None'}...")
-```
-
-#### Test Credentials
-
-- **Email**: `admin@certifyhealth.com`
-- **Password**: `certifyintel2024`
+- **Email**: `admin@certifyintel.com`
+- **Password**: `MSFWINTERCLINIC2026`
 - **Backend .env SECRET_KEY**: `certify-intel-secret-key-2024`
-
-#### How to Reproduce
-
-1. Start server: `cd backend && python main.py`
-2. Open browser: `http://localhost:8000`
-3. Login with credentials above
-4. Observe: Dashboard flashes briefly, then redirects back to login
-5. Check server logs: `/api/auth/me` returns 401
 
 ---
 

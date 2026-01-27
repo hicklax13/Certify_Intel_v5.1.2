@@ -200,6 +200,35 @@
                 transform: rotate(360deg);
             }
         }
+
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-wrapper input {
+            flex: 1;
+            padding-right: 70px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .password-toggle:hover {
+            color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
     </style>
 </head>
 
@@ -226,8 +255,13 @@
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="••••••••"
-                        autocomplete="current-password" required>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="password" name="password" placeholder="••••••••"
+                            autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility()">
+                            <span id="toggleIcon">Show</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-options">
@@ -285,6 +319,18 @@
 
     <script>
         const API_BASE = window.location.origin;
+
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('toggleIcon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.textContent = 'Hide';
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.textContent = 'Show';
+            }
+        }
 
         function toggleAuthMode(mode) {
             document.getElementById('loginForm').style.display = mode === 'login' ? 'flex' : 'none';
