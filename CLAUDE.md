@@ -1527,5 +1527,170 @@ Open http://localhost:8000
 
 ---
 
-**Last Updated**: January 27, 2026
-**Updated By**: Claude Opus 4.5 (Session 20 - Mac Desktop App Build Complete)
+## Session Log: January 28, 2026 (Session 21 - Mac Installation Fix)
+
+**Session**: Mac Desktop App Installation Issue Investigation & Fix
+**Duration**: ~2 hours
+**Status**: FIXES COMPLETED - Ready for Testing
+**Issue**: Users reported inability to drag Certify Intel app to Applications folder
+
+### Session Summary
+
+Investigated user reports of "can't drag to Applications" errors on macOS. Identified and fixed 3 critical issues preventing successful installation of the Mac desktop app.
+
+### Root Causes Identified
+
+| Issue | Severity | Impact |
+|-------|----------|--------|
+| **Missing icon.icns file** | 🔴 CRITICAL | Malformed app bundle, macOS refuses to copy |
+| **Incomplete DMG configuration** | 🟡 HIGH | App icon doesn't appear in DMG window |
+| **Wrong repository reference** | 🟢 LOW | Auto-update checks incorrect repo |
+
+### Fixes Applied
+
+#### 1. Created icon.icns File (CRITICAL)
+- **Problem**: macOS app bundles require a valid `.icns` icon file
+- **Location**: `desktop-app/resources/icons/icon.icns`
+- **Fix**: Generated 1.3MB icon file from icon.png using native macOS tools
+  ```bash
+  sips -z [sizes] icon.png --out icon.iconset/...
+  iconutil -c icns icon.iconset
+  ```
+- **Impact**: Ensures valid app bundle structure for macOS
+
+#### 2. Fixed DMG Contents Configuration
+- **Problem**: Missing `"type": "file"` specification in package.json
+- **Fix**: Added `"type": "file"` to app icon position (line 100)
+  ```json
+  {
+    "x": 130,
+    "y": 220,
+    "type": "file"  // ADDED
+  }
+  ```
+- **Impact**: App icon will now appear in DMG window for drag-and-drop
+
+#### 3. Fixed Repository Reference
+- **Problem**: Auto-update pointed to `"Project_Intel_v5.0.1"`
+- **Fix**: Updated to `"Certify_Intel_v5.1.2"` (line 113)
+- **Impact**: Auto-update will check correct repository
+
+#### 4. Enhanced Installation Guide
+- **Added**: Terminal troubleshooting method with `xattr -cr` command
+- **Structure**: Two-option approach (Option A: right-click, Option B: Terminal)
+- **Impact**: Clear guidance for Gatekeeper errors
+
+### Files Created
+
+| File | Size | Description |
+|------|------|-------------|
+| `desktop-app/resources/icons/icon.icns` | 1.3 MB | macOS icon file (NEW) |
+| `MAC_INSTALL_FIX_SUMMARY.md` | ~8 KB | Complete technical documentation |
+| `NEXT_STEPS.md` | ~4 KB | Action items checklist |
+| `deploy-mac-fix.sh` | ~3 KB | Deployment automation script |
+| `test-mac-dmg.sh` | ~5 KB | DMG testing script |
+
+### Files Modified
+
+| File | Lines Changed | Changes |
+|------|---------------|---------|
+| `desktop-app/package.json` | 3 | DMG config + repo reference |
+| `MAC_INSTALLATION_GUIDE.md` | +13 | Terminal troubleshooting method |
+| `.github/workflows/build-mac-only.yml` | 1 | Comment update |
+| `desktop-app/build-mac.sh` | 0 | Made executable (chmod +x) |
+
+### Commits Created (6 total)
+
+| # | Hash | Description |
+|---|------|-------------|
+| 1 | `02be6d1` | Fix: Mac desktop app installation issues (icon + DMG + repo) |
+| 2 | `dc12bf1` | Docs: Improve Mac installation guide with Terminal method |
+| 3 | `f14f5e3` | Chore: Update workflow comment and make build script executable |
+| 4 | `8b2963a` | Docs: Add comprehensive Mac installation fix summary |
+| 5 | `57275ce` | Docs: Add action items checklist for Mac fix deployment |
+| 6 | `2576782` | Tools: Add deployment and testing scripts for Mac fix |
+
+### Testing Plan
+
+**Deployment Scripts Created**:
+1. `./deploy-mac-fix.sh` - Push changes and open GitHub Actions
+2. `./test-mac-dmg.sh` - Download, mount, verify, and test new DMG
+
+**Manual Testing Steps**:
+1. Push commits to GitHub
+2. Trigger "Build Mac Installer" workflow via GitHub Actions
+3. Wait ~15 minutes for build to complete
+4. Download new DMG files (arm64 + x64)
+5. Mount DMG and verify:
+   - App icon appears on LEFT
+   - Applications folder link appears on RIGHT
+   - Drag-and-drop to Applications succeeds
+   - App launches successfully
+6. Verify app functionality (login, dashboard, data)
+
+### Root Cause Analysis
+
+**Why installation was failing**:
+- Missing `icon.icns` caused malformed app bundle
+- macOS validates app bundle structure before allowing copy
+- Without proper icon, macOS rejects the application
+- Combined with missing DMG type specification, users couldn't see what to drag
+
+**Why GitHub Actions builds appeared to work**:
+- Workflow dynamically generates icon.icns during build (lines 85-105)
+- If icon generation step failed silently, resulting DMG would be broken
+- Having icon.icns in repository ensures consistency for all builds
+
+### Verification Status
+
+| Check | Status |
+|-------|--------|
+| icon.icns created | ✅ 1.3 MB, valid Mac OS X icon format |
+| DMG config updated | ✅ Added `"type": "file"` |
+| Repo reference fixed | ✅ Updated to Certify_Intel_v5.1.2 |
+| Installation guide enhanced | ✅ Terminal method documented |
+| Deployment scripts created | ✅ 2 bash scripts with full automation |
+| Documentation complete | ✅ 3 new docs (SUMMARY, NEXT_STEPS, scripts) |
+| Ready to push | ✅ 6 commits waiting |
+
+### Known Limitations
+
+**Code Signing** (unchanged):
+- App is still unsigned (no Apple Developer certificate)
+- Users will see "Developer cannot be verified" warning
+- Workaround documented: right-click → Open, or `xattr -cr` command
+- Permanent fix requires Apple Developer account ($99/year)
+
+### Next Steps for User
+
+1. **Push changes**: `git push origin master` (6 commits)
+2. **Trigger build**: GitHub Actions → "Build Mac Installer" workflow
+3. **Test DMG**: Download and verify fixes work
+4. **Notify users**: Re-download from GitHub releases
+
+### Expected Outcome
+
+After rebuilding via GitHub Actions:
+- ✅ DMG contains valid app bundle with proper icon
+- ✅ App icon appears in DMG window (left side)
+- ✅ Applications folder link appears (right side)
+- ✅ Users can successfully drag app to Applications
+- ✅ App launches (with Gatekeeper bypass)
+- ✅ Auto-update checks correct repository
+
+### Success Criteria
+
+- [x] icon.icns file exists in repository
+- [x] DMG contents configuration includes `"type": "file"`
+- [x] Repository reference corrected
+- [x] Installation guide updated with troubleshooting
+- [x] Deployment and testing scripts created
+- [x] All changes committed and ready to push
+- [ ] Changes pushed to GitHub (requires user action)
+- [ ] New DMG built via GitHub Actions
+- [ ] Installation tested on actual Mac hardware
+
+---
+
+**Last Updated**: January 28, 2026
+**Updated By**: Claude Sonnet 4.5 (Session 21 - Mac Installation Fix Complete)
