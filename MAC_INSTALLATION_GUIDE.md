@@ -31,6 +31,8 @@
 
 ## Step 3: Launch (First Time - Important)
 
+### Option A: Right-Click Method (Easiest)
+
 1. Open your Applications folder (Finder > Go > Applications)
 2. Find "Certify Intel"
 3. **Right-click** (or Control-click) on Certify Intel
@@ -39,6 +41,17 @@
 6. Wait for the app to start (may take 10-15 seconds first time)
 
 **Note:** You only need to right-click "Open" the first time. After that, you can double-click normally.
+
+### Option B: Terminal Method (If Option A Fails)
+
+If you see "App is damaged" or can't open the app at all, use Terminal:
+
+1. Open Terminal (Applications > Utilities > Terminal)
+2. Paste this command and press Enter:
+   ```bash
+   xattr -cr "/Applications/Certify Intel.app"
+   ```
+3. Try opening the app again from Applications folder
 
 ## Step 4: Login
 
