@@ -1,125 +1,89 @@
-# Certify Intel - Mac Installation Guide
-## Version 5.1.2
+# Certify Intel Desktop App: Mac Installation Guide
 
----
+## Step 1: Download
 
-## Step 1: Download the Mac Installer
+1. Go to: https://github.com/hicklax13/Certify_Intel_v5.1.2/releases
+2. Click the green "v5.1.2" release (or "Latest")
+3. Scroll down to "Assets" and click the correct file for your Mac:
 
-1. Go to **https://github.com/hicklax13/Certify_Intel_v5.1.2/releases/tag/v5.1.2**
+| Mac Type | File to Download |
+|----------|------------------|
+| **Apple Silicon** (M1, M2, M3, M4) | `20260127_Certify_Intel_v5.5.0_arm64.dmg` |
+| **Intel Mac** (older Macs) | `20260127_Certify_Intel_v5.5.0_x64.dmg` |
 
-2. Scroll down to the **Assets** section
+**Not sure which Mac you have?**
+- Click the Apple menu () in the top-left corner
+- Click "About This Mac"
+- Look for "Chip" - if it says "Apple M1/M2/M3/M4", download arm64
+- If it says "Intel", download x64
 
-3. Click the correct file for your Mac:
-   - **Apple Silicon Mac** (M1, M2, M3, M4 chips): Download `20260127_Certify_Intel_v5.5.0_arm64.dmg`
-   - **Intel Mac** (older Macs): Download `20260127_Certify_Intel_v5.5.0_x64.dmg`
+4. Wait for download to complete (~280 MB)
 
-   **Not sure which Mac you have?**
-   - Click the Apple menu in the top-left corner
-   - Click "About This Mac"
-   - Look for "Chip" - if it says "Apple M1/M2/M3/M4", download the arm64 version
-   - If it says "Intel", download the x64 version
+## Step 2: Install
 
-4. Wait for the download to complete (file is approximately 280-290 MB)
-
----
-
-## Step 2: Install the Application
-
-1. Open your **Downloads** folder
-
-2. Double-click the downloaded `.dmg` file to open it
-
-3. A window will appear showing the Certify Intel app and an Applications folder shortcut
-
-4. **Drag the Certify Intel icon** to the **Applications** folder
-
+1. Open your Downloads folder
+2. Double-click the downloaded `.dmg` file
+3. A window will appear with Certify Intel and an Applications folder
+4. Drag the Certify Intel icon to the Applications folder
 5. Wait for the copy to complete
-
 6. Close the DMG window
+7. (Optional) Right-click the DMG on desktop and select "Eject"
 
-7. (Optional) Right-click the DMG file on your desktop and select "Eject" to clean up
+## Step 3: Launch (First Time - Important)
 
----
-
-## Step 3: First Launch (Important - Security Step)
-
-Because this app is not from the Mac App Store, macOS will ask for permission:
-
-1. Open your **Applications** folder (in Finder, click Go > Applications)
-
-2. Find **Certify Intel**
-
+1. Open your Applications folder (Finder > Go > Applications)
+2. Find "Certify Intel"
 3. **Right-click** (or Control-click) on Certify Intel
+4. Select "Open" from the menu
+5. Click "Open" again in the security dialog
+6. Wait for the app to start (may take 10-15 seconds first time)
 
-4. Select **"Open"** from the menu
+**Note:** You only need to right-click "Open" the first time. After that, you can double-click normally.
 
-5. A security dialog will appear - click **"Open"** again to confirm
+## Step 4: Login
 
-   **Note:** You only need to do this right-click "Open" the first time. After that, you can launch normally.
+Enter these credentials:
 
-6. Wait for the app to start (a loading screen will appear briefly)
+| Field | Value |
+|-------|-------|
+| Username | `admin@certifyintel.com` |
+| Password | `MSFWINTERCLINIC2026` |
 
----
+Click "Sign In"
 
-## Step 4: Log In to the Application
+## Step 5: Use the App
 
-1. The login screen will appear
+You're now on the Dashboard. Use the menu on the left to navigate:
 
-2. Enter your credentials:
-   - **Email:** `admin@certifyintel.com`
-   - **Password:** `MSFWINTERCLINIC2026`
-
-3. Click **"Sign In"**
-
-4. You're now in the Certify Intel dashboard!
+| Menu Item | What It Does |
+|-----------|--------------|
+| Dashboard | Overview and quick stats |
+| Competitors | View all 82 competitors |
+| Sales & Marketing | Battlecards and comparisons |
+| News Feed | Latest competitor news |
+| Reports | Generate PDF reports |
 
 ---
 
 ## Troubleshooting
 
-### "Certify Intel is damaged and can't be opened"
-
-If you see this error:
-1. Open **Terminal** (search for it in Spotlight)
-2. Copy and paste this command, then press Enter:
-   ```
-   xattr -cr /Applications/Certify\ Intel.app
-   ```
-3. Try opening the app again
-
-### "Cannot be opened because the developer cannot be verified"
-
-1. Right-click the app and select "Open"
-2. Click "Open" in the dialog that appears
-3. The app will now open normally in the future
-
-### App closes immediately after opening
-
-1. Make sure you downloaded the correct version for your Mac (arm64 vs x64)
-2. Try restarting your Mac
-3. Re-download and reinstall the app
-
-### Backend server failed to start
-
-1. Make sure no other application is using port 8000
-2. Check if you have another instance of Certify Intel running
-3. Restart your Mac and try again
+| Problem | Solution |
+|---------|----------|
+| "App is damaged and can't be opened" | Open Terminal, run: `xattr -cr /Applications/Certify\ Intel.app` |
+| "Developer cannot be verified" | Right-click the app, select "Open", then click "Open" |
+| App closes immediately | Make sure you downloaded the correct version (arm64 vs x64) |
+| App won't start | Wait 30 seconds, try again. Restart Mac if needed |
+| Login fails | Check caps lock, retype password |
+| Blank screen | Close and reopen the app |
+| Backend server failed | Make sure no other app is using port 8000 |
 
 ---
 
 ## Uninstalling
 
-1. Open **Applications** folder
-2. Drag **Certify Intel** to the Trash
+1. Open Applications folder
+2. Drag "Certify Intel" to the Trash
 3. Empty the Trash
-
----
-
-## Support
-
-For issues or questions:
-- Visit: https://github.com/hicklax13/Certify_Intel_v5.1.2/issues
-- Email: support@certifyhealth.com
 
 ---
 
