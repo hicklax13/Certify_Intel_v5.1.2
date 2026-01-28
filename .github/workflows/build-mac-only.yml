@@ -112,7 +112,7 @@ jobs:
       - name: Build macOS installer
         run: |
           cd desktop-app
-          # Use --publish never to skip auto-publish (package.json has wrong repo)
+          # Use --publish never to skip auto-publish (manual upload has better control)
           # We upload to release manually in the next step
           npx electron-builder --mac --publish never
         env:
