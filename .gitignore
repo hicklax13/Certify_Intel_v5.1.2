@@ -121,3 +121,12 @@ nul
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Installer/Distribution Packages (build artifacts - distributed via GitHub Releases)
+Installer Packages for v5.1.2/
+Installer Packages*/
+*_Package_Installer*/
+
+# Migration/Task tracking files (personal notes)
+Migration To Do List.md
+Migration*.md
