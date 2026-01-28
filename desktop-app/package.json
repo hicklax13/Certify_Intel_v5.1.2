@@ -96,7 +96,8 @@
             "contents": [
                 {
                     "x": 130,
-                    "y": 220
+                    "y": 220,
+                    "type": "file"
                 },
                 {
                     "x": 410,
@@ -109,7 +110,7 @@
         "publish": {
             "provider": "github",
             "owner": "hicklax13",
-            "repo": "Project_Intel_v5.0.1",
+            "repo": "Certify_Intel_v5.1.2",
             "releaseType": "release"
         }
     }
