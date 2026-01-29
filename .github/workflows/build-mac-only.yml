@@ -47,26 +47,36 @@ jobs:
 
           # Debug: Check if secrets are available
           echo "Checking GitHub Secrets availability..."
-          if [ -z "${{ secrets.DESKTOP_SECRET_KEY }}" ]; then
+          if [ -z "$SECRET_KEY" ]; then
             echo "ERROR: DESKTOP_SECRET_KEY is empty or not accessible"
             echo "Please check: Settings → Secrets and variables → Actions"
             exit 1
           fi
 
-          if [ -z "${{ secrets.DESKTOP_ADMIN_PASSWORD }}" ]; then
+          if [ -z "$ADMIN_PASSWORD" ]; then
             echo "ERROR: DESKTOP_ADMIN_PASSWORD is empty or not accessible"
             echo "Please check: Settings → Secrets and variables → Actions"
             exit 1
           fi
 
-          echo "✓ GitHub Secrets are accessible"
-          echo "✓ SECRET_KEY length: ${#SECRET_KEY}"
-          echo "✓ ADMIN_PASSWORD length: ${#ADMIN_PASSWORD}"
+          # Trim whitespace/newlines from secrets (common copy-paste issue)
+          SECRET_KEY_CLEAN=$(echo "$SECRET_KEY" | tr -d '\n\r' | xargs)
+          ADMIN_PASSWORD_CLEAN=$(echo "$ADMIN_PASSWORD" | tr -d '\n\r' | xargs)
 
-          # Inject secrets into production .env template
-          sed -e "s/\${DESKTOP_SECRET_KEY}/${{ secrets.DESKTOP_SECRET_KEY }}/g" \
-              -e "s/\${DESKTOP_ADMIN_PASSWORD}/${{ secrets.DESKTOP_ADMIN_PASSWORD }}/g" \
-              .env.production.template > .env
+          echo "✓ GitHub Secrets are accessible"
+          echo "✓ SECRET_KEY length: ${#SECRET_KEY_CLEAN}"
+          echo "✓ ADMIN_PASSWORD length: ${#ADMIN_PASSWORD_CLEAN}"
+
+          # Inject secrets into production .env template using printf for safety
+          cp .env.production.template .env
+
+          # Replace placeholders using parameter expansion (safer than sed)
+          SECRET_KEY_ESCAPED="${SECRET_KEY_CLEAN//\//\\/}"
+          ADMIN_PASSWORD_ESCAPED="${ADMIN_PASSWORD_CLEAN//\//\\/}"
+
+          sed -i.bak "s/\${DESKTOP_SECRET_KEY}/${SECRET_KEY_ESCAPED}/g" .env
+          sed -i.bak "s/\${DESKTOP_ADMIN_PASSWORD}/${ADMIN_PASSWORD_ESCAPED}/g" .env
+          rm .env.bak
 
           # Verify .env was created (check for unsubstituted placeholders)
           if grep -q "\${DESKTOP_" .env; then
