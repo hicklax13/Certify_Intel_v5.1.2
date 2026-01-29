@@ -55,16 +55,24 @@ If you see "App is damaged" or can't open the app at all, use Terminal:
 
 ## Step 4: Login
 
-Enter these credentials:
+The desktop app comes pre-configured with default admin credentials:
 
-| Field | Value |
-|-------|-------|
-| Username | `admin@certifyintel.com` |
-| Password | `MSFWINTERCLINIC2026` |
+**Email**: `admin@certifyintel.com`
+**Password**: `MSFWINTERCLINIC2026`
+
+> **Security Note**: These are default credentials shared by all installations.
+> For production use with sensitive data:
+> 1. Login with default credentials
+> 2. Go to Settings → User Management
+> 3. Create a new admin user with your own password
+> 4. Delete or disable the default admin account
 
 Click "Sign In"
 
 ## Step 5: Use the App
+
+> **First Launch**: The app initializes its database on first startup (takes 5-10 seconds).
+> You'll see "Starting backend..." - this is normal.
 
 You're now on the Dashboard. Use the menu on the left to navigate:
 

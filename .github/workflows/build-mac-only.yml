@@ -41,13 +41,26 @@ jobs:
           pip install -r requirements-mac.txt
           pip install pyinstaller
 
-      - name: Initialize database
+      - name: Initialize database with production credentials
         run: |
           cd backend
-          # Create .env file for database initialization
-          cp .env.example .env 2>/dev/null || echo "SECRET_KEY=build-key-not-for-production" > .env
-          # Create empty database by importing database module
-          python -c "from database import engine, Base; Base.metadata.create_all(bind=engine); print('Database created')"
+
+          # Inject secrets into production .env template
+          sed -e "s/\${DESKTOP_SECRET_KEY}/${{ secrets.DESKTOP_SECRET_KEY }}/g" \
+              -e "s/\${DESKTOP_ADMIN_PASSWORD}/${{ secrets.DESKTOP_ADMIN_PASSWORD }}/g" \
+              .env.production.template > .env
+
+          # Verify .env was created (check for unsubstituted placeholders)
+          if grep -q "\${DESKTOP_" .env; then
+            echo "ERROR: .env still contains placeholder variables"
+            exit 1
+          fi
+
+          echo "✓ Production .env created successfully"
+          echo "ADMIN_EMAIL: $(grep ADMIN_EMAIL .env | cut -d= -f2)"
+
+          # Create empty database schema (admin user created on first app startup)
+          python -c "from database import engine, Base; Base.metadata.create_all(bind=engine); print('Database schema created')"
 
       - name: Build backend with PyInstaller
         run: |
@@ -64,22 +77,44 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare desktop app
+      - name: Prepare desktop app with production config
         run: |
           mkdir -p desktop-app/backend-bundle
           mkdir -p desktop-app/frontend
           mkdir -p desktop-app/data
 
+          # Copy backend executable
           cp backend/dist/certify_backend desktop-app/backend-bundle/
 
+          # Copy empty database (admin user created on first startup)
           if [ -f "backend/certify_intel.db" ]; then
             cp backend/certify_intel.db desktop-app/backend-bundle/
+            echo "✓ Copied database"
           fi
 
-          if [ -f "backend/.env.example" ]; then
-            cp backend/.env.example desktop-app/backend-bundle/.env
+          # Copy PRODUCTION .env (with secrets injected)
+          if [ -f "backend/.env" ]; then
+            cp backend/.env desktop-app/backend-bundle/
+            echo "✓ Copied production .env"
+
+            # Security verification: ensure no placeholders remain
+            if grep -q "your-secret-key-here" desktop-app/backend-bundle/.env; then
+              echo "ERROR: .env contains placeholder SECRET_KEY"
+              exit 1
+            fi
+
+            if grep -q "admin@yourcompany.com" desktop-app/backend-bundle/.env; then
+              echo "ERROR: .env contains placeholder ADMIN_EMAIL"
+              exit 1
+            fi
+
+            echo "✓ Production .env verified (no placeholders)"
+          else
+            echo "ERROR: Production .env not found"
+            exit 1
           fi
 
+          # Copy frontend files
           cp -r frontend/* desktop-app/frontend/
 
       - name: Create Mac icon from PNG
