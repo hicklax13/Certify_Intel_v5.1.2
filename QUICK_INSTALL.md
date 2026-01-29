@@ -133,8 +133,10 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 1. Open Google Chrome
 2. Go to: **http://localhost:8000**
 3. Login with:
-   - **Email**: `admin@certifyhealth.com`
-   - **Password**: `certifyintel2024`
+   - **Email**: `admin@certifyintel.com`
+   - **Password**: `MSFWINTERCLINIC2026`
+
+> **Security Note**: Change these default credentials after first login (Settings → User Management)
 
 ---
 
@@ -204,9 +206,9 @@ from dotenv import load_dotenv
 from database import SessionLocal, User
 load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY', '')
-new_hash = hashlib.sha256(f'{SECRET_KEY}certifyintel2024'.encode()).hexdigest()
+new_hash = hashlib.sha256(f'{SECRET_KEY}MSFWINTERCLINIC2026'.encode()).hexdigest()
 db = SessionLocal()
-user = db.query(User).filter(User.email == 'admin@certifyhealth.com').first()
+user = db.query(User).filter(User.email == 'admin@certifyintel.com').first()
 if user: user.hashed_password = new_hash; db.commit(); print('Password reset!')
 db.close()
 "

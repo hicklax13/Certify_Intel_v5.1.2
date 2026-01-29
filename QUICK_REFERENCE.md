@@ -72,7 +72,7 @@ lsof -i :8000 | grep LISTEN | awk '{print $2}' | xargs kill -9
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8000/token \
-  -d "username=admin@certifyhealth.com&password=certifyintel2024&grant_type=password" \
+  -d "username=admin@certifyintel.com&password=MSFWINTERCLINIC2026&grant_type=password" \
   | grep -o '"access_token":\"[^\"]*' | cut -d'\"' -f4)
 
 echo $TOKEN  # Print token
@@ -135,10 +135,10 @@ ls -lah *.md
 
 ## Default Credentials
 
-**User**: `admin@certifyhealth.com`
-**Password**: `certifyintel2024`
+**User**: `admin@certifyintel.com`
+**Password**: `MSFWINTERCLINIC2026`
 
-⚠️ Change these in production!
+⚠️ **Security Note**: Change these default credentials after first login (Settings → User Management)
 
 ---
 

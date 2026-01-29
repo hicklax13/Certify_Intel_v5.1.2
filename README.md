@@ -368,7 +368,9 @@ chmod +x setup.sh
 #### Step 4: Access the Application
 
 - Open Chrome: **http://localhost:8000**
-- Login: `admin@certifyhealth.com` / `certifyintel2024`
+- Login: `admin@certifyintel.com` / `MSFWINTERCLINIC2026`
+
+> **Security Note**: Change these default credentials after first login (Settings → User Management)
 
 ---
 

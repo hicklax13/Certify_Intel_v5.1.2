@@ -31,14 +31,31 @@
 
 ## Step 3: Launch (First Time - Important)
 
+### Why the Security Warning?
+
+macOS shows a security warning because the app isn't code-signed with an Apple Developer certificate ($99/year). **This is normal and safe** for free/open-source desktop apps.
+
+Here's what you'll see and how to bypass it:
+
 ### Option A: Right-Click Method (Easiest)
 
 1. Open your Applications folder (Finder > Go > Applications)
 2. Find "Certify Intel"
 3. **Right-click** (or Control-click) on Certify Intel
 4. Select "Open" from the menu
-5. Click "Open" again in the security dialog
-6. Wait for the app to start (may take 10-15 seconds first time)
+
+**What you'll see:**
+
+**First Dialog:** *"Certify Intel can't be opened because the developer cannot be verified"*
+- Do NOT click "Move to Trash"
+- Click "Cancel"
+- Right-click the app again → select "Open"
+
+**Second Dialog:** *"Are you sure you want to open it?"*
+- This time, you'll see an "Open" button
+- Click "Open"
+
+5. Wait for the app to start (may take 10-15 seconds first time)
 
 **Note:** You only need to right-click "Open" the first time. After that, you can double-click normally.
 
@@ -83,6 +100,32 @@ You're now on the Dashboard. Use the menu on the left to navigate:
 | Sales & Marketing | Battlecards and comparisons |
 | News Feed | Latest competitor news |
 | Reports | Generate PDF reports |
+
+---
+
+## Verify Installation Succeeded
+
+After logging in, check that you see:
+
+✅ Dashboard page loads successfully
+✅ Left sidebar shows: Dashboard, Competitors, Sales & Marketing, News Feed, etc.
+✅ Top right shows your email: `admin@certifyintel.com`
+✅ Competitor count shows: **82 competitors**
+✅ Latest news articles appear in the feed
+
+**If you see all this → Installation succeeded!** 🎉
+
+### Troubleshooting Installation Issues
+
+| Problem | Solution |
+|---------|----------|
+| App won't start | Wait 30 seconds and try again. Check Activity Monitor for "Certify Intel" process. |
+| Login fails | Check caps lock is off. Password is case-sensitive: `MSFWINTERCLINIC2026` |
+| Blank screen | Close app completely (Cmd+Q), relaunch. |
+| "Backend server failed" | Another app might be using port 8000. Restart your Mac. |
+| Dashboard shows 0 competitors | Wait 10 seconds for database to load. Refresh the page (Cmd+R). |
+
+**Still stuck?** Open an issue on GitHub with error details: [https://github.com/hicklax13/Certify_Intel_v5.1.2/issues](https://github.com/hicklax13/Certify_Intel_v5.1.2/issues)
 
 ---
 
