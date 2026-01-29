@@ -45,6 +45,24 @@ jobs:
         run: |
           cd backend
 
+          # Debug: Check if secrets are available
+          echo "Checking GitHub Secrets availability..."
+          if [ -z "${{ secrets.DESKTOP_SECRET_KEY }}" ]; then
+            echo "ERROR: DESKTOP_SECRET_KEY is empty or not accessible"
+            echo "Please check: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.DESKTOP_ADMIN_PASSWORD }}" ]; then
+            echo "ERROR: DESKTOP_ADMIN_PASSWORD is empty or not accessible"
+            echo "Please check: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+          echo "✓ GitHub Secrets are accessible"
+          echo "✓ SECRET_KEY length: ${#SECRET_KEY}"
+          echo "✓ ADMIN_PASSWORD length: ${#ADMIN_PASSWORD}"
+
           # Inject secrets into production .env template
           sed -e "s/\${DESKTOP_SECRET_KEY}/${{ secrets.DESKTOP_SECRET_KEY }}/g" \
               -e "s/\${DESKTOP_ADMIN_PASSWORD}/${{ secrets.DESKTOP_ADMIN_PASSWORD }}/g" \
@@ -53,6 +71,8 @@ jobs:
           # Verify .env was created (check for unsubstituted placeholders)
           if grep -q "\${DESKTOP_" .env; then
             echo "ERROR: .env still contains placeholder variables"
+            echo "Content of .env file:"
+            cat .env
             exit 1
           fi
 
@@ -61,6 +81,9 @@ jobs:
 
           # Create empty database schema (admin user created on first app startup)
           python -c "from database import engine, Base; Base.metadata.create_all(bind=engine); print('Database schema created')"
+        env:
+          SECRET_KEY: ${{ secrets.DESKTOP_SECRET_KEY }}
+          ADMIN_PASSWORD: ${{ secrets.DESKTOP_ADMIN_PASSWORD }}
 
       - name: Build backend with PyInstaller
         run: |
